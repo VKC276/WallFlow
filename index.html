@@ -466,7 +466,7 @@ let __sessionToken = null;
 let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
 let db = { routes: [], grades: DEFAULT_GRADES.slice() };
 let currentView = "flow";
-let rebuildFilter = "Ja"; // default: visa det som ska byggas om
+let rebuildFilter = "ALL"; // default: visa alla leder
 let colorFilter = "ALL";
 
 function apiCall_(action, args) {
@@ -828,9 +828,9 @@ function availableColors_() {
 function renderFilters() {
   const rebuildHost = document.getElementById("rebuild-filters");
   const rebuildItems = [
+    { key: "ALL", label: "Alla" },
     { key: "Ja", label: "Bygg om" },
-    { key: "Nej", label: "Aktuella" },
-    { key: "ALL", label: "Alla" }
+    { key: "Nej", label: "Aktuella" }
   ];
   rebuildHost.innerHTML = rebuildItems.map((it) =>
     `<button type="button" class="chip${rebuildFilter === it.key ? " active" : ""}" data-key="${it.key}" onclick="setRebuildFilter('${it.key}')">${escapeHtml_(it.label)}</button>`
