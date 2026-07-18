@@ -1175,8 +1175,8 @@ function renderRouteForm(nr) {
   }
   const grades = gradeList_();
   const route = r || {
-    Nr: "", Gradering: grades[0] || "Grön", DagsAttByggaOm: "Ja", Ledbyggare: currentUser.name || currentUser.username || "",
-    Byggdatum: new Date().toISOString().slice(0, 10), Slutdatum: "", Anteckningar: "", Bild: ""
+    Nr: "", Gradering: grades[0] || "Grön", Ledbyggare: currentUser.name || currentUser.username || "",
+    Byggdatum: new Date().toISOString().slice(0, 10), Anteckningar: "", Bild: ""
   };
   const selectedGrade = isAllowedGrade_(route.Gradering) ? route.Gradering : grades[0];
   const colorOpts = grades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
@@ -1184,21 +1184,13 @@ function renderRouteForm(nr) {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("panel-title").textContent = nr ? ("Redigera led " + nr) : "Ny led";
   document.getElementById("panel-body").innerHTML = `
+      <p class="small mb-3" style="color:var(--muted);">Bygg om och slutdatum räknas ut i sheetet från datum — de redigeras inte här.</p>
       <div class="row g-2 mb-3">
         <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
-        <div class="col-4"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
-        <div class="col-4"><label class="form-label">Bygg om</label>
-          <select id="f-rebuild" class="form-select">
-            <option value="Ja" ${route.DagsAttByggaOm === "Ja" ? "selected" : ""}>Ja</option>
-            <option value="Nej" ${route.DagsAttByggaOm === "Nej" ? "selected" : ""}>Nej</option>
-          </select>
-        </div>
+        <div class="col-8"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
       </div>
       <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}"></div>
-      <div class="row g-2 mb-3">
-        <div class="col-6"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
-        <div class="col-6"><label class="form-label">Slutdatum</label><input id="f-end" type="date" class="form-control" value="${escapeHtml_(route.Slutdatum)}"></div>
-      </div>
+      <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
       <button class="btn btn-accent w-100" type="button" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
@@ -1212,10 +1204,8 @@ function saveRoute(existingNr) {
   const route = {
     Nr: document.getElementById("f-nr").value.trim() || existingNr || "",
     Gradering: document.getElementById("f-grad").value,
-    DagsAttByggaOm: document.getElementById("f-rebuild").value,
     Ledbyggare: document.getElementById("f-setter").value.trim(),
     Byggdatum: document.getElementById("f-build").value,
-    Slutdatum: document.getElementById("f-end").value,
     Anteckningar: document.getElementById("f-notes").value.trim(),
     Bild: document.getElementById("f-img").value.trim()
   };

@@ -562,19 +562,12 @@ function nextRouteNumber_() {
   return max + 1;
 }
 
-function routeToRowValues_(route) {
-  return [
-    route.Nr === "" || route.Nr == null ? "" : Number(route.Nr) || route.Nr,
-    route.Gradering || "",
-    normalizeJaNej_(route.DagsAttByggaOm || route["Dags att bygga om"] || "Nej"),
-    route.Ledbyggare || "",
-    route.Byggdatum || "",
-    route.Slutdatum || "",
-    route.Anteckningar || "",
-    route.Bild || ""
-  ];
-}
-
+/**
+ * Skrivbara kolumner från appen.
+ * "Dags att bygga om" (C) och "Slutdatum" (F) räknas ut i sheetet — rörs aldrig.
+ * Kolumnordning: A Nr, B Gradering, C Dags att bygga om, D Ledbyggare,
+ * E Byggdatum, F Slutdatum, G Anteckningar, H Bild
+ */
 function saveRoute_(route, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
   route = route || {};
@@ -611,11 +604,21 @@ function saveRoute_(route, session) {
     }
   }
 
-  var values = routeToRowValues_(route);
+  var nrVal = Number(nr) || nr;
+  var gradVal = route.Gradering || "";
+  var setterVal = route.Ledbyggare || "";
+  var buildVal = route.Byggdatum || "";
+  var noteVal = route.Anteckningar || "";
+  var imgVal = route.Bild || "";
+
   if (!creating && rowNum > 0) {
-    // Behåll Nr från sheetet (ändras inte via app för vanliga roller)
-    values[0] = Number(nr) || nr;
-    sh.getRange(rowNum, 1, 1, ROUTE_HEADERS.length).setValues([values]);
+    // Uppdatera bara manuella fält — lämna formler i C och F orörda
+    sh.getRange(rowNum, 1).setValue(nrVal);           // A Nr
+    sh.getRange(rowNum, 2).setValue(gradVal);         // B Gradering
+    sh.getRange(rowNum, 4).setValue(setterVal);       // D Ledbyggare
+    sh.getRange(rowNum, 5).setValue(buildVal);        // E Byggdatum
+    sh.getRange(rowNum, 7).setValue(noteVal);         // G Anteckningar
+    sh.getRange(rowNum, 8).setValue(imgVal);          // H Bild
   } else {
     var table = readTable_(WALLFLOW_SHEET_ROUTES);
     var lastRouteRow = 1;
@@ -623,18 +626,33 @@ function saveRoute_(route, session) {
       if (isRouteRow_(table.rows[j])) lastRouteRow = Math.max(lastRouteRow, table.rows[j].__row);
     }
     sh.insertRowAfter(lastRouteRow);
-    sh.getRange(lastRouteRow + 1, 1, 1, ROUTE_HEADERS.length).setValues([values]);
+    var newRow = lastRouteRow + 1;
+    // C och F lämnas tomma så sheetets uträkning/formler kan fylla i
+    sh.getRange(newRow, 1, 1, ROUTE_HEADERS.length).setValues([[
+      nrVal,
+      gradVal,
+      "",
+      setterVal,
+      buildVal,
+      "",
+      noteVal,
+      imgVal
+    ]]);
+    rowNum = newRow;
   }
 
+  SpreadsheetApp.flush();
+  var rowValues = sh.getRange(rowNum, 1, 1, ROUTE_HEADERS.length).getValues()[0];
   var saved = mapRoute_({
-    "Nr": values[0],
-    "Gradering": values[1],
-    "Dags att bygga om": values[2],
-    "Ledbyggare": values[3],
-    "Byggdatum": values[4],
-    "Slutdatum": values[5],
-    "Anteckningar": values[6],
-    "Bild": values[7]
+    "Nr": rowValues[0],
+    "Gradering": rowValues[1],
+    "Dags att bygga om": rowValues[2],
+    "Ledbyggare": rowValues[3],
+    "Byggdatum": rowValues[4],
+    "Slutdatum": rowValues[5],
+    "Anteckningar": rowValues[6],
+    "Bild": rowValues[7],
+    __row: rowNum
   });
   return { ok: true, route: saved };
 }
