@@ -1,60 +1,54 @@
 # WallFlow
 
-App för att följa **ledbyggnationen** i klätterhallen.
+App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arkitektur som [Crags](https://github.com/VKC276/Crags) (GAS ↔ GitHub Pages + Workbench).
 
-WallFlow är byggd på samma arkitektur som [Crags](https://github.com/VKC276/Crags):
+## Google Sheet
 
-- Enkel HTML/CSS/JS-SPA (GitHub Pages)
-- Bootstrap + mobil-first UI
-- Google Apps Script som JSON-API (`google.script.run`-kompatibel brygga)
-- Workbench för admin/sättare
+Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 
-## Vad skiljer från Crags?
+### Flik `Alla leder`
 
-| Crags | WallFlow |
-|-------|----------|
-| Utomhusklippor på karta | Statusflöde i hallen |
-| Approach / parkering / access | Väggar, sättare, färger, datum |
-| Status G/Y/R (access) | Planerad → Sätts → Aktiv → Strippas |
+| Kolumn | Betydelse |
+|--------|-----------|
+| Nr | Lednummer |
+| Gradering | Färg (Blå, Grön, Röd, Vit, Svart, Wildcard…) |
+| Dags att bygga om | `Ja` / `Nej` |
+| Ledbyggare | Vem som satt leden |
+| Byggdatum | När den sattes |
+| Slutdatum | Planerat slut / ombyggnadsdatum |
+| Anteckningar | Fri text |
+| Bild | Drive-fil-ID eller URL |
 
-## Kom igång (demoläge)
+### Flik `Users` (samma som Crags)
 
-Öppna `index.html` lokalt eller via GitHub Pages.
+`Username | passwordHash | salt | role | name | FirstLogin`
 
-- Demoläge är aktivt när `GAS_API_URL` är tom
-- Demo-login: `admin` / `wallflow`
-- Data sparas i `localStorage`
+## Setup GAS
 
-```bash
-# enkel lokal server
-python3 -m http.server 8080
-# öppna http://localhost:8080
-```
-
-## Koppla riktig backend (GAS)
-
-1. Skapa ett Google Sheet
-2. Extensions → Apps Script, klistra in `gas/Code.gs`
-3. Kör funktionen `setupWallFlowSheets()` en gång
-4. Deploy → **Web app** (Execute as: Me, Who has access: Anyone)
+1. Öppna sheetet → **Extensions → Apps Script**
+2. Klistra in `gas/Code.gs`
+3. Kör manuellt en gång: `setupFirstSuperadmin("admin", "Ditt namn", "tillfalligtLosen")`
+4. **Deploy → New deployment → Web app**
+   - Execute as: Me
+   - Who has access: Anyone
 5. Klistra in `/exec`-URL:en i `index.html`:
 
 ```js
 const GAS_API_URL = "https://script.google.com/macros/s/XXXX/exec";
 ```
 
-## Datamodell
+## Demoläge
 
-- **Walls** — vägg/sektor (`ID`, `Namn`, `Order`, `Info`)
-- **Routes** — led under byggnation (`WallID`, `Namn`, `Grad`, `Farg`, `Setter`, `Status`, datum, anteckning)
-- **Users / Sessions** — adminroller: `superadmin`, `admin`, `scout` (sättare)
+Om `GAS_API_URL` är tom kör appen lokalt med demo-data.
+
+```bash
+python3 -m http.server 8080
+```
+
+Demo-login: `admin` / `wallflow`
 
 ## Roller
 
-- **Superadmin** — allt + användarhantering
-- **Admin** — skapa/redigera/radera innehåll
-- **Sättare (scout)** — skapa/redigera, ej radera
-
-## Hosting
-
-Publicera `main` (eller denna branch) via GitHub Pages. Valfri `CNAME` för t.ex. `wallflow.vastervikclimbing.se`.
+- **superadmin** — allt + användarhantering  
+- **admin** — skapa/redigera/radera leder  
+- **scout** (sättare) — skapa/redigera, ej radera  
