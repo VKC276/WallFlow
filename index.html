@@ -74,12 +74,22 @@
       padding: calc(12px + var(--safe-top)) 16px 10px;
       background: linear-gradient(180deg, rgba(18,21,26,.96), rgba(18,21,26,.82) 70%, transparent);
       backdrop-filter: blur(10px);
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "brand search account"
+        "filters filters filters";
+      gap: 10px 12px;
+      align-items: center;
     }
-    .topbar-row { display: flex; align-items: center; gap: 12px; }
-    .top-brand { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.03em; }
+    .top-brand {
+      grid-area: brand;
+      font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.03em;
+    }
     .top-brand span { color: var(--accent); }
     .search-wrap {
-      flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+      grid-area: search;
+      display: flex; align-items: center; gap: 8px; min-width: 0;
       height: var(--search-h); padding: 0 12px; border-radius: 14px;
       background: rgba(255,255,255,0.05); border: 1px solid var(--line);
     }
@@ -90,8 +100,22 @@
       width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; cursor: pointer;
     }
     .icon-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
-    .filter-row { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px 4px; scrollbar-width: none; }
+    .filters-block {
+      grid-area: filters;
+      display: flex; flex-direction: column; gap: 6px; min-width: 0;
+    }
+    .filter-row { display: flex; gap: 8px; overflow-x: auto; padding: 0; scrollbar-width: none; }
     .filter-row::-webkit-scrollbar { display: none; }
+    /* Mobil: WallFlow + konto, sedan filter under rubriken, sedan sök */
+    @media (max-width: 720px) {
+      .topbar {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "brand account"
+          "filters filters"
+          "search search";
+      }
+    }
     .chip {
       flex: 0 0 auto; border: 1px solid var(--line); background: rgba(255,255,255,0.03);
       color: var(--muted); border-radius: 999px; padding: 8px 14px; font-size: 0.82rem;
@@ -128,7 +152,7 @@
     .color-head small { color: var(--muted); }
     .route-list { padding: 0 10px 10px; display: grid; gap: 8px; }
     .route-row {
-      display: grid; grid-template-columns: 10px 1fr auto auto; gap: 10px; align-items: center;
+      display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center;
       padding: 12px; border-radius: 14px; background: rgba(0,0,0,0.22); border: 1px solid transparent;
       cursor: pointer; transition: border-color .2s, transform .2s, background .2s; animation: fadeSlide .35s ease both;
     }
@@ -173,18 +197,13 @@
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: #10141a; display: none; flex-direction: column; }
     #login-panel.show, #app-admin.show { display: flex; }
     .account-chip {
+      grid-area: account;
       display: flex; align-items: center; gap: 6px; flex-shrink: 0;
       padding: 0 4px 0 10px; height: 40px; border-radius: 12px;
       background: rgba(255,255,255,0.05); border: 1px solid var(--line);
       color: var(--muted); font-size: 0.78rem; font-weight: 600;
     }
     .account-chip strong { color: var(--text); font-weight: 700; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .btn-edit-row {
-      border: 1px solid var(--line); background: rgba(255,255,255,0.04);
-      color: var(--text); border-radius: 10px; padding: 6px 10px;
-      font-size: 0.75rem; font-weight: 700; cursor: pointer;
-    }
-    .btn-edit-row:hover { border-color: rgba(232,165,75,0.45); color: var(--accent); }
     .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .login-card { width: min(360px, 100%); }
     .login-card h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 6px; }
@@ -228,27 +247,25 @@
 
   <div id="app-public">
     <div class="topbar">
-      <div class="topbar-row">
-        <div class="top-brand">Wall<span>Flow</span></div>
-        <div class="search-wrap">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-          <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="filterData()" autocomplete="off">
-          <button class="icon-btn" type="button" onclick="document.getElementById('mainSearch').value=''; filterData();" aria-label="Rensa sök">✕</button>
-        </div>
-        <div class="account-chip" id="account-chip">
-          <strong id="account-name">—</strong>
-          <button class="icon-btn" type="button" onclick="openSettings()" aria-label="Inställningar" title="Inställningar">⚙</button>
-        </div>
+      <div class="top-brand">Wall<span>Flow</span></div>
+      <div class="search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="filterData()" autocomplete="off">
+        <button class="icon-btn" type="button" onclick="document.getElementById('mainSearch').value=''; filterData();" aria-label="Rensa sök">✕</button>
       </div>
-      <div id="edit-toolbar" class="filter-row" style="padding-top:8px; display:none;"></div>
+      <div class="account-chip" id="account-chip">
+        <strong id="account-name">—</strong>
+        <button class="icon-btn" type="button" onclick="openSettings()" aria-label="Inställningar" title="Inställningar">⚙</button>
+      </div>
+      <div class="filters-block">
+        <div class="filter-row" id="rebuild-filters" aria-label="Ombyggnadsfilter"></div>
+        <div class="filter-row" id="color-filters" aria-label="Färgfilter"></div>
+      </div>
     </div>
 
     <div id="demo-banner" class="demo-banner" style="display:none;">
       Demoläge — koppla GAS_API_URL för live-data från Google Sheet.
     </div>
-
-    <div class="filter-row" id="rebuild-filters" aria-label="Ombyggnadsfilter"></div>
-    <div class="filter-row" id="color-filters" aria-label="Färgfilter"></div>
 
     <div class="scroll-area">
       <div id="view-flow"></div>
@@ -609,14 +626,7 @@ function showAppShell_() {
   if (currentUser.firstLogin) openSettings();
 }
 function renderEditToolbar_() {
-  const host = document.getElementById("edit-toolbar");
-  if (!host) return;
-  if (!currentUser.authorized) { host.style.display = "none"; return; }
-  host.style.display = "flex";
-  host.innerHTML = `
-    ${canManageRouteStructureRole() ? `<button type="button" class="chip" onclick="renderRouteForm()">+ Ny led</button>` : ""}
-    <button type="button" class="chip" onclick="openSettings()">Konto</button>
-  `;
+  /* Redigera sker via ledkortet; + Ny led ligger under Inställningar för superadmin. */
 }
 function sortRoutes_(routes) {
   return routes.slice().sort((a, b) => {
@@ -818,9 +828,6 @@ function renderColors(routes) {
 
 function routeRowHtml_(r) {
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
-  const editBtn = (currentUser.authorized && canEditContentRole() && r.Nr)
-    ? `<button type="button" class="btn-edit-row" onclick="event.stopPropagation(); renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera</button>`
-    : `<span></span>`;
   return `
     <div class="route-row" onclick="openRoute('${escapeHtml_(routeKey_(r))}')">
       <span class="route-dot" style="background:${colorHex_(r.Gradering)}"></span>
@@ -829,7 +836,6 @@ function routeRowHtml_(r) {
         <span>${escapeHtml_(r.Gradering || "—")}${r.Ledbyggare ? " · " + escapeHtml_(r.Ledbyggare) : ""} · ${escapeHtml_(r.Byggdatum || "—")}</span>
       </div>
       <div><span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell"}</span></div>
-      ${editBtn}
     </div>`;
 }
 
@@ -960,9 +966,10 @@ function renderSettingsHome() {
       <h3>Konto</h3>
       <p class="mb-3" style="color:var(--muted); font-size:.9rem;">
         ${escapeHtml_(currentUser.name || currentUser.username || "")} · ${escapeHtml_(adminRoleLabelSv())}<br>
-        Redigera leder direkt i listan. ${USE_DEMO ? "Demoläge aktivt." : "Live mot Google Sheet."}
+        Öppna en led och tryck <strong>Redigera led</strong>. ${USE_DEMO ? "Demoläge aktivt." : "Live mot Google Sheet."}
       </p>
       <div class="d-flex flex-wrap gap-2">
+        ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
