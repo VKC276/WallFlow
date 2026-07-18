@@ -964,13 +964,12 @@ function renderColors(routes) {
     const list = byColor[c] || [];
     const n = list.length;
     const rebuild = list.filter((r) => r.DagsAttByggaOm === "Ja").length;
-    const pct = total ? Math.round((n / total) * 100) : 0;
     const active = colorFilter === c ? " active" : "";
     return `
       <button type="button" class="color-dist-card${active}" onclick="setColorFilter('${escapeHtml_(c)}')">
         <span class="color-dist-blob" style="background:${colorHex_(c)}"></span>
         <strong>${n}</strong>
-        <span>${escapeHtml_(c)} · ${pct}%</span>
+        <span>${escapeHtml_(c)}</span>
         <span>${rebuild} bygg om</span>
       </button>`;
   }).join("");
