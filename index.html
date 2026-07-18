@@ -224,8 +224,11 @@
     }
     .stat strong { display: block; font-family: var(--font-display); font-size: 1.45rem; line-height: 1; margin-bottom: 4px; }
     .stat span { color: var(--muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .section-label { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 0 10px; }
-    .section-label h2 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; letter-spacing: -0.02em; }
+    .section-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 10px; overflow: visible; }
+    .section-label h2 {
+      font-family: var(--font-display); font-size: 1.05rem; margin: 0; letter-spacing: -0.02em;
+      line-height: 1.4; overflow: visible; padding-bottom: 0.12em;
+    }
     .section-label span { color: var(--muted); font-size: 0.8rem; }
     .color-block {
       margin-bottom: 14px; border-radius: var(--radius); background: rgba(255,255,255,0.03);
@@ -875,7 +878,7 @@ function renderFlow(routes) {
       <div class="stat"><strong>${c.total}</strong><span>Totalt</span></div>
     </div>
     <div class="section-label">
-      <h2>${rebuildFilter === "Ja" ? "Behöver byggas om" : rebuildFilter === "Nej" ? "Aktuella leder" : "Alla leder"}</h2>
+      <h2>${rebuildFilter === "Ja" ? "Dags att bygga om" : rebuildFilter === "Nej" ? "Aktuella leder" : "Alla leder"}</h2>
       <span>${routes.length} st</span>
     </div>
     ${routes.length ? `<div class="route-list" style="padding:0;">${routes.map(routeRowHtml_).join("")}</div>` : `<div class="empty">Inga leder matchar filtret.</div>`}
