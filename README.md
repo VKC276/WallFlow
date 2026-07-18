@@ -23,19 +23,30 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 
 `Username | passwordHash | salt | role | name | FirstLogin`
 
-## Setup GAS
+## Setup GAS (fristående — rekommenderat)
 
-1. Öppna sheetet → **Extensions → Apps Script**
-2. Klistra in `gas/Code.gs`
-3. Kör manuellt en gång: `setupFirstSuperadmin("admin", "Ditt namn", "tillfalligtLosen")`
-4. **Deploy → New deployment → Web app**
-   - Execute as: Me
-   - Who has access: Anyone
-5. Klistra in `/exec`-URL:en i `index.html`:
+Sheettet har redan egen bunden kod. **Klistra inte in WallFlow i sheetets Apps Script** (då krockar t.ex. `SPREADSHEET_ID`).
+
+Skapa i stället ett **nytt standalone-projekt**:
+
+1. Gå till [script.google.com](https://script.google.com) → **New project**
+2. Namnge projektet t.ex. `WallFlow API`
+3. Ersätt innehållet i `Code.gs` med filen `gas/Code.gs` från detta repo
+4. Kör manuellt en gång (välj funktionen i dropdown → Run):
+   ```
+   setupFirstSuperadmin("admin", "Ditt namn", "tillfalligtLosen")
+   ```
+   Godkänn behörighet till Google Sheets när du blir tillfrågad.
+5. **Deploy → New deployment → Web app**
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+6. Kopiera `/exec`-URL:en till `index.html`:
 
 ```js
 const GAS_API_URL = "https://script.google.com/macros/s/XXXX/exec";
 ```
+
+WallFlow öppnar sheetet via ID (`SpreadsheetApp.openById`) — ingen bindning behövs. Befintlig sheet-kod lämnas orörd.
 
 ## Demoläge
 

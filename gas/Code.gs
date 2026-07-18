@@ -1,24 +1,32 @@
 /**
- * WallFlow — Google Apps Script backend
+ * WallFlow — Google Apps Script backend (STANDALONE)
  *
- * Spreadsheet: 1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0
+ * Viktigt: skapa ett NYTT Apps Script-projekt som INTE är bundet till sheetet.
+ * Sheetet har redan egen bunden kod (Kod.gs) — klistra inte in WallFlow där
+ * (då krockar bl.a. SPREADSHEET_ID).
+ *
+ * Setup:
+ *   1. https://script.google.com → New project → namnge "WallFlow API"
+ *   2. Ersätt Code.gs med denna fil
+ *   3. Kör setupFirstSuperadmin(...) en gång (godkänn tillgång till Sheets)
+ *   4. Deploy → New deployment → Web app
+ *        Execute as: Me
+ *        Who has access: Anyone
+ *   5. Klistra in /exec-URL:en i index.html som GAS_API_URL
+ *
+ * Spreadsheet (öppnas via ID, ej bundet):
+ *   1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0
  *
  * Flikar:
  *   "Alla leder" — Nr | Gradering | Dags att bygga om | Ledbyggare | Byggdatum | Slutdatum | Anteckningar | Bild
  *   "Users"      — Username | passwordHash | salt | role | name | FirstLogin   (samma som Crags)
  *
- * Deploy:
- *   1. Apps Script (bundet till sheetet eller fristående med tillgång till sheetet)
- *   2. Klistra in denna fil
- *   3. Deploy → Web app (Execute as: Me, Who has access: Anyone)
- *   4. Sätt GAS_API_URL i index.html till /exec-URL:en
- *
  * API: POST text/plain JSON { action, token, args: [...] } → JSON
  */
 
-var SPREADSHEET_ID = "1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0";
-var SHEET_ROUTES = "Alla leder";
-var SHEET_USERS = "Users";
+var WALLFLOW_SPREADSHEET_ID = "1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0";
+var WALLFLOW_SHEET_ROUTES = "Alla leder";
+var WALLFLOW_SHEET_USERS = "Users";
 
 var ROUTE_HEADERS = [
   "Nr",
@@ -58,7 +66,7 @@ function doPost(e) {
 
 function doGet() {
   return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, app: "WallFlow", sheet: SPREADSHEET_ID }))
+    .createTextOutput(JSON.stringify({ ok: true, app: "WallFlow", sheet: WALLFLOW_SPREADSHEET_ID }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -119,12 +127,9 @@ function dispatch_(action, token, args) {
 
 /* ---------- Spreadsheet helpers ---------- */
 
+/** Fristående projekt: öppna alltid sheetet via ID (inte getActiveSpreadsheet). */
 function ss_() {
-  try {
-    var active = SpreadsheetApp.getActiveSpreadsheet();
-    if (active && active.getId() === SPREADSHEET_ID) return active;
-  } catch (e) {}
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
+  return SpreadsheetApp.openById(WALLFLOW_SPREADSHEET_ID);
 }
 
 function sheet_(name) {
@@ -134,7 +139,7 @@ function sheet_(name) {
 }
 
 function ensureUserSheetHeaders_() {
-  var sh = sheet_(SHEET_USERS);
+  var sh = sheet_(WALLFLOW_SHEET_USERS);
   var lastCol = Math.max(sh.getLastColumn(), USER_HEADERS.length);
   var header = sh.getRange(1, 1, 1, lastCol).getValues()[0];
   var needWrite = false;
@@ -214,7 +219,7 @@ function mapRoute_(obj) {
 }
 
 function readRoutes_() {
-  var table = readTable_(SHEET_ROUTES);
+  var table = readTable_(WALLFLOW_SHEET_ROUTES);
   var out = [];
   for (var i = 0; i < table.rows.length; i++) {
     if (!isRouteRow_(table.rows[i])) continue;
@@ -254,7 +259,7 @@ function randomSalt_() {
 
 function readUsers_() {
   ensureUserSheetHeaders_();
-  var table = readTable_(SHEET_USERS);
+  var table = readTable_(WALLFLOW_SHEET_USERS);
   return table.rows.map(function (u) {
     return {
       username: String(u.Username || u.username || "").trim(),
@@ -269,7 +274,7 @@ function readUsers_() {
 }
 
 function writeUsers_(users) {
-  var sh = sheet_(SHEET_USERS);
+  var sh = sheet_(WALLFLOW_SHEET_USERS);
   sh.clearContents();
   sh.getRange(1, 1, 1, USER_HEADERS.length).setValues([USER_HEADERS]);
   if (!users.length) return;
@@ -489,7 +494,7 @@ function deleteUserAction_(username, session) {
 /* ---------- Routes CRUD på "Alla leder" ---------- */
 
 function findRouteRowNumber_(nr) {
-  var sh = sheet_(SHEET_ROUTES);
+  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
   var values = sh.getDataRange().getValues();
   var target = String(nr).trim();
   for (var r = 1; r < values.length; r++) {
@@ -526,7 +531,7 @@ function routeToRowValues_(route) {
 function saveRoute_(route, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
   route = route || {};
-  var sh = sheet_(SHEET_ROUTES);
+  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
 
   // Säkerställ header
   var header = sh.getRange(1, 1, 1, ROUTE_HEADERS.length).getValues()[0];
@@ -552,12 +557,7 @@ function saveRoute_(route, session) {
   } else {
     // Infoga före summeringsrader om möjligt: skriv på första tomma rad efter sista giltiga led
     var insertAt = sh.getLastRow() + 1;
-    var table = readTable_(SHEET_ROUTES);
-    for (var r = 0; r < table.rows.length; r++) {
-      if (isRouteRow_(table.rows[r]) && table.rows[r].__row >= insertAt - 1) {
-        // keep scanning
-      }
-    }
+    var table = readTable_(WALLFLOW_SHEET_ROUTES);
     // Hitta sista route-radens radnummer
     var lastRouteRow = 1;
     for (var j = 0; j < table.rows.length; j++) {
@@ -585,7 +585,7 @@ function deleteRoute_(nr, session) {
   if (!canDelete_(session)) return { ok: false, error: "Saknar behörighet" };
   var rowNum = findRouteRowNumber_(nr);
   if (rowNum < 0) return { ok: false, error: "Leden hittades inte" };
-  sheet_(SHEET_ROUTES).deleteRow(rowNum);
+  sheet_(WALLFLOW_SHEET_ROUTES).deleteRow(rowNum);
   return { ok: true };
 }
 
