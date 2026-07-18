@@ -202,15 +202,20 @@
       width: 36px; height: 36px; border-radius: 50%;
       box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18), 0 6px 14px rgba(0,0,0,0.25);
     }
-    .color-dist-card strong {
+    .color-dist-card .color-dist-count {
       font-family: var(--font-body);
-      font-size: 1.35rem;
+      font-size: 1.25rem;
       line-height: 1;
       letter-spacing: -0.01em;
       color: #f7f4ee;
-      font-weight: 500;
+      font-weight: 400;
     }
-    .color-dist-card span { color: #c4ccd8; font-size: 0.78rem; font-weight: 600; text-align: center; }
+    .color-dist-card .color-dist-name {
+      color: #c4ccd8;
+      font-size: 0.78rem;
+      font-weight: 500;
+      text-align: center;
+    }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; animation: riseIn .55s ease .05s both; }
     .stat {
       padding: 14px 12px; border-radius: 16px;
@@ -971,8 +976,8 @@ function renderColors(routes) {
     return `
       <button type="button" class="color-dist-card${active}" onclick="setColorFilter('${escapeHtml_(c)}')">
         <span class="color-dist-blob" style="background:${colorHex_(c)}"></span>
-        <strong>${n}</strong>
-        <span>${escapeHtml_(c)}</span>
+        <span class="color-dist-count">${n}</span>
+        <span class="color-dist-name">${escapeHtml_(c)}</span>
       </button>`;
   }).join("");
 
