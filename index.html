@@ -128,7 +128,7 @@
     .color-head small { color: var(--muted); }
     .route-list { padding: 0 10px 10px; display: grid; gap: 8px; }
     .route-row {
-      display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center;
+      display: grid; grid-template-columns: 10px 1fr auto auto; gap: 10px; align-items: center;
       padding: 12px; border-radius: 14px; background: rgba(0,0,0,0.22); border: 1px solid transparent;
       cursor: pointer; transition: border-color .2s, transform .2s, background .2s; animation: fadeSlide .35s ease both;
     }
@@ -169,8 +169,23 @@
     .detail-cell { padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); }
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
+    #app-public { display: none; }
+    #app-public.ready { display: flex; }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: #10141a; display: none; flex-direction: column; }
     #login-panel.show, #app-admin.show { display: flex; }
+    .account-chip {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+      padding: 0 4px 0 10px; height: 40px; border-radius: 12px;
+      background: rgba(255,255,255,0.05); border: 1px solid var(--line);
+      color: var(--muted); font-size: 0.78rem; font-weight: 600;
+    }
+    .account-chip strong { color: var(--text); font-weight: 700; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-edit-row {
+      border: 1px solid var(--line); background: rgba(255,255,255,0.04);
+      color: var(--text); border-radius: 10px; padding: 6px 10px;
+      font-size: 0.75rem; font-weight: 700; cursor: pointer;
+    }
+    .btn-edit-row:hover { border-color: rgba(232,165,75,0.45); color: var(--accent); }
     .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .login-card { width: min(360px, 100%); }
     .login-card h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 6px; }
@@ -220,9 +235,13 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
           <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="filterData()" autocomplete="off">
           <button class="icon-btn" type="button" onclick="document.getElementById('mainSearch').value=''; filterData();" aria-label="Rensa sök">✕</button>
-          <button class="icon-btn" type="button" onclick="toggleAdmin(true)" aria-label="Admin">⚙</button>
+        </div>
+        <div class="account-chip" id="account-chip">
+          <strong id="account-name">—</strong>
+          <button class="icon-btn" type="button" onclick="openSettings()" aria-label="Inställningar" title="Inställningar">⚙</button>
         </div>
       </div>
+      <div id="edit-toolbar" class="filter-row" style="padding-top:8px; display:none;"></div>
     </div>
 
     <div id="demo-banner" class="demo-banner" style="display:none;">
@@ -258,19 +277,14 @@
   </div>
 
   <div id="login-panel">
-    <div class="p-3 d-flex justify-content-between align-items-center border-bottom" style="border-color: var(--line) !important;">
-      <button class="btn btn-sm btn-ghost" type="button" onclick="closeLoginPanel()">Avbryt</button>
-      <span class="text-uppercase small" style="color:var(--muted); letter-spacing:.08em;">Workbench</span>
-      <span style="width:64px;"></span>
-    </div>
     <div class="login-inner">
       <div class="login-card">
         <h2>WallFlow</h2>
-        <p class="mb-4" style="color:var(--muted);">Logga in för att uppdatera ledbyggnationen.</p>
+        <p class="mb-4" style="color:var(--muted);">Logga in för att se och uppdatera ledbyggnationen.</p>
         <div class="mb-3"><input id="admin-user" class="form-control form-control-lg" placeholder="Användarnamn" autocomplete="username"></div>
         <div class="mb-3"><input id="admin-pw" class="form-control form-control-lg" type="password" placeholder="Lösenord" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkLogin()"></div>
         <label class="d-flex align-items-center gap-2 mb-3" style="color:var(--muted); font-size:.9rem;">
-          <input type="checkbox" id="admin-remember-me"> Kom ihåg mig
+          <input type="checkbox" id="admin-remember-me" checked> Kom ihåg mig på den här enheten
         </label>
         <button id="login-btn" class="btn btn-accent btn-lg w-100" type="button" onclick="checkLogin()">Logga in</button>
         <div id="login-error" class="alert alert-danger mt-3 py-2 small" style="display:none;">Fel inloggningsuppgifter.</div>
@@ -281,11 +295,11 @@
   <div id="app-admin">
     <div class="p-3 d-flex justify-content-between align-items-center border-bottom" style="border-color: var(--line) !important;">
       <div>
-        <div class="small text-uppercase" style="color:var(--muted); letter-spacing:.08em;">Workbench</div>
+        <div class="small text-uppercase" style="color:var(--muted); letter-spacing:.08em;">Inställningar</div>
         <strong id="admin-role-label">Admin</strong>
       </div>
       <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-ghost" type="button" onclick="toggleAdmin(false)">Stäng</button>
+        <button class="btn btn-sm btn-ghost" type="button" onclick="closeSettings()">Stäng</button>
         <button class="btn btn-sm btn-outline-danger" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
     </div>
@@ -306,6 +320,7 @@
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
 const USE_DEMO = !GAS_API_URL || GAS_API_URL.includes("PASTE_");
 const DEMO_STORAGE_KEY = "wallflow_demo_db_v3";
+const SESSION_STORAGE_KEY = "wallflow_session_v1";
 const REMEMBER_COOKIE = "wallflow_admin_remember_username";
 
 const COLOR_HEX = {
@@ -532,6 +547,78 @@ function setRememberedAdminUsername(username) {
   }
   document.cookie = REMEMBER_COOKIE + "=" + encodeURIComponent(username) + "; Max-Age=" + (400 * 86400) + "; path=/; SameSite=Lax";
 }
+
+function saveSession_(remember) {
+  const payload = {
+    token: __sessionToken,
+    username: currentUser.username,
+    name: currentUser.name || "",
+    role: currentUser.role,
+    firstLogin: !!currentUser.firstLogin,
+    remember: !!remember
+  };
+  if (remember) localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+  else {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+  }
+}
+function clearStoredSession_() {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  sessionStorage.removeItem(SESSION_STORAGE_KEY);
+}
+function restoreSession_() {
+  let raw = localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) return false;
+  try {
+    const s = JSON.parse(raw);
+    if (!s || !s.token || !s.username) return false;
+    __sessionToken = s.token;
+    currentUser = {
+      authorized: true,
+      username: s.username,
+      name: s.name || "",
+      role: s.role || "admin",
+      firstLogin: !!s.firstLogin
+    };
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+function showLoginGate_() {
+  document.getElementById("app-public").classList.remove("ready");
+  document.getElementById("login-panel").classList.add("show");
+  document.getElementById("login-error").style.display = "none";
+  const remembered = getCookie_(REMEMBER_COOKIE);
+  if (remembered) {
+    document.getElementById("admin-user").value = remembered;
+    document.getElementById("admin-remember-me").checked = true;
+  }
+  setTimeout(() => {
+    const el = document.getElementById(remembered ? "admin-pw" : "admin-user");
+    if (el) el.focus();
+  }, 50);
+}
+function showAppShell_() {
+  document.getElementById("login-panel").classList.remove("show");
+  document.getElementById("app-public").classList.add("ready");
+  const label = currentUser.name || currentUser.username || "Användare";
+  document.getElementById("account-name").textContent = label;
+  document.getElementById("admin-role-label").textContent = adminRoleLabelSv();
+  renderEditToolbar_();
+  if (currentUser.firstLogin) openSettings();
+}
+function renderEditToolbar_() {
+  const host = document.getElementById("edit-toolbar");
+  if (!host) return;
+  if (!currentUser.authorized) { host.style.display = "none"; return; }
+  host.style.display = "flex";
+  host.innerHTML = `
+    ${canManageRouteStructureRole() ? `<button type="button" class="chip" onclick="renderRouteForm()">+ Ny led</button>` : ""}
+    <button type="button" class="chip" onclick="openSettings()">Konto</button>
+  `;
+}
 function sortRoutes_(routes) {
   return routes.slice().sort((a, b) => {
     if (a.DagsAttByggaOm !== b.DagsAttByggaOm) return a.DagsAttByggaOm === "Ja" ? -1 : 1;
@@ -566,27 +653,49 @@ function normalizeRoute_(r) {
 /* ---------- Boot ---------- */
 window.addEventListener("load", () => {
   if (USE_DEMO) document.getElementById("demo-banner").style.display = "block";
+  const hasSession = restoreSession_();
+  if (!hasSession) {
+    hideLoadingScreen();
+    showLoginGate_();
+    return;
+  }
+  bootAppData_();
+});
+function hideLoadingScreen() { document.getElementById("loading-screen").classList.add("hide"); }
+
+function bootAppData_() {
   renderFilters();
   google.script.run
     .withSuccessHandler((data) => {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
       if (colorFilter !== "ALL" && !isAllowedGrade_(colorFilter)) colorFilter = "ALL";
+      showAppShell_();
       filterData();
       hideLoadingScreen();
     })
     .withFailureHandler(() => {
+      // Session kan vara ogiltig mot GAS — tvinga ny inloggning om inte demoläge
+      if (!USE_DEMO) {
+        clearStoredSession_();
+        currentUser = { authorized: false, role: null, username: null, firstLogin: false };
+        __sessionToken = null;
+        hideLoadingScreen();
+        showLoginGate_();
+        showToast("Sessionen har gått ut — logga in igen");
+        return;
+      }
       const seeded = seedDemoDb_();
       db.routes = seeded.routes.map(normalizeRoute_);
       db.grades = seeded.grades.slice();
       document.getElementById("demo-banner").style.display = "block";
+      showAppShell_();
       filterData();
       hideLoadingScreen();
       showToast("Kunde inte nå backend — visar lokal data");
     })
     .getAppData();
-});
-function hideLoadingScreen() { document.getElementById("loading-screen").classList.add("hide"); }
+}
 
 /** Endast färger från fliken Grades (i sheet-ordning). */
 function availableColors_() {
@@ -710,7 +819,9 @@ function renderColors(routes) {
 
 function routeRowHtml_(r) {
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
-  const note = r.Anteckningar || r.Ledbyggare || "—";
+  const editBtn = (currentUser.authorized && canEditContentRole() && r.Nr)
+    ? `<button type="button" class="btn-edit-row" onclick="event.stopPropagation(); renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera</button>`
+    : `<span></span>`;
   return `
     <div class="route-row" onclick="openRoute('${escapeHtml_(routeKey_(r))}')">
       <span class="route-dot" style="background:${colorHex_(r.Gradering)}"></span>
@@ -719,6 +830,7 @@ function routeRowHtml_(r) {
         <span>${escapeHtml_(r.Gradering || "—")}${r.Ledbyggare ? " · " + escapeHtml_(r.Ledbyggare) : ""} · ${escapeHtml_(r.Byggdatum || "—")}</span>
       </div>
       <div><span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell"}</span></div>
+      ${editBtn}
     </div>`;
 }
 
@@ -747,36 +859,33 @@ function openRoute(key) {
       <div style="white-space:pre-wrap; margin-top:4px;">${escapeHtml_(r.Anteckningar || "Inga anteckningar.")}</div>
     </div>
     ${img ? `<img class="topo-img" src="${escapeHtml_(img)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy">` : ""}
+    ${currentUser.authorized && canEditContentRole() && r.Nr ? `
+      <button class="btn btn-accent w-100 mt-3" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera led</button>
+      ${canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera led</button>` : ""}
+    ` : ""}
   `;
   document.getElementById("panel").classList.add("open");
 }
 function closePanel() { document.getElementById("panel").classList.remove("open"); }
 
-/* ---------- Auth / Admin ---------- */
-function toggleAdmin(show) {
-  if (!show) { document.getElementById("app-admin").classList.remove("show"); return; }
-  if (currentUser.authorized) {
-    document.getElementById("app-admin").classList.add("show");
-    document.getElementById("admin-role-label").textContent = adminRoleLabelSv();
-    if (currentUser.firstLogin) renderForcePasswordChange();
-    else renderAdminHome();
-  } else openLoginPanel();
+/* ---------- Auth / Settings ---------- */
+function openSettings() {
+  if (!currentUser.authorized) return showLoginGate_();
+  document.getElementById("app-admin").classList.add("show");
+  document.getElementById("admin-role-label").textContent = adminRoleLabelSv();
+  if (currentUser.firstLogin) renderForcePasswordChange();
+  else renderSettingsHome();
 }
-function openLoginPanel() {
-  document.getElementById("login-error").style.display = "none";
-  const remembered = getCookie_(REMEMBER_COOKIE);
-  if (remembered) {
-    document.getElementById("admin-user").value = remembered;
-    document.getElementById("admin-remember-me").checked = true;
-  }
-  document.getElementById("login-panel").classList.add("show");
+function closeSettings() {
+  if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  document.getElementById("app-admin").classList.remove("show");
 }
-function closeLoginPanel() { document.getElementById("login-panel").classList.remove("show"); }
 
 function checkLogin() {
   const user = document.getElementById("admin-user").value.trim();
   const pw = document.getElementById("admin-pw").value;
   const btn = document.getElementById("login-btn");
+  const remember = !!document.getElementById("admin-remember-me").checked;
   btn.disabled = true; btn.textContent = "Loggar in…";
   google.script.run
     .withSuccessHandler((res) => {
@@ -792,12 +901,12 @@ function checkLogin() {
         name: res.name || "",
         firstLogin: !!res.firstLogin
       };
-      if (document.getElementById("admin-remember-me").checked) setRememberedAdminUsername(user);
+      if (remember) setRememberedAdminUsername(user);
       else setRememberedAdminUsername("");
+      saveSession_(remember);
       document.getElementById("admin-pw").value = "";
-      closeLoginPanel();
-      toggleAdmin(true);
       showToast("Inloggad");
+      bootAppData_();
     })
     .withFailureHandler(() => {
       btn.disabled = false; btn.textContent = "Logga in";
@@ -808,11 +917,15 @@ function checkLogin() {
 function logoutAdmin() {
   currentUser = { authorized: false, role: null, username: null, firstLogin: false };
   __sessionToken = null;
+  clearStoredSession_();
   document.getElementById("app-admin").classList.remove("show");
+  closePanel();
+  showLoginGate_();
   showToast("Utloggad");
 }
 
 function renderForcePasswordChange() {
+  document.getElementById("app-admin").classList.add("show");
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <h3>Välj nytt lösenord</h3>
@@ -834,72 +947,40 @@ function handlePasswordChange() {
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) { err.textContent = (res && res.error) || "Kunde inte spara"; err.style.display = "block"; return; }
       currentUser.firstLogin = false;
+      saveSession_(!!localStorage.getItem(SESSION_STORAGE_KEY));
       showToast("Lösenord sparat");
-      renderAdminHome();
+      closeSettings();
+      showAppShell_();
     })
     .finalizeUserPassword(currentUser.username, p1);
 }
 
-function renderAdminHome() {
-  const routes = sortRoutes_(db.routes);
+function renderSettingsHome() {
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
-      <h3>WallFlow Workbench</h3>
+      <h3>Konto</h3>
       <p class="mb-3" style="color:var(--muted); font-size:.9rem;">
-        Synkad mot Google Sheet-fliken <strong>Alla leder</strong>.
-        ${USE_DEMO ? "Demoläge aktivt." : "Live mot GAS."}
-        ${canManageRouteStructureRole() ? "" : " Du kan redigera befintliga leder."}
+        ${escapeHtml_(currentUser.name || currentUser.username || "")} · ${escapeHtml_(adminRoleLabelSv())}<br>
+        Redigera leder direkt i listan. ${USE_DEMO ? "Demoläge aktivt." : "Live mot Google Sheet."}
       </p>
       <div class="d-flex flex-wrap gap-2">
-        ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
+        <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
-    </div>
-    <div class="admin-card">
-      <h4>Leder</h4>
-      <input class="form-control form-control-sm mb-2" id="admin-route-filter" placeholder="Filtrera…" oninput="renderAdminRouteList()">
-      <div id="admin-route-list"></div>
     </div>`;
-  window.__adminRoutes = routes;
-  renderAdminRouteList();
-}
-
-function renderAdminRouteList() {
-  const q = String((document.getElementById("admin-route-filter") || {}).value || "").toLowerCase().trim();
-  const host = document.getElementById("admin-route-list");
-  if (!host) return;
-  const list = sortRoutes_(db.routes).filter((r) => {
-    if (!q) return true;
-    return [r.Nr, r.Gradering, r.Ledbyggare, r.Anteckningar, r.DagsAttByggaOm].join(" ").toLowerCase().includes(q);
-  });
-  host.innerHTML = list.map((r) => `
-    <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:var(--line)!important; gap:8px;">
-      <div style="min-width:0;">
-        <strong style="display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-          <span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>
-          ${r.Nr ? "Led " + escapeHtml_(r.Nr) : escapeHtml_(r.Gradering || "Led")}
-          ${r.Anteckningar ? " · " + escapeHtml_(r.Anteckningar) : ""}
-        </strong>
-        <div class="small" style="color:var(--muted);">${escapeHtml_(r.Gradering)} · ${escapeHtml_(r.DagsAttByggaOm)} · ${escapeHtml_(r.Ledbyggare || "—")}</div>
-      </div>
-      <div class="d-flex gap-2 flex-shrink-0">
-        <button class="btn btn-sm btn-ghost" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera</button>
-        ${canManageRouteStructureRole() && r.Nr ? `<button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera</button>` : ""}
-      </div>
-    </div>
-  `).join("") || `<div class="empty">Inga leder.</div>`;
 }
 
 function renderRouteForm(nr) {
+  if (!currentUser.authorized) return showLoginGate_();
   if (!nr && !canManageRouteStructureRole()) {
     showToast("Bara superadmin kan lägga till leder");
-    return renderAdminHome();
+    return;
   }
   const r = nr ? routeByNr_(nr) : null;
   if (nr && !r) {
     showToast("Leden hittades inte");
-    return renderAdminHome();
+    return;
   }
   const grades = gradeList_();
   const route = r || {
@@ -909,10 +990,9 @@ function renderRouteForm(nr) {
   const selectedGrade = isAllowedGrade_(route.Gradering) ? route.Gradering : grades[0];
   const colorOpts = grades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
   const nrReadonly = !!nr || !canManageRouteStructureRole();
-  document.getElementById("admin-main").innerHTML = `
-    <div class="admin-card">
-      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
-      <h3>${nr ? "Redigera led " + escapeHtml_(nr) : "Ny led"}</h3>
+  document.getElementById("app-admin").classList.remove("show");
+  document.getElementById("panel-title").textContent = nr ? ("Redigera led " + nr) : "Ny led";
+  document.getElementById("panel-body").innerHTML = `
       <div class="row g-2 mb-3">
         <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
         <div class="col-4"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
@@ -931,7 +1011,9 @@ function renderRouteForm(nr) {
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
       <button class="btn btn-accent w-100" type="button" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
-    </div>`;
+      ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
+  `;
+  document.getElementById("panel").classList.add("open");
 }
 
 function saveRoute(existingNr) {
@@ -961,7 +1043,7 @@ function saveRoute(existingNr) {
       if (i >= 0) db.routes[i] = saved;
       else if (canManageRouteStructureRole()) db.routes.push(saved);
       showToast("Led sparad");
-      renderAdminHome();
+      closePanel();
       filterData();
     })
     .withFailureHandler(() => showToast("Kunde inte spara"))
@@ -976,16 +1058,17 @@ function deleteRoute(nr) {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte radera");
       db.routes = db.routes.filter((r) => String(r.Nr) !== String(nr));
       showToast("Led raderad");
-      renderAdminHome();
+      closePanel();
       filterData();
     })
     .deleteRoute(nr);
 }
 
 function renderPasswordForm() {
+  document.getElementById("app-admin").classList.add("show");
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
-      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>Byt lösenord</h3>
       <div class="mb-3"><input id="pw-old" type="password" class="form-control" placeholder="Nuvarande lösenord"></div>
       <div class="mb-3"><input id="pw-new" type="password" class="form-control" placeholder="Nytt lösenord"></div>
@@ -1000,16 +1083,17 @@ function changePassword() {
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte byta");
       showToast("Lösenord uppdaterat");
-      renderAdminHome();
+      renderSettingsHome();
     })
     .changeOwnPassword(oldPw, newPw);
 }
 
 function renderUserManagement() {
   if (!canManageUsersRole()) return;
+  document.getElementById("app-admin").classList.add("show");
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
-      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>Användare</h3>
       <p class="small mb-3" style="color:var(--muted);">Samma Users-struktur som Crags (Username, passwordHash, salt, role, name, FirstLogin).</p>
       <div class="row g-2 mb-3">

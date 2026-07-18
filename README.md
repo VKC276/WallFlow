@@ -72,6 +72,10 @@ python3 -m http.server 8080
 
 Demo-login: `admin` / `wallflow`
 
+## Inloggning
+
+WallFlow kräver inloggning direkt. Med **Kom ihåg mig** sparas sessionen på enheten så nästa besök hoppar över login. Redigering sker i huvudvyn via knappen **Redigera** (ingen separat workbench för leder).
+
 ## Roller
 
 - **superadmin** — redigera leder + lägga till/ta bort led-rader + användarhantering  
