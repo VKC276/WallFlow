@@ -541,7 +541,12 @@ function demoApi_(action, args) {
       const fail = (msg) => resolve({ ok: false, error: msg || "Fel" });
 
       if (action === "getAppData") {
-        return ok({ routes: store.routes, grades: store.grades || DEFAULT_GRADES.slice() });
+        const meUser = (store.users || []).find((x) => x.username === currentUser.username);
+        return ok({
+          routes: store.routes,
+          grades: store.grades || DEFAULT_GRADES.slice(),
+          me: meUser ? { username: meUser.username, name: meUser.name || "", role: meUser.role } : null
+        });
       }
       if (action === "verifyAdminPassword") {
         const [user, pw] = args;
@@ -730,10 +735,15 @@ function showLoginGate_() {
     if (el) el.focus();
   }, 50);
 }
+/** Visningsnamn för inloggad användare (inte användarnamn). */
+function currentDisplayName_() {
+  return String(currentUser && currentUser.name || "").trim();
+}
+
 function showAppShell_() {
   document.getElementById("login-panel").classList.remove("show");
   document.getElementById("app-public").classList.add("ready");
-  const label = currentUser.name || currentUser.username || "Användare";
+  const label = currentDisplayName_() || currentUser.username || "Användare";
   document.getElementById("account-name").textContent = label;
   document.getElementById("admin-role-label").textContent = adminRoleLabelSv();
   renderEditToolbar_();
@@ -793,6 +803,12 @@ function bootAppData_() {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
       if (colorFilter !== "ALL" && !isAllowedGrade_(colorFilter)) colorFilter = "ALL";
+      // Uppdatera visningsnamn från Users-fliken (aldrig användarnamn som Ledbyggare-default)
+      if (data && data.me && currentUser.authorized) {
+        if (data.me.name) currentUser.name = String(data.me.name).trim();
+        if (data.me.role) currentUser.role = data.me.role;
+        saveSession_(!!(localStorage.getItem(SESSION_STORAGE_KEY)));
+      }
       showAppShell_();
       filterData();
       hideLoadingScreen();
@@ -1201,12 +1217,13 @@ function renderRouteForm(nr) {
   }
   const grades = gradeList_();
   const route = r || {
-    Nr: "", Gradering: grades[0] || "Grön", Ledbyggare: currentUser.name || currentUser.username || "",
+    Nr: "", Gradering: grades[0] || "Grön", Ledbyggare: currentDisplayName_(),
     Byggdatum: new Date().toISOString().slice(0, 10), Anteckningar: "", Bild: ""
   };
   const selectedGrade = isAllowedGrade_(route.Gradering) ? route.Gradering : grades[0];
   const colorOpts = grades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
   const nrReadonly = !!nr || !canManageRouteStructureRole();
+  const displayName = currentDisplayName_();
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("panel-title").textContent = nr ? ("Redigera led " + nr) : "Ny led";
   document.getElementById("panel-body").innerHTML = `
@@ -1214,7 +1231,7 @@ function renderRouteForm(nr) {
         <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
         <div class="col-8"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
       </div>
-      <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(currentUser.name || currentUser.username || "")}"></div>
+      <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(displayName)}"></div>
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
@@ -1222,14 +1239,13 @@ function renderRouteForm(nr) {
       ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
   `;
   document.getElementById("panel").classList.add("open");
-  // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad användare som default (kan ändras)
+  // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad persons namn (inte användarnamn)
   if (nr) {
     const setterEl = document.getElementById("f-setter");
-    const defaultSetter = String(currentUser.name || currentUser.username || "").trim();
     if (setterEl) {
       setterEl.addEventListener("focus", () => {
-        setterEl.value = defaultSetter;
-        if (defaultSetter) setterEl.select();
+        setterEl.value = displayName;
+        if (displayName) setterEl.select();
       }, { once: true });
     }
   }

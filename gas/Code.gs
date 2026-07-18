@@ -91,8 +91,27 @@ function dispatch_(action, token, args) {
   }
 
   switch (action) {
-    case "getAppData":
-      return { routes: readRoutes_(), grades: readGrades_() };
+    case "getAppData": {
+      var appData = { routes: readRoutes_(), grades: readGrades_() };
+      // Om token finns: bifoga inloggad användares visningsnamn (inte användarnamn)
+      if (token) {
+        var meSession = getSession_(token);
+        if (meSession && meSession.username) {
+          var meUsers = readUsers_();
+          for (var mi = 0; mi < meUsers.length; mi++) {
+            if (meUsers[mi].username.toLowerCase() === String(meSession.username).toLowerCase()) {
+              appData.me = {
+                username: meUsers[mi].username,
+                name: meUsers[mi].name || "",
+                role: meUsers[mi].role
+              };
+              break;
+            }
+          }
+        }
+      }
+      return appData;
+    }
 
     case "verifyAdminPassword":
       return verifyAdminPassword_(args[0], args[1]);
@@ -299,6 +318,25 @@ function randomSalt_() {
   return Utilities.getUuid().replace(/-/g, "");
 }
 
+function userDisplayName_(u) {
+  // Crags/Sheets kan ha "name", "Name" eller "Namn"
+  var raw = u.name != null ? u.name
+    : (u.Name != null ? u.Name
+      : (u.Namn != null ? u.Namn : ""));
+  if (raw === "" || raw == null) {
+    var keys = Object.keys(u || {});
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k === "__row") continue;
+      if (String(k).toLowerCase() === "name" || String(k).toLowerCase() === "namn") {
+        raw = u[k];
+        break;
+      }
+    }
+  }
+  return String(raw == null ? "" : raw).trim();
+}
+
 function readUsers_() {
   ensureUserSheetHeaders_();
   var table = readTable_(WALLFLOW_SHEET_USERS);
@@ -308,7 +346,7 @@ function readUsers_() {
       passwordHash: String(u.passwordHash || ""),
       salt: String(u.salt || ""),
       role: String(u.role || "admin").trim().toLowerCase() || "admin",
-      name: String(u.name || "").trim(),
+      name: userDisplayName_(u),
       FirstLogin: String(u.FirstLogin == null ? "" : u.FirstLogin).trim(),
       __row: u.__row
     };
