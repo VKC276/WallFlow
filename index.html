@@ -203,9 +203,14 @@
       box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18), 0 6px 14px rgba(0,0,0,0.25);
     }
     .color-dist-card strong {
-      font-family: var(--font-display); font-size: 1.15rem; line-height: 1; letter-spacing: -0.02em;
+      font-family: var(--font-display);
+      font-size: 1.45rem;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: #f7f4ee;
+      font-weight: 800;
     }
-    .color-dist-card span { color: var(--muted); font-size: 0.72rem; font-weight: 600; text-align: center; }
+    .color-dist-card span { color: #c4ccd8; font-size: 0.78rem; font-weight: 600; text-align: center; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; animation: riseIn .55s ease .05s both; }
     .stat {
       padding: 14px 12px; border-radius: 16px;
@@ -961,16 +966,13 @@ function renderColors(routes) {
   const total = distRoutes.length;
 
   const cardsHtml = colors.map((c) => {
-    const list = byColor[c] || [];
-    const n = list.length;
-    const rebuild = list.filter((r) => r.DagsAttByggaOm === "Ja").length;
+    const n = (byColor[c] || []).length;
     const active = colorFilter === c ? " active" : "";
     return `
       <button type="button" class="color-dist-card${active}" onclick="setColorFilter('${escapeHtml_(c)}')">
         <span class="color-dist-blob" style="background:${colorHex_(c)}"></span>
         <strong>${n}</strong>
         <span>${escapeHtml_(c)}</span>
-        <span>${rebuild} bygg om</span>
       </button>`;
   }).join("");
 
