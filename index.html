@@ -1214,7 +1214,7 @@ function renderRouteForm(nr) {
         <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
         <div class="col-8"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
       </div>
-      <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}"></div>
+      <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(currentUser.name || currentUser.username || "")}"></div>
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
@@ -1222,6 +1222,17 @@ function renderRouteForm(nr) {
       ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
   `;
   document.getElementById("panel").classList.add("open");
+  // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad användare som default (kan ändras)
+  if (nr) {
+    const setterEl = document.getElementById("f-setter");
+    const defaultSetter = String(currentUser.name || currentUser.username || "").trim();
+    if (setterEl) {
+      setterEl.addEventListener("focus", () => {
+        setterEl.value = defaultSetter;
+        if (defaultSetter) setterEl.select();
+      }, { once: true });
+    }
+  }
 }
 
 function saveRoute(existingNr) {
