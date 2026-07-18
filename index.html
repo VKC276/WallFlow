@@ -286,8 +286,19 @@
       display: flex; flex-direction: column; box-shadow: 0 -20px 60px rgba(0,0,0,0.45);
     }
     #panel.open { transform: translateY(0); }
-    .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 8px; border-bottom: 1px solid var(--line); }
-    .panel-header h5 { margin: 0; font-family: var(--font-display); font-size: 1.2rem; letter-spacing: -0.02em; }
+    .panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 10px; border-bottom: 1px solid var(--line); overflow: visible; }
+    .panel-header h5 {
+      font-family: var(--font-body);
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.01em;
+      line-height: 1.5;
+      overflow: visible;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .panel-header .icon-btn { flex: 0 0 auto; margin-top: 1px; }
     #panel-body { overflow-y: auto; padding: 14px 16px calc(24px + var(--safe-bottom)); }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 16px; }
     .detail-cell { padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); }
@@ -1199,7 +1210,6 @@ function renderRouteForm(nr) {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("panel-title").textContent = nr ? ("Redigera led " + nr) : "Ny led";
   document.getElementById("panel-body").innerHTML = `
-      <p class="small mb-3" style="color:var(--muted);">Bygg om och slutdatum räknas ut i sheetet från datum — de redigeras inte här.</p>
       <div class="row g-2 mb-3">
         <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
         <div class="col-8"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
