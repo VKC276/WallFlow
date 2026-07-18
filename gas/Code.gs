@@ -19,6 +19,7 @@
  *
  * Flikar:
  *   "Alla leder" — Nr | Gradering | Dags att bygga om | Ledbyggare | Byggdatum | Slutdatum | Anteckningar | Bild
+ *   "Grades"     — Ordning | Färgnamn (t.ex. 1|Grön … 5|Vit) — tillåtna graderingar
  *   "Users"      — Username | passwordHash | salt | role | name | FirstLogin   (samma som Crags)
  *
  * API: POST text/plain JSON { action, token, args: [...] } → JSON
@@ -26,6 +27,7 @@
 
 var WALLFLOW_SPREADSHEET_ID = "1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0";
 var WALLFLOW_SHEET_ROUTES = "Alla leder";
+var WALLFLOW_SHEET_GRADES = "Grades";
 var WALLFLOW_SHEET_USERS = "Users";
 
 var ROUTE_HEADERS = [
@@ -90,7 +92,7 @@ function dispatch_(action, token, args) {
 
   switch (action) {
     case "getAppData":
-      return { routes: readRoutes_() };
+      return { routes: readRoutes_(), grades: readGrades_() };
 
     case "verifyAdminPassword":
       return verifyAdminPassword_(args[0], args[1]);
@@ -216,6 +218,46 @@ function mapRoute_(obj) {
     Bild: String(obj["Bild"] == null ? "" : obj["Bild"]).trim(),
     __row: obj.__row
   };
+}
+
+/**
+ * Fliken Grades: rader som "1, Grön" / "2, Blå" …
+ * Returnerar färgnamn i sheet-ordning.
+ */
+function readGrades_() {
+  var sh = sheet_(WALLFLOW_SHEET_GRADES);
+  var values = sh.getDataRange().getValues();
+  var out = [];
+  var seen = {};
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i] || [];
+    var a = String(row[0] == null ? "" : row[0]).trim();
+    var b = String(row[1] == null ? "" : row[1]).trim();
+    // Hoppa över tom rad / ev. header
+    if (!a && !b) continue;
+    var name = "";
+    var order = i + 1;
+    if (b && isNaN(Number(b)) && String(b).toLowerCase() !== "gradering" && String(b).toLowerCase() !== "grade") {
+      name = b;
+      if (!isNaN(Number(a))) order = Number(a);
+    } else if (a && isNaN(Number(a)) && String(a).toLowerCase() !== "gradering" && String(a).toLowerCase() !== "grade") {
+      name = a;
+    }
+    if (!name || seen[name.toLowerCase()]) continue;
+    seen[name.toLowerCase()] = true;
+    out.push({ Order: order, Namn: name });
+  }
+  out.sort(function (x, y) { return (x.Order || 0) - (y.Order || 0); });
+  return out.map(function (g) { return g.Namn; });
+}
+
+function isAllowedGrade_(name) {
+  var grades = readGrades_();
+  var target = String(name || "").trim().toLowerCase();
+  for (var i = 0; i < grades.length; i++) {
+    if (String(grades[i]).toLowerCase() === target) return true;
+  }
+  return false;
 }
 
 function readRoutes_() {
@@ -536,6 +578,12 @@ function routeToRowValues_(route) {
 function saveRoute_(route, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
   route = route || {};
+  var grade = String(route.Gradering || "").trim();
+  if (!grade) return { ok: false, error: "Gradering saknas" };
+  if (!isAllowedGrade_(grade)) {
+    return { ok: false, error: "Ogiltig gradering. Tillåtna: " + readGrades_().join(", ") };
+  }
+  route.Gradering = grade;
   var sh = sheet_(WALLFLOW_SHEET_ROUTES);
 
   // Säkerställ header

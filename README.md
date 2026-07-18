@@ -19,6 +19,20 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 | Anteckningar | Fri text |
 | Bild | Drive-fil-ID eller URL |
 
+### Flik `Grades`
+
+Tillåtna färger / graderingar i ordning, t.ex.:
+
+| | |
+|--|--|
+| 1 | Grön |
+| 2 | Blå |
+| 3 | Röd |
+| 4 | Svart |
+| 5 | Vit |
+
+Appen använder **bara** dessa i filter och admin-val.
+
 ### Flik `Users` (samma som Crags)
 
 `Username | passwordHash | salt | role | name | FirstLogin`

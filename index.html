@@ -300,30 +300,26 @@
  *
  * Sheet: 1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0
  * Flik "Alla leder": Nr | Gradering | Dags att bygga om | Ledbyggare | Byggdatum | Slutdatum | Anteckningar | Bild
+ * Flik "Grades": tillåtna färger (Grön, Blå, Röd, Svart, Vit)
  * Flik "Users": Username | passwordHash | salt | role | name | FirstLogin
  *********************************************************************/
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
 const USE_DEMO = !GAS_API_URL || GAS_API_URL.includes("PASTE_");
-const DEMO_STORAGE_KEY = "wallflow_demo_db_v2";
+const DEMO_STORAGE_KEY = "wallflow_demo_db_v3";
 const REMEMBER_COOKIE = "wallflow_admin_remember_username";
 
 const COLOR_HEX = {
-  "Blå": "#3498db",
-  "Vit": "#ecf0f1",
-  "Svart": "#2c3e50",
-  "Röd": "#e74c3c",
   "Grön": "#2ecc71",
-  "Wildcard": "#f39c12",
-  "Orange": "#e67e22",
-  "Gul": "#f1c40f",
-  "Rosa": "#ff6b9d",
-  "Lila": "#9b59b6"
+  "Blå": "#3498db",
+  "Röd": "#e74c3c",
+  "Svart": "#2c3e50",
+  "Vit": "#ecf0f1"
 };
-const COLOR_ORDER = ["Blå", "Grön", "Röd", "Vit", "Svart", "Wildcard", "Orange", "Gul", "Rosa", "Lila"];
+const DEFAULT_GRADES = ["Grön", "Blå", "Röd", "Svart", "Vit"];
 
 let __sessionToken = null;
 let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
-let db = { routes: [] };
+let db = { routes: [], grades: DEFAULT_GRADES.slice() };
 let currentView = "flow";
 let rebuildFilter = "Ja"; // default: visa det som ska byggas om
 let colorFilter = "ALL";
@@ -365,6 +361,7 @@ window.google.script.run = createRunProxy_();
 /* ---------- Demo ---------- */
 function seedDemoDb_() {
   return {
+    grades: DEFAULT_GRADES.slice(),
     routes: [
       { Nr: "1", Gradering: "Blå", DagsAttByggaOm: "Ja", Ledbyggare: "", Byggdatum: "2026-06-14", Slutdatum: "2026-07-14", Anteckningar: "Nått nytt", Bild: "" },
       { Nr: "2", Gradering: "Blå", DagsAttByggaOm: "Ja", Ledbyggare: "Jesper", Byggdatum: "2026-04-27", Slutdatum: "2026-05-27", Anteckningar: "", Bild: "" },
@@ -398,7 +395,9 @@ function demoApi_(action, args) {
       const ok = (data) => resolve(data);
       const fail = (msg) => resolve({ ok: false, error: msg || "Fel" });
 
-      if (action === "getAppData") return ok({ routes: store.routes });
+      if (action === "getAppData") {
+        return ok({ routes: store.routes, grades: store.grades || DEFAULT_GRADES.slice() });
+      }
       if (action === "verifyAdminPassword") {
         const [user, pw] = args;
         const u = (store.users || []).find((x) => x.username === String(user || "").trim() && x.password === String(pw || ""));
@@ -412,6 +411,10 @@ function demoApi_(action, args) {
         const [route] = args;
         const role = String(currentUser.role || "").toLowerCase();
         const isSuper = role === "superadmin";
+        const grades = store.grades || DEFAULT_GRADES;
+        if (!grades.some((g) => String(g).toLowerCase() === String(route.Gradering || "").toLowerCase())) {
+          return fail("Ogiltig gradering. Tillåtna: " + grades.join(", "));
+        }
         if (route.Nr) {
           const i = store.routes.findIndex((r) => String(r.Nr) === String(route.Nr));
           if (i >= 0) {
@@ -485,6 +488,13 @@ function escapeHtml_(str) {
 }
 function colorHex_(name) {
   return COLOR_HEX[name] || "#95a5a6";
+}
+function gradeList_() {
+  return (db.grades && db.grades.length) ? db.grades.slice() : DEFAULT_GRADES.slice();
+}
+function isAllowedGrade_(name) {
+  const t = String(name || "").trim().toLowerCase();
+  return gradeList_().some((g) => String(g).toLowerCase() === t);
 }
 function userRole_() {
   const r = String(currentUser && currentUser.role || "").toLowerCase().trim();
@@ -560,11 +570,15 @@ window.addEventListener("load", () => {
   google.script.run
     .withSuccessHandler((data) => {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
+      db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
+      if (colorFilter !== "ALL" && !isAllowedGrade_(colorFilter)) colorFilter = "ALL";
       filterData();
       hideLoadingScreen();
     })
     .withFailureHandler(() => {
-      db.routes = seedDemoDb_().routes.map(normalizeRoute_);
+      const seeded = seedDemoDb_();
+      db.routes = seeded.routes.map(normalizeRoute_);
+      db.grades = seeded.grades.slice();
       document.getElementById("demo-banner").style.display = "block";
       filterData();
       hideLoadingScreen();
@@ -574,11 +588,9 @@ window.addEventListener("load", () => {
 });
 function hideLoadingScreen() { document.getElementById("loading-screen").classList.add("hide"); }
 
+/** Endast färger från fliken Grades (i sheet-ordning). */
 function availableColors_() {
-  const set = new Set(db.routes.map((r) => r.Gradering).filter(Boolean));
-  const ordered = COLOR_ORDER.filter((c) => set.has(c));
-  const rest = [...set].filter((c) => !COLOR_ORDER.includes(c)).sort((a, b) => a.localeCompare(b, "sv"));
-  return ordered.concat(rest);
+  return gradeList_();
 }
 
 function renderFilters() {
@@ -621,6 +633,8 @@ function routeMatches_(r, tokens) {
 function visibleRoutes_() {
   const tokens = getSearchTokens_();
   return sortRoutes_(db.routes.filter((r) => {
+    // Visa bara leder med gradering från Grades (dölj t.ex. Wildcard)
+    if (!isAllowedGrade_(r.Gradering)) return false;
     if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
     if (colorFilter !== "ALL" && r.Gradering !== colorFilter) return false;
     return routeMatches_(r, tokens);
@@ -662,17 +676,17 @@ function renderFlow(routes) {
 function renderColors(routes) {
   const byColor = {};
   routes.forEach((r) => {
-    const key = r.Gradering || "Övrigt";
+    const key = r.Gradering || "";
+    if (!isAllowedGrade_(key)) return; // hoppa över t.ex. Wildcard utanför Grades
     if (!byColor[key]) byColor[key] = [];
     byColor[key].push(r);
   });
   const colors = availableColors_().filter((c) => byColor[c] && byColor[c].length);
-  Object.keys(byColor).forEach((c) => { if (!colors.includes(c)) colors.push(c); });
 
   document.getElementById("view-colors").innerHTML = `
     <div class="hero-line">
       <h1>Efter färg</h1>
-      <p>Grupperat på gradering från sheetet.</p>
+      <p>Grupperat enligt fliken Grades.</p>
     </div>
     ${colors.length ? colors.map((c, idx) => `
       <div class="color-block" style="animation-delay:${idx * 0.04}s">
@@ -882,12 +896,13 @@ function renderRouteForm(nr) {
     showToast("Leden hittades inte");
     return renderAdminHome();
   }
+  const grades = gradeList_();
   const route = r || {
-    Nr: "", Gradering: "Blå", DagsAttByggaOm: "Ja", Ledbyggare: currentUser.name || currentUser.username || "",
+    Nr: "", Gradering: grades[0] || "Grön", DagsAttByggaOm: "Ja", Ledbyggare: currentUser.name || currentUser.username || "",
     Byggdatum: new Date().toISOString().slice(0, 10), Slutdatum: "", Anteckningar: "", Bild: ""
   };
-  const colors = Array.from(new Set(COLOR_ORDER.concat(availableColors_())));
-  const colorOpts = colors.map((c) => `<option value="${escapeHtml_(c)}" ${route.Gradering === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
+  const selectedGrade = isAllowedGrade_(route.Gradering) ? route.Gradering : grades[0];
+  const colorOpts = grades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
   const nrReadonly = !!nr || !canManageRouteStructureRole();
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
@@ -926,6 +941,9 @@ function saveRoute(existingNr) {
     Anteckningar: document.getElementById("f-notes").value.trim(),
     Bild: document.getElementById("f-img").value.trim()
   };
+  if (!isAllowedGrade_(route.Gradering)) {
+    return showToast("Välj en gradering från Grades");
+  }
   const exists = route.Nr && db.routes.some((r) => String(r.Nr) === String(route.Nr));
   if ((!route.Nr || !exists) && !canManageRouteStructureRole()) {
     return showToast("Bara superadmin kan lägga till leder");
