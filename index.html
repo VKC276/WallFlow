@@ -128,10 +128,57 @@
     .scroll-area { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px calc(98px + var(--safe-bottom)); }
     .hero-line { margin: 8px 0 18px; animation: riseIn .5s ease both; }
     .hero-line h1 {
-      font-family: var(--font-display); font-size: clamp(1.7rem, 5.5vw, 2.2rem);
-      font-weight: 800; letter-spacing: -0.03em; margin: 0 0 6px; line-height: 1.1;
+      font-family: var(--font-body);
+      font-size: clamp(1.2rem, 4.2vw, 1.65rem);
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      margin: 0 0 6px;
+      line-height: 1.2;
+      color: var(--text);
     }
-    .hero-line p { margin: 0; color: var(--muted); font-size: 0.95rem; max-width: 40ch; }
+    .hero-line .hero-title-short { display: none; }
+    @media (max-width: 420px) {
+      .hero-line .hero-title-full { display: none; }
+      .hero-line .hero-title-short { display: inline; }
+    }
+    .hero-line p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 40ch; }
+    .color-dist {
+      margin-bottom: 18px;
+      padding: 14px;
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line);
+      animation: riseIn .5s ease both;
+    }
+    .color-dist-bar {
+      display: flex; height: 18px; border-radius: 999px; overflow: hidden;
+      background: rgba(255,255,255,0.04); margin-bottom: 14px;
+    }
+    .color-dist-seg {
+      min-width: 2px; height: 100%;
+      transition: flex-grow .35s ease;
+    }
+    .color-dist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+      gap: 10px;
+    }
+    .color-dist-card {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 12px 8px; border-radius: 14px;
+      background: rgba(0,0,0,0.22); border: 1px solid transparent;
+      cursor: pointer; transition: border-color .2s, transform .2s;
+    }
+    .color-dist-card:hover { border-color: rgba(232,165,75,0.4); transform: translateY(-2px); }
+    .color-dist-card.active { border-color: rgba(232,165,75,0.65); }
+    .color-dist-blob {
+      width: 36px; height: 36px; border-radius: 50%;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18), 0 6px 14px rgba(0,0,0,0.25);
+    }
+    .color-dist-card strong {
+      font-family: var(--font-display); font-size: 1.15rem; line-height: 1; letter-spacing: -0.02em;
+    }
+    .color-dist-card span { color: var(--muted); font-size: 0.72rem; font-weight: 600; text-align: center; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; animation: riseIn .55s ease .05s both; }
     .stat {
       padding: 14px 12px; border-radius: 16px;
@@ -783,8 +830,8 @@ function renderFlow(routes) {
   const c = counts_();
   document.getElementById("view-flow").innerHTML = `
     <div class="hero-line">
-      <h1>Dags att bygga om</h1>
-      <p>Leder från bladet <em>Alla leder</em> — filtrera på ombyggnad och färg.</p>
+      <h1><span class="hero-title-full">Dags att bygga om</span><span class="hero-title-short">Ombyggnad</span></h1>
+      <p>Filtrera på ombyggnad och färg — öppna en led för att redigera.</p>
     </div>
     <div class="stats">
       <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Bygg om</span></div>
@@ -799,31 +846,72 @@ function renderFlow(routes) {
   `;
 }
 
-function renderColors(routes) {
-  const byColor = {};
-  routes.forEach((r) => {
-    const key = r.Gradering || "";
-    if (!isAllowedGrade_(key)) return; // hoppa över t.ex. Wildcard utanför Grades
-    if (!byColor[key]) byColor[key] = [];
-    byColor[key].push(r);
+function colorDistributionRoutes_() {
+  // Fördelning: alla Grades-färger, respektera ombyggnadsfilter + sök men inte färgfilter
+  const tokens = getSearchTokens_();
+  return db.routes.filter((r) => {
+    if (!isAllowedGrade_(r.Gradering)) return false;
+    if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
+    return routeMatches_(r, tokens);
   });
-  const colors = availableColors_().filter((c) => byColor[c] && byColor[c].length);
+}
+
+function renderColors(routes) {
+  const distRoutes = colorDistributionRoutes_();
+  const byColor = {};
+  availableColors_().forEach((c) => { byColor[c] = []; });
+  distRoutes.forEach((r) => {
+    if (!byColor[r.Gradering]) byColor[r.Gradering] = [];
+    byColor[r.Gradering].push(r);
+  });
+  const colors = availableColors_();
+  const total = distRoutes.length || 1;
+
+  const barHtml = colors.map((c) => {
+    const n = (byColor[c] || []).length;
+    if (!n) return "";
+    return `<div class="color-dist-seg" title="${escapeHtml_(c)}: ${n}" style="flex:${n}; background:${colorHex_(c)};"></div>`;
+  }).join("");
+
+  const cardsHtml = colors.map((c) => {
+    const list = byColor[c] || [];
+    const n = list.length;
+    const rebuild = list.filter((r) => r.DagsAttByggaOm === "Ja").length;
+    const pct = distRoutes.length ? Math.round((n / distRoutes.length) * 100) : 0;
+    const active = colorFilter === c ? " active" : "";
+    return `
+      <button type="button" class="color-dist-card${active}" onclick="setColorFilter('${escapeHtml_(c)}')">
+        <span class="color-dist-blob" style="background:${colorHex_(c)}"></span>
+        <strong>${n}</strong>
+        <span>${escapeHtml_(c)} · ${pct}%</span>
+        <span>${rebuild} bygg om</span>
+      </button>`;
+  }).join("");
+
+  // Lista under: filtrera enligt valt färgfilter om satt
+  const listColors = colorFilter === "ALL"
+    ? colors.filter((c) => (byColor[c] || []).length)
+    : colors.filter((c) => c === colorFilter && (byColor[c] || []).length);
 
   document.getElementById("view-colors").innerHTML = `
     <div class="hero-line">
-      <h1>Efter färg</h1>
-      <p>Grupperat enligt fliken Grades.</p>
+      <h1>Färgfördelning</h1>
+      <p>Snabb överblick per gradering — tryck på en färg för att filtrera.</p>
     </div>
-    ${colors.length ? colors.map((c, idx) => `
+    <div class="color-dist">
+      <div class="color-dist-bar" aria-hidden="true">${barHtml || `<div class="color-dist-seg" style="flex:1;background:rgba(255,255,255,0.06)"></div>`}</div>
+      <div class="color-dist-grid">${cardsHtml}</div>
+    </div>
+    ${listColors.length ? listColors.map((c, idx) => `
       <div class="color-block" style="animation-delay:${idx * 0.04}s">
         <div class="color-head" onclick="setColorFilter('${escapeHtml_(c)}'); switchView('flow');">
           <div>
             <h3><span class="color-swatch" style="background:${colorHex_(c)}"></span>${escapeHtml_(c)}</h3>
-            <small>${byColor[c].length} leder · ${byColor[c].filter((r) => r.DagsAttByggaOm === "Ja").length} att bygga om</small>
+            <small>${(byColor[c] || []).length} leder · ${(byColor[c] || []).filter((r) => r.DagsAttByggaOm === "Ja").length} att bygga om</small>
           </div>
           <span style="color:var(--muted)">›</span>
         </div>
-        <div class="route-list">${byColor[c].slice(0, 5).map(routeRowHtml_).join("")}</div>
+        <div class="route-list">${(byColor[c] || []).slice(0, 5).map(routeRowHtml_).join("")}</div>
       </div>
     `).join("") : `<div class="empty">Inga leder matchar.</div>`}
   `;
@@ -853,7 +941,7 @@ function openRoute(key) {
         : "https://lh3.googleusercontent.com/d/" + encodeURIComponent(r.Bild) + "=s800")
     : "";
   document.getElementById("panel-body").innerHTML = `
-    <div class="mb-2"><span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${r.DagsAttByggaOm === "Ja" ? "Dags att bygga om" : "Aktuell"}</span></div>
+    <div class="mb-2"><span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell"}</span></div>
     <div class="detail-grid">
       <div class="detail-cell"><label>Nr</label><strong>${escapeHtml_(r.Nr || "—")}</strong></div>
       <div class="detail-cell"><label>Gradering</label><strong><span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>${escapeHtml_(r.Gradering || "—")}</strong></div>
