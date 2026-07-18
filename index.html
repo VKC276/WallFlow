@@ -224,12 +224,25 @@
     }
     .stat strong { display: block; font-family: var(--font-display); font-size: 1.45rem; line-height: 1; margin-bottom: 4px; }
     .stat span { color: var(--muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .section-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 10px; overflow: visible; }
-    .section-label h2 {
-      font-family: var(--font-display); font-size: 1.05rem; margin: 0; letter-spacing: -0.02em;
-      line-height: 1.4; overflow: visible; padding-bottom: 0.12em;
+    .section-label {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+      margin: 18px 0 10px; overflow: visible;
     }
-    .section-label span { color: var(--muted); font-size: 0.8rem; }
+    .section-label h2 {
+      /* Figtree: Syne-descenders (g) klipptes i flex under statistikboxarna */
+      font-family: var(--font-body);
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.01em;
+      line-height: 1.5;
+      overflow: visible;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .section-label span {
+      color: var(--muted); font-size: 0.8rem; line-height: 1.5; flex: 0 0 auto; padding-top: 0.15em;
+    }
     .color-block {
       margin-bottom: 14px; border-radius: var(--radius); background: rgba(255,255,255,0.03);
       border: 1px solid var(--line); overflow: hidden; animation: riseIn .5s ease both;
