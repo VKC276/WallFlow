@@ -865,7 +865,6 @@ function renderColors(routes) {
     byColor[r.Gradering].push(r);
   });
   const colors = availableColors_();
-  const total = distRoutes.length || 1;
 
   const barHtml = colors.map((c) => {
     const n = (byColor[c] || []).length;
