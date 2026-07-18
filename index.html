@@ -1101,18 +1101,28 @@ function renderUserManagement() {
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>Användare</h3>
-      <p class="small mb-3" style="color:var(--muted);">Samma Users-struktur som Crags (Username, passwordHash, salt, role, name, FirstLogin).</p>
+      <p class="small mb-3" style="color:var(--muted);">Skapa nya konton. Vid första inloggning uppmanas användaren att byta lösenord.</p>
       <div class="row g-2 mb-3">
-        <div class="col-6"><input id="nu-user" class="form-control form-control-sm" placeholder="Användarnamn"></div>
-        <div class="col-6"><input id="nu-name" class="form-control form-control-sm" placeholder="Namn"></div>
         <div class="col-6">
+          <label class="form-label" for="nu-user">Användarnamn</label>
+          <input id="nu-user" class="form-control form-control-sm" placeholder="t.ex. jesper" autocomplete="off">
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="nu-name">Namn</label>
+          <input id="nu-name" class="form-control form-control-sm" placeholder="För- och efternamn" autocomplete="off">
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="nu-role">Roll</label>
           <select id="nu-role" class="form-select form-select-sm">
             <option value="admin">Admin</option>
             <option value="scout">Sättare</option>
             <option value="superadmin">Superadmin</option>
           </select>
         </div>
-        <div class="col-6"><input id="nu-pw" class="form-control form-control-sm" placeholder="Temp-lösenord" value="changeme"></div>
+        <div class="col-6">
+          <label class="form-label" for="nu-pw">Tillfälligt lösenord</label>
+          <input id="nu-pw" class="form-control form-control-sm" placeholder="Temp-lösenord" value="changeme" autocomplete="new-password">
+        </div>
       </div>
       <button class="btn btn-accent btn-sm mb-3" type="button" onclick="createUser()">Skapa användare</button>
       <div id="admin-user-list">Laddar…</div>
