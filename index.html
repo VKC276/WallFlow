@@ -68,7 +68,7 @@
     @keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
     @keyframes fadeSlide { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 
-    #app-public { display: flex; flex-direction: column; height: 100%; min-height: 100dvh; position: relative; }
+    #app-public { display: none; flex-direction: column; height: 100%; min-height: 100dvh; position: relative; }
     .topbar {
       position: sticky; top: 0; z-index: 30;
       padding: calc(12px + var(--safe-top)) 16px 10px;
@@ -169,7 +169,6 @@
     .detail-cell { padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--line); }
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
-    #app-public { display: none; }
     #app-public.ready { display: flex; }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: #10141a; display: none; flex-direction: column; }
     #login-panel.show, #app-admin.show { display: flex; }
