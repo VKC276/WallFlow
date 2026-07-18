@@ -641,9 +641,14 @@ function visibleRoutes_() {
   }));
 }
 function counts_() {
-  let ja = 0, nej = 0;
-  db.routes.forEach((r) => { if (r.DagsAttByggaOm === "Ja") ja++; else if (r.DagsAttByggaOm === "Nej") nej++; });
-  return { ja, nej, total: db.routes.length };
+  let ja = 0, nej = 0, total = 0;
+  db.routes.forEach((r) => {
+    if (!isAllowedGrade_(r.Gradering)) return;
+    total++;
+    if (r.DagsAttByggaOm === "Ja") ja++;
+    else if (r.DagsAttByggaOm === "Nej") nej++;
+  });
+  return { ja, nej, total };
 }
 
 function filterData() {
