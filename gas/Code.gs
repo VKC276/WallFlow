@@ -343,6 +343,11 @@ function canDelete_(session) {
   return r === "superadmin" || r === "admin";
 }
 
+/** Superadmin: lägga till / ta bort led-rader. Övriga får bara redigera befintliga. */
+function canManageRouteStructure_(session) {
+  return roleOf_(session) === "superadmin";
+}
+
 function canManageUsers_(session) {
   return roleOf_(session) === "superadmin";
 }
@@ -544,28 +549,33 @@ function saveRoute_(route, session) {
   }
 
   var nr = String(route.Nr == null ? "" : route.Nr).trim();
-  var isNew = !nr;
-  if (isNew) {
-    nr = String(nextRouteNumber_());
-    route.Nr = nr;
+  var rowNum = nr ? findRouteRowNumber_(nr) : -1;
+  var creating = !nr || rowNum < 0;
+
+  // Befintliga rader: alla med edit-roll. Nya rader: bara superadmin.
+  if (creating) {
+    if (!canManageRouteStructure_(session)) {
+      return { ok: false, error: "Bara superadmin kan lägga till leder" };
+    }
+    if (!nr) {
+      nr = String(nextRouteNumber_());
+      route.Nr = nr;
+    }
   }
 
   var values = routeToRowValues_(route);
-  var rowNum = findRouteRowNumber_(nr);
-  if (rowNum > 0) {
+  if (!creating && rowNum > 0) {
+    // Behåll Nr från sheetet (ändras inte via app för vanliga roller)
+    values[0] = Number(nr) || nr;
     sh.getRange(rowNum, 1, 1, ROUTE_HEADERS.length).setValues([values]);
   } else {
-    // Infoga före summeringsrader om möjligt: skriv på första tomma rad efter sista giltiga led
-    var insertAt = sh.getLastRow() + 1;
     var table = readTable_(WALLFLOW_SHEET_ROUTES);
-    // Hitta sista route-radens radnummer
     var lastRouteRow = 1;
     for (var j = 0; j < table.rows.length; j++) {
       if (isRouteRow_(table.rows[j])) lastRouteRow = Math.max(lastRouteRow, table.rows[j].__row);
     }
-    insertAt = lastRouteRow + 1;
     sh.insertRowAfter(lastRouteRow);
-    sh.getRange(insertAt, 1, 1, ROUTE_HEADERS.length).setValues([values]);
+    sh.getRange(lastRouteRow + 1, 1, 1, ROUTE_HEADERS.length).setValues([values]);
   }
 
   var saved = mapRoute_({
@@ -582,7 +592,9 @@ function saveRoute_(route, session) {
 }
 
 function deleteRoute_(nr, session) {
-  if (!canDelete_(session)) return { ok: false, error: "Saknar behörighet" };
+  if (!canManageRouteStructure_(session)) {
+    return { ok: false, error: "Bara superadmin kan ta bort leder" };
+  }
   var rowNum = findRouteRowNumber_(nr);
   if (rowNum < 0) return { ok: false, error: "Leden hittades inte" };
   sheet_(WALLFLOW_SHEET_ROUTES).deleteRow(rowNum);

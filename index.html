@@ -410,10 +410,19 @@ function demoApi_(action, args) {
 
       if (action === "saveRoute") {
         const [route] = args;
+        const role = String(currentUser.role || "").toLowerCase();
+        const isSuper = role === "superadmin";
         if (route.Nr) {
           const i = store.routes.findIndex((r) => String(r.Nr) === String(route.Nr));
-          if (i >= 0) store.routes[i] = { ...store.routes[i], ...route };
-          else store.routes.push(route);
+          if (i >= 0) {
+            store.routes[i] = { ...store.routes[i], ...route };
+          } else if (!isSuper) {
+            return fail("Bara superadmin kan lägga till leder");
+          } else {
+            store.routes.push(route);
+          }
+        } else if (!isSuper) {
+          return fail("Bara superadmin kan lägga till leder");
         } else {
           const max = store.routes.reduce((m, r) => Math.max(m, Number(r.Nr) || 0), 0);
           route.Nr = String(max + 1);
@@ -423,6 +432,9 @@ function demoApi_(action, args) {
         return ok({ ok: true, route });
       }
       if (action === "deleteRoute") {
+        if (String(currentUser.role || "").toLowerCase() !== "superadmin") {
+          return fail("Bara superadmin kan ta bort leder");
+        }
         const [nr] = args;
         store.routes = store.routes.filter((r) => String(r.Nr) !== String(nr));
         saveDemoDb_(store);
@@ -480,7 +492,8 @@ function userRole_() {
   return r || "admin";
 }
 function canManageUsersRole() { return userRole_() === "superadmin"; }
-function canDeleteContentRole() { return userRole_() === "superadmin" || userRole_() === "admin"; }
+/** Superadmin: lägga till / ta bort led-rader. Övriga ser bara redigera. */
+function canManageRouteStructureRole() { return userRole_() === "superadmin"; }
 function canEditContentRole() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || r === "scout";
@@ -816,9 +829,10 @@ function renderAdminHome() {
       <p class="mb-3" style="color:var(--muted); font-size:.9rem;">
         Synkad mot Google Sheet-fliken <strong>Alla leder</strong>.
         ${USE_DEMO ? "Demoläge aktivt." : "Live mot GAS."}
+        ${canManageRouteStructureRole() ? "" : " Du kan redigera befintliga leder."}
       </p>
       <div class="d-flex flex-wrap gap-2">
-        <button class="btn btn-accent btn-sm" type="button" onclick="renderRouteForm()">+ Ny led</button>
+        ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
       </div>
@@ -852,26 +866,35 @@ function renderAdminRouteList() {
       </div>
       <div class="d-flex gap-2 flex-shrink-0">
         <button class="btn btn-sm btn-ghost" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera</button>
-        ${canDeleteContentRole() && r.Nr ? `<button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera</button>` : ""}
+        ${canManageRouteStructureRole() && r.Nr ? `<button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera</button>` : ""}
       </div>
     </div>
   `).join("") || `<div class="empty">Inga leder.</div>`;
 }
 
 function renderRouteForm(nr) {
+  if (!nr && !canManageRouteStructureRole()) {
+    showToast("Bara superadmin kan lägga till leder");
+    return renderAdminHome();
+  }
   const r = nr ? routeByNr_(nr) : null;
+  if (nr && !r) {
+    showToast("Leden hittades inte");
+    return renderAdminHome();
+  }
   const route = r || {
     Nr: "", Gradering: "Blå", DagsAttByggaOm: "Ja", Ledbyggare: currentUser.name || currentUser.username || "",
     Byggdatum: new Date().toISOString().slice(0, 10), Slutdatum: "", Anteckningar: "", Bild: ""
   };
   const colors = Array.from(new Set(COLOR_ORDER.concat(availableColors_())));
   const colorOpts = colors.map((c) => `<option value="${escapeHtml_(c)}" ${route.Gradering === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
+  const nrReadonly = !!nr || !canManageRouteStructureRole();
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
       <h3>${nr ? "Redigera led " + escapeHtml_(nr) : "Ny led"}</h3>
       <div class="row g-2 mb-3">
-        <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nr ? "readonly" : ""} placeholder="auto"></div>
+        <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
         <div class="col-4"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
         <div class="col-4"><label class="form-label">Bygg om</label>
           <select id="f-rebuild" class="form-select">
@@ -903,13 +926,17 @@ function saveRoute(existingNr) {
     Anteckningar: document.getElementById("f-notes").value.trim(),
     Bild: document.getElementById("f-img").value.trim()
   };
+  const exists = route.Nr && db.routes.some((r) => String(r.Nr) === String(route.Nr));
+  if ((!route.Nr || !exists) && !canManageRouteStructureRole()) {
+    return showToast("Bara superadmin kan lägga till leder");
+  }
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
       const saved = normalizeRoute_((res && res.route) || route);
       const i = db.routes.findIndex((x) => String(x.Nr) === String(saved.Nr));
       if (i >= 0) db.routes[i] = saved;
-      else db.routes.push(saved);
+      else if (canManageRouteStructureRole()) db.routes.push(saved);
       showToast("Led sparad");
       renderAdminHome();
       filterData();
@@ -919,7 +946,7 @@ function saveRoute(existingNr) {
 }
 
 function deleteRoute(nr) {
-  if (!canDeleteContentRole()) return;
+  if (!canManageRouteStructureRole()) return showToast("Bara superadmin kan ta bort leder");
   if (!confirm("Radera led " + nr + " från sheetet?")) return;
   google.script.run
     .withSuccessHandler((res) => {

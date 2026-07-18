@@ -60,6 +60,8 @@ Demo-login: `admin` / `wallflow`
 
 ## Roller
 
-- **superadmin** — allt + användarhantering  
-- **admin** — skapa/redigera/radera leder  
-- **scout** (sättare) — skapa/redigera, ej radera  
+- **superadmin** — redigera leder + lägga till/ta bort led-rader + användarhantering  
+- **admin** — redigera befintliga leder (ser inte lägg till / ta bort)  
+- **scout** (sättare) — redigera befintliga leder (ser inte lägg till / ta bort)  
+
+Nya eller borttagna leder i det fasta antalet görs av superadmin (eller manuellt i sheetet).
