@@ -395,14 +395,23 @@
     .route-img-lightbox {
       position: fixed; inset: 0; z-index: 130;
       background: rgba(5, 6, 8, 0.94);
-      display: none; align-items: center; justify-content: center;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
       padding: 12px; padding-top: max(12px, env(safe-area-inset-top));
       padding-bottom: max(12px, env(safe-area-inset-bottom));
-      cursor: zoom-out;
+      cursor: zoom-out; gap: 12px;
     }
     .route-img-lightbox.open { display: flex; }
+    .route-img-lightbox-hint {
+      flex: 0 0 auto; order: 2;
+      color: rgba(255,255,255,0.88); font-size: 0.95rem; font-weight: 600;
+      letter-spacing: 0.01em; text-align: center;
+      padding: 10px 16px; border-radius: 999px;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.18);
+      pointer-events: none; user-select: none;
+    }
     .route-img-lightbox img {
-      max-width: 100%; max-height: 100%; width: auto; height: auto;
+      flex: 1 1 auto; min-height: 0; order: 1;
+      max-width: 100%; max-height: calc(100% - 64px); width: auto; height: auto;
       object-fit: contain; border-radius: 8px;
       box-shadow: 0 12px 40px rgba(0,0,0,0.5);
       cursor: zoom-out;
@@ -531,6 +540,7 @@
 
   <div id="route-img-lightbox" class="route-img-lightbox" aria-hidden="true" onclick="toggleRouteImageLightbox_()">
     <img id="route-img-lightbox-img" alt="Ledbild i full storlek">
+    <div class="route-img-lightbox-hint">Tryck för att stänga</div>
   </div>
 
   <div id="login-panel">
@@ -1659,6 +1669,13 @@ function routeImageSrc_(bild, size) {
   return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(b) + "=s" + px;
 }
 
+let routeImgLightboxHistory_ = false;
+
+function isRouteImageLightboxOpen_() {
+  const lb = document.getElementById("route-img-lightbox");
+  return !!(lb && lb.classList.contains("open"));
+}
+
 function toggleRouteImageLightbox_(src) {
   const lb = document.getElementById("route-img-lightbox");
   const img = document.getElementById("route-img-lightbox-img");
@@ -1673,20 +1690,42 @@ function toggleRouteImageLightbox_(src) {
   lb.classList.add("open");
   lb.setAttribute("aria-hidden", "false");
   document.body.classList.add("route-img-lightbox-open");
+  // Så webbläsarens bakåt stänger bilden i stället för att lämna appen
+  try {
+    history.pushState({ wallflowLightbox: true }, "");
+    routeImgLightboxHistory_ = true;
+  } catch (e) {
+    routeImgLightboxHistory_ = false;
+  }
 }
 
-function closeRouteImageLightbox_() {
+function closeRouteImageLightbox_(fromPopstate) {
   const lb = document.getElementById("route-img-lightbox");
   const img = document.getElementById("route-img-lightbox-img");
-  if (!lb) return;
+  if (!lb || !lb.classList.contains("open")) {
+    routeImgLightboxHistory_ = false;
+    return;
+  }
   lb.classList.remove("open");
   lb.setAttribute("aria-hidden", "true");
   document.body.classList.remove("route-img-lightbox-open");
   if (img) img.removeAttribute("src");
+  if (!fromPopstate && routeImgLightboxHistory_) {
+    routeImgLightboxHistory_ = false;
+    try { history.back(); } catch (e) { /* ignore */ }
+  } else {
+    routeImgLightboxHistory_ = false;
+  }
 }
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeRouteImageLightbox_();
+});
+
+window.addEventListener("popstate", () => {
+  if (isRouteImageLightboxOpen_()) {
+    closeRouteImageLightbox_(true);
+  }
 });
 
 /* ---------- Bildredigerare: foto → helskärmsmarkering → förhandsvisning ---------- */
