@@ -25,7 +25,7 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 **Formel i kolumn F (Slutdatum)**
 
 - `=OM(E2=0;"";E2+I2)` (svenska UI) / engelsk `IF(E2=0,"",E2+I2)` via Apps Script  
-- Kolumn **I** på samma rad styr ledtiden; ändras för alla leder under Inställningar → **Dagar till ombyggnad** (superadmin).
+- Kolumn **I** på samma rad styr livslängden; ändras för alla leder under Inställningar → **Livslängd** (superadmin).
 
 **Formel i kolumn C**
 

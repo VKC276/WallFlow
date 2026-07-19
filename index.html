@@ -1672,7 +1672,7 @@ function renderSettingsHome() {
         ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
-        ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Dagar till ombyggnad</button>` : ""}
+        ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
     </div>`;

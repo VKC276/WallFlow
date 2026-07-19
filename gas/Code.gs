@@ -745,7 +745,7 @@ function writeRouteLifetimeDaysToAllRows_(days) {
  */
 function setRouteLifetimeDays_(days, session) {
   if (!canManageUsers_(session)) {
-    return { ok: false, error: "Bara superadmin kan ändra ledtid" };
+    return { ok: false, error: "Bara superadmin kan ändra livslängd" };
   }
   var parsed = Math.round(Number(days));
   if (!isFinite(parsed) || parsed < 1 || parsed > 3650) {
