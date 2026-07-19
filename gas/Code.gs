@@ -627,9 +627,39 @@ function nextRouteNumber_() {
   return max + 1;
 }
 
+/** Hitta en rad som har formel i C (Dags att bygga om) och/eller F (Slutdatum). */
+function findFormulaTemplateRow_(sh, preferRow) {
+  function hasFormula_(row) {
+    if (row < 2) return false;
+    return !!(sh.getRange(row, 3).getFormula() || sh.getRange(row, 6).getFormula());
+  }
+  if (hasFormula_(preferRow)) return preferRow;
+  var last = sh.getLastRow();
+  for (var r = 2; r <= last; r++) {
+    if (hasFormula_(r)) return r;
+  }
+  return -1;
+}
+
+/**
+ * Kopiera formler för C och F från mallrad till ny rad (relativt radnummer justeras).
+ */
+function copyComputedFormulas_(sh, templateRow, destRow) {
+  if (templateRow < 2 || destRow < 2 || templateRow === destRow) return;
+  // C = 3, F = 6
+  var cols = [3, 6];
+  for (var i = 0; i < cols.length; i++) {
+    var col = cols[i];
+    var src = sh.getRange(templateRow, col);
+    if (!src.getFormula()) continue;
+    src.copyTo(sh.getRange(destRow, col), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+  }
+}
+
 /**
  * Skrivbara kolumner från appen.
- * "Dags att bygga om" (C) och "Slutdatum" (F) räknas ut i sheetet — rörs aldrig.
+ * "Dags att bygga om" (C) och "Slutdatum" (F) räknas ut i sheetet — rörs aldrig vid uppdatering.
+ * Vid ny rad kopieras formlerna från en befintlig led-rad.
  * Kolumnordning: A Nr, B Gradering, C Dags att bygga om, D Ledbyggare,
  * E Byggdatum, F Slutdatum, G Anteckningar, H Bild
  */
@@ -691,19 +721,20 @@ function saveRoute_(route, session) {
     for (var j = 0; j < table.rows.length; j++) {
       if (isRouteRow_(table.rows[j])) lastRouteRow = Math.max(lastRouteRow, table.rows[j].__row);
     }
+    var templateRow = findFormulaTemplateRow_(sh, lastRouteRow);
     sh.insertRowAfter(lastRouteRow);
     var newRow = lastRouteRow + 1;
-    // C och F lämnas tomma så sheetets uträkning/formler kan fylla i
-    sh.getRange(newRow, 1, 1, ROUTE_HEADERS.length).setValues([[
-      nrVal,
-      gradVal,
-      "",
-      setterVal,
-      buildVal,
-      "",
-      noteVal,
-      imgVal
-    ]]);
+    // Skriv manuella fält — rör inte C/F med tomma värden
+    sh.getRange(newRow, 1).setValue(nrVal);           // A Nr
+    sh.getRange(newRow, 2).setValue(gradVal);         // B Gradering
+    sh.getRange(newRow, 4).setValue(setterVal);       // D Ledbyggare
+    sh.getRange(newRow, 5).setValue(buildVal);        // E Byggdatum
+    sh.getRange(newRow, 7).setValue(noteVal);         // G Anteckningar
+    sh.getRange(newRow, 8).setValue(imgVal);          // H Bild
+    // Kopiera formler för C (Dags att bygga om) och F (Slutdatum) från mallrad
+    if (templateRow > 0) {
+      copyComputedFormulas_(sh, templateRow, newRow);
+    }
     rowNum = newRow;
   }
 
