@@ -490,7 +490,6 @@
       </div>
       <div class="filters-block">
         <div class="filter-row" id="rebuild-filters" aria-label="Ombyggnadsfilter"></div>
-        <div class="filter-row" id="color-filters" aria-label="Färgfilter"></div>
       </div>
     </div>
 
@@ -1073,6 +1072,7 @@ function gradeBucketKey_(r) {
 
 function renderFilters() {
   const rebuildHost = document.getElementById("rebuild-filters");
+  if (!rebuildHost) return;
   const rebuildItems = [
     { key: "ALL", label: "Alla" },
     { key: "Ja", label: "Bygg om" },
@@ -1082,15 +1082,8 @@ function renderFilters() {
   rebuildHost.innerHTML = rebuildItems.map((it) =>
     `<button type="button" class="chip${rebuildFilter === it.key ? " active" : ""}" data-key="${it.key}" onclick="setRebuildFilter('${it.key}')">${escapeHtml_(it.label)}</button>`
   ).join("");
-
-  const colorHost = document.getElementById("color-filters");
-  // Färgraden: hoppa över Ej uppsatt (filtreras via statuschip/statistikbox)
-  const colorChips = availableColors_().filter((c) => !isEjUppsattGrade_(c));
-  const colors = [{ key: "ALL", label: "Alla färger" }].concat(colorChips.map((c) => ({ key: c, label: c })));
+  // Ej uppsatt är ingen färg — rensa om det ändå satts via äldre UI
   if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
-  colorHost.innerHTML = colors.map((it) =>
-    `<button type="button" class="chip${colorFilter === it.key ? " active" : ""}" data-key="${escapeHtml_(it.key)}" onclick="setColorFilter('${escapeHtml_(it.key)}')">${escapeHtml_(it.label)}</button>`
-  ).join("");
 }
 function setRebuildFilter(key) {
   rebuildFilter = key;
@@ -1099,7 +1092,13 @@ function setRebuildFilter(key) {
   renderFilters();
   filterData();
 }
-function setColorFilter(key) { colorFilter = key; renderFilters(); filterData(); }
+function setColorFilter(key) {
+  // Färgfilter via pie / färgkort / färgblock — ingen separat chip-rad
+  colorFilter = key;
+  if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
+  renderFilters();
+  filterData();
+}
 
 function switchView(view) {
   currentView = view;
@@ -1120,7 +1119,7 @@ function routeMatches_(r, tokens) {
 }
 function routeMatchesColorFilter_(r) {
   if (colorFilter === "ALL") return true;
-  // Vid Ej uppsatt-statusfilter: ignorera färgchip (graderingen är "Ej uppsatt")
+  // Vid Ej uppsatt-statusfilter: ignorera färgfilter (graderingen är "Ej uppsatt")
   if (rebuildFilter === "EJ") return true;
   return gradeBucketKey_(r) === gradeBucketKey_({ Gradering: colorFilter, Nr: "" });
 }
