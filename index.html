@@ -501,7 +501,6 @@
     }
     .img-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .img-editor-actions .btn { flex: 1 1 auto; min-width: 120px; }
-    .img-editor-hint { color: var(--muted); font-size: 0.78rem; margin-top: 8px; }
     .img-editor-status { color: var(--accent); font-size: 0.82rem; margin-top: 6px; min-height: 1.2em; }
 
     /* Fullskärm: markera led på foto */
@@ -2238,7 +2237,7 @@ function confirmRouteImageMark_() {
   if (hid) hid.value = "";
   updateRouteImagePreviewUI_(dataUrl);
   hideRouteImageMarkOverlay_();
-  setImgEditorStatus_("Markering klar — spara leden, bilden laddas upp i bakgrunden.");
+  setImgEditorStatus_("");
 }
 
 function cancelRouteImageMark_() {
@@ -2326,7 +2325,6 @@ function uploadRouteImageInBackground_(nr, dataUrl, previousId) {
           if (i >= 0) db.routes[i] = Object.assign({}, db.routes[i], saved, { Bild: id });
           else db.routes.push(saved);
           filterData();
-          showToast("Bild uppladdad för led " + led);
         })
         .withFailureHandler(() => {
           showToast("Bilden laddades upp men kunde inte kopplas till led " + led);
