@@ -304,12 +304,17 @@
     }
     .badge-rebuild.Ja { background: var(--rebuild); }
     .badge-rebuild.Nej { background: var(--ok); }
-    .route-rebuild-icon {
+    .route-status-icon {
       display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px;
-      color: var(--rebuild); background: color-mix(in srgb, var(--rebuild) 16%, transparent);
       flex: 0 0 auto;
     }
-    .route-rebuild-icon svg { display: block; }
+    .route-status-icon svg { display: block; }
+    .route-status-icon.is-rebuild {
+      color: var(--rebuild); background: color-mix(in srgb, var(--rebuild) 16%, transparent);
+    }
+    .route-status-icon.is-ok {
+      color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent);
+    }
     .empty { text-align: center; color: var(--muted); padding: 40px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
     .modern-nav {
       position: fixed; left: 50%; bottom: calc(18px + var(--safe-bottom)); transform: translateX(-50%);
