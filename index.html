@@ -894,8 +894,21 @@ function availableColors_() {
   // Ej uppsatt ska alltid gå att välja/filtrera (ligger under Grades i sheetet)
   ensure(EJ_UPPSATT_GRADE);
   const eu = db.routes.find((r) => isEjUppsattGrade_(r.Gradering));
-  if (eu) ensure(String(eu.Gradering).trim());
+  if (eu) ensure(String(eu.Gradering).trim() || EJ_UPPSATT_GRADE);
   return list;
+}
+
+/** Kanoniskt färg-/graderingsnamn för filter och färgvyn. */
+function gradeBucketKey_(r) {
+  const g = r && r.Gradering;
+  if (isEjUppsattGrade_(g)) return EJ_UPPSATT_GRADE;
+  if (isWildcardGrade_(g) || isWildcardNr_(r && r.Nr)) {
+    const wc = availableColors_().find((c) => WILDCARD_NAMES.includes(String(c).toLowerCase()));
+    return wc || "Wildcard";
+  }
+  const t = String(g || "").trim();
+  const hit = availableColors_().find((c) => String(c).toLowerCase() === t.toLowerCase());
+  return hit || t;
 }
 
 function renderFilters() {
@@ -989,11 +1002,15 @@ function renderFlow(routes) {
 }
 
 function colorDistributionRoutes_() {
-  // Fördelning: Grades + Wildcard (inkl. W1/W2), respektera ombyggnadsfilter + sök men inte färgfilter
+  // Fördelning: Grades + Wildcard + Ej uppsatt; sök + ombyggnadsfilter (Ej uppsatt med "-" ingår alltid)
   const tokens = getSearchTokens_();
   return db.routes.filter((r) => {
     if (!isListableRoute_(r)) return false;
-    if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
+    if (rebuildFilter !== "ALL") {
+      // Status "-" (Ej uppsatt) matchar varken Ja/Nej — visa dem ändå i färgvyn
+      const isDash = String(r.DagsAttByggaOm || "").trim() === "-";
+      if (!isEjUppsattGrade_(r.Gradering) && !isDash && r.DagsAttByggaOm !== rebuildFilter) return false;
+    }
     return routeMatches_(r, tokens);
   });
 }
@@ -1066,12 +1083,7 @@ function renderColors(routes) {
   const byColor = {};
   availableColors_().forEach((c) => { byColor[c] = []; });
   distRoutes.forEach((r) => {
-    let key = r.Gradering;
-    // W1/W2 utan Wildcard-gradering räknas under Wildcard
-    if (isWildcardNr_(r.Nr) && !isWildcardGrade_(r.Gradering)) {
-      const wcLabel = availableColors_().find((c) => WILDCARD_NAMES.includes(String(c).toLowerCase())) || "Wildcard";
-      key = wcLabel;
-    }
+    const key = gradeBucketKey_(r);
     if (!byColor[key]) byColor[key] = [];
     byColor[key].push(r);
   });
@@ -1083,7 +1095,7 @@ function renderColors(routes) {
 
   const cardsHtml = colors.map((c) => {
     const n = (byColor[c] || []).length;
-    const active = colorFilter === c ? " active" : "";
+    const active = colorFilter === c || (isEjUppsattGrade_(colorFilter) && isEjUppsattGrade_(c)) ? " active" : "";
     return `
       <button type="button" class="color-dist-card${active}" onclick="setColorFilter('${escapeHtml_(c)}')">
         <span class="color-dist-blob" style="background:${colorHex_(c)}"></span>
@@ -1094,7 +1106,11 @@ function renderColors(routes) {
 
   const listColors = colorFilter === "ALL"
     ? colors.filter((c) => (byColor[c] || []).length)
-    : colors.filter((c) => c === colorFilter && (byColor[c] || []).length);
+    : colors.filter((c) => {
+        if (!(byColor[c] || []).length) return false;
+        if (c === colorFilter) return true;
+        return isEjUppsattGrade_(colorFilter) && isEjUppsattGrade_(c);
+      });
 
   document.getElementById("view-colors").innerHTML = `
     <div class="hero-line">
