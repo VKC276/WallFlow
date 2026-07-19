@@ -56,15 +56,19 @@ Skapa i stället ett **nytt standalone-projekt**:
 1. Gå till [script.google.com](https://script.google.com) → **New project**
 2. Namnge projektet t.ex. `WallFlow API`
 3. Ersätt innehållet i `Code.gs` med filen `gas/Code.gs` från detta repo
-4. Kör manuellt en gång (välj funktionen i dropdown → Run):
+4. **Project Settings** (kugghjul) → kryssa i **Show "appsscript.json" manifest file in editor**  
+   Klistra in innehållet från `gas/appsscript.json` (inkluderar Drive-scope `auth/drive`)
+5. Kör manuellt en gång (välj funktionen i dropdown → Run):
    ```
    setupFirstSuperadmin("admin", "Ditt namn", "tillfalligtLosen")
    ```
    Godkänn behörighet till Google Sheets när du blir tillfrågad.
-5. **Deploy → New deployment → Web app**
+6. Kör sedan **`authorizeDriveAccess`** → Run → godkänn **Google Drive**  
+   (annars: *Du har inte behörighet att ringa DriveApp.Folder.createFile*)
+7. **Deploy → New deployment → Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
-6. Kopiera `/exec`-URL:en till `index.html`:
+8. Kopiera `/exec`-URL:en till `index.html`:
 
 ```js
 const GAS_API_URL = "https://script.google.com/macros/s/XXXX/exec";

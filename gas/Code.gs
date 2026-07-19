@@ -7,12 +7,13 @@
  *
  * Setup:
  *   1. https://script.google.com → New project → namnge "WallFlow API"
- *   2. Ersätt Code.gs med denna fil
- *   3. Kör setupFirstSuperadmin(...) en gång (godkänn tillgång till Sheets)
- *   4. Deploy → New deployment → Web app
+ *   2. Ersätt Code.gs med denna fil + kopiera appsscript.json (manifest med Drive-scope)
+ *   3. Kör setupFirstSuperadmin(...) en gång (godkänn Sheets)
+ *   4. Kör authorizeDriveAccess() en gång (godkänn Drive — krävs för Bilder)
+ *   5. Deploy → New deployment → Web app
  *        Execute as: Me
  *        Who has access: Anyone
- *   5. Klistra in /exec-URL:en i index.html som GAS_API_URL
+ *   6. Klistra in /exec-URL:en i index.html som GAS_API_URL
  *
  * Spreadsheet (öppnas via ID, ej bundet):
  *   1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0
@@ -964,6 +965,23 @@ function uploadRouteImage_(payload, session) {
     url: "https://drive.google.com/uc?export=view&id=" + file.getId(),
     name: file.getName()
   };
+}
+
+/**
+ * Kör manuellt en gång efter att Drive lagts till (eller vid felet
+ * "Du har inte behörighet att ringa DriveApp...").
+ * Godkänn https://www.googleapis.com/auth/drive i popupen, skapa sedan
+ * en ny Web App-deployment / ny version.
+ */
+function authorizeDriveAccess() {
+  var folder = getBilderFolder_();
+  var probe = folder.createFile(
+    Utilities.newBlob("wallflow-drive-ok", "text/plain", "wallflow-auth-probe.txt")
+  );
+  var id = probe.getId();
+  probe.setTrashed(true);
+  Logger.log("Drive OK — Bilder: " + folder.getName() + " (" + folder.getId() + "), probe=" + id);
+  return "Drive-behörighet OK. Deploy → ny version av Web App.";
 }
 
 /**
