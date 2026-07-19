@@ -642,7 +642,7 @@ const EJ_UPPSATT_GRADE = "Ej uppsatt";
 
 let __sessionToken = null;
 let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
-let db = { routes: [], grades: DEFAULT_GRADES.slice() };
+let db = { routes: [], grades: DEFAULT_GRADES.slice(), routeLifetimeDays: 30 };
 let currentView = "colors";
 let rebuildFilter = "ALL"; // default: visa alla leder
 let colorFilter = "ALL";
@@ -684,6 +684,7 @@ window.google.script.run = createRunProxy_();
 /* ---------- Demo ---------- */
 function seedDemoDb_() {
   return {
+    routeLifetimeDays: 30,
     grades: DEFAULT_GRADES.slice(),
     routes: [
       { Nr: "1", Gradering: "Blå", DagsAttByggaOm: "Ja", Ledbyggare: "", Byggdatum: "2026-06-14", Slutdatum: "2026-07-14", Anteckningar: "Nått nytt", Bild: "" },
@@ -725,6 +726,7 @@ function demoApi_(action, args) {
         return ok({
           routes: store.routes,
           grades: store.grades || DEFAULT_GRADES.slice(),
+          routeLifetimeDays: Number(store.routeLifetimeDays) || 30,
           me: meUser ? { username: meUser.username, name: meUser.name || "", role: meUser.role } : null
         });
       }
@@ -808,6 +810,35 @@ function demoApi_(action, args) {
         store.users = (store.users || []).filter((u) => u.username !== args[0]);
         saveDemoDb_(store);
         return ok({ ok: true });
+      }
+      if (action === "setRouteLifetimeDays") {
+        if (String(currentUser.role || "").toLowerCase() !== "superadmin") {
+          return fail("Bara superadmin kan ändra ledtid");
+        }
+        const parsed = Math.round(Number(args[0]));
+        if (!Number.isFinite(parsed) || parsed < 1 || parsed > 3650) {
+          return fail("Ange antal dagar mellan 1 och 3650");
+        }
+        store.routeLifetimeDays = parsed;
+        store.routes = (store.routes || []).map((r) => {
+          const build = String(r.Byggdatum || "").slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(build)) return r;
+          const d = new Date(build + "T12:00:00");
+          if (isNaN(d.getTime())) return r;
+          d.setDate(d.getDate() + parsed);
+          const slut = d.toISOString().slice(0, 10);
+          const next = { ...r, Slutdatum: slut };
+          if (isEjUppsattGrade_(r.Gradering)) {
+            next.DagsAttByggaOm = "-";
+          } else {
+            const today = new Date();
+            today.setHours(12, 0, 0, 0);
+            next.DagsAttByggaOm = d < today ? "Ja" : "Nej";
+          }
+          return next;
+        });
+        saveDemoDb_(store);
+        return ok({ ok: true, routeLifetimeDays: parsed });
       }
       if (action === "changeOwnPassword" || action === "finalizeUserPassword") {
         const u = (store.users || []).find((x) => x.username === currentUser.username);
@@ -1050,6 +1081,7 @@ function bootAppData_() {
     .withSuccessHandler((data) => {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
+      db.routeLifetimeDays = Math.max(1, Math.round(Number(data && data.routeLifetimeDays) || 30));
       if (colorFilter !== "ALL" && !isListableGrade_(colorFilter)) colorFilter = "ALL";
       // Uppdatera visningsnamn från Users-fliken (aldrig användarnamn som Ledbyggare-default)
       if (data && data.me && currentUser.authorized) {
@@ -1075,6 +1107,7 @@ function bootAppData_() {
       const seeded = seedDemoDb_();
       db.routes = seeded.routes.map(normalizeRoute_);
       db.grades = seeded.grades.slice();
+      db.routeLifetimeDays = seeded.routeLifetimeDays || 30;
       document.getElementById("demo-banner").style.display = "block";
       showAppShell_();
       filterData();
@@ -1639,9 +1672,62 @@ function renderSettingsHome() {
         ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
+        ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Dagar till ombyggnad</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
     </div>`;
+}
+
+function renderLifetimeSettings() {
+  if (!canManageUsersRole()) return showToast("Bara superadmin");
+  const days = Math.max(1, Math.round(Number(db.routeLifetimeDays) || 30));
+  document.getElementById("app-admin").classList.add("show");
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
+      <h3>Dagar till ombyggnad</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Antal dagar från byggdatum till slutdatum. Värdet sparas i cell <strong>I1</strong> på fliken Alla leder
+        och används av slutdatumformeln i sheetet.
+      </p>
+      <label class="form-label" for="lifetime-days">Antal dagar</label>
+      <input id="lifetime-days" type="number" min="1" max="3650" step="1" class="form-control mb-3" value="${days}">
+      <button class="btn btn-accent w-100" type="button" id="lifetime-save-btn" onclick="saveLifetimeDays()">Spara</button>
+    </div>`;
+}
+
+function saveLifetimeDays() {
+  if (!canManageUsersRole()) return showToast("Bara superadmin");
+  const el = document.getElementById("lifetime-days");
+  const days = Math.round(Number(el && el.value));
+  if (!Number.isFinite(days) || days < 1 || days > 3650) {
+    return showToast("Ange antal dagar mellan 1 och 3650");
+  }
+  const btn = document.getElementById("lifetime-save-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+      db.routeLifetimeDays = Number(res.routeLifetimeDays) || days;
+      showToast("Ledtid sparad: " + db.routeLifetimeDays + " dagar");
+      renderSettingsHome();
+      // Ladda om leder så slutdatum/status speglar nya I1
+      google.script.run
+        .withSuccessHandler((data) => {
+          db.routes = ((data && data.routes) || []).map(normalizeRoute_);
+          if (data && data.routeLifetimeDays) {
+            db.routeLifetimeDays = Math.max(1, Math.round(Number(data.routeLifetimeDays) || db.routeLifetimeDays));
+          }
+          filterData();
+        })
+        .getAppData();
+    })
+    .withFailureHandler(() => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      showToast("Kunde inte spara");
+    })
+    .setRouteLifetimeDays(days);
 }
 
 function renderRouteForm(nr) {

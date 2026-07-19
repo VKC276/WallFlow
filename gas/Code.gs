@@ -31,6 +31,10 @@ var WALLFLOW_SHEET_ROUTES = "Alla leder";
 var WALLFLOW_SHEET_GRADES = "Grades";
 var WALLFLOW_SHEET_USERS = "Users";
 
+/** Cell I1: antal dagar från Byggdatum (E) till Slutdatum (F). Ingår inte i ROUTE_HEADERS. */
+var ROUTE_LIFETIME_CELL = "I1";
+var DEFAULT_ROUTE_LIFETIME_DAYS = 30;
+
 var ROUTE_HEADERS = [
   "Nr",
   "Gradering",
@@ -93,7 +97,11 @@ function dispatch_(action, token, args) {
 
   switch (action) {
     case "getAppData": {
-      var appData = { routes: readRoutes_(), grades: readGrades_() };
+      var appData = {
+        routes: readRoutes_(),
+        grades: readGrades_(),
+        routeLifetimeDays: readRouteLifetimeDays_()
+      };
       // Om token finns: bifoga inloggad användares visningsnamn (inte användarnamn)
       if (token) {
         var meSession = getSession_(token);
@@ -147,6 +155,9 @@ function dispatch_(action, token, args) {
 
     case "deleteUserAction":
       return deleteUserAction_(args[0], session);
+
+    case "setRouteLifetimeDays":
+      return setRouteLifetimeDays_(args[0], session);
 
     default:
       return { ok: false, error: "Okänd action: " + action };
@@ -665,9 +676,56 @@ function rebuildStatusFormula_(row) {
   return '=IF(E' + row + '=0,"",IF(UPPER(B' + row + ')="EJ UPPSATT","-",IF(F' + row + '-TODAY()<0,"Ja","Nej")))';
 }
 
+/** F = Byggdatum + dagar i I1 (absolut referens så alla rader delar samma ledtid). */
+function slutdatumFormula_(row) {
+  return '=IF(OR(E' + row + '="",E' + row + '=0),"",E' + row + '+$I$1)';
+}
+
 function setRebuildStatusFormula_(sh, row) {
   if (row < 2) return;
   sh.getRange(row, 3).setFormula(rebuildStatusFormula_(row));
+}
+
+function setSlutdatumFormula_(sh, row) {
+  if (row < 2) return;
+  sh.getRange(row, 6).setFormula(slutdatumFormula_(row));
+}
+
+function normalizeRouteLifetimeDays_(n) {
+  var days = Math.round(Number(n));
+  if (!isFinite(days) || days < 1) return DEFAULT_ROUTE_LIFETIME_DAYS;
+  if (days > 3650) return 3650;
+  return days;
+}
+
+/** Läs antal dagar till slutdatum från Alla leder!I1. */
+function readRouteLifetimeDays_() {
+  try {
+    var sh = sheet_(WALLFLOW_SHEET_ROUTES);
+    var raw = sh.getRange(ROUTE_LIFETIME_CELL).getValue();
+    if (raw === "" || raw == null) return DEFAULT_ROUTE_LIFETIME_DAYS;
+    return normalizeRouteLifetimeDays_(raw);
+  } catch (e) {
+    return DEFAULT_ROUTE_LIFETIME_DAYS;
+  }
+}
+
+/**
+ * Superadmin: skriv antal dagar till I1.
+ * Befintliga F-formler som använder $I$1 räknas om automatiskt.
+ */
+function setRouteLifetimeDays_(days, session) {
+  if (!canManageUsers_(session)) {
+    return { ok: false, error: "Bara superadmin kan ändra ledtid" };
+  }
+  var parsed = Math.round(Number(days));
+  if (!isFinite(parsed) || parsed < 1 || parsed > 3650) {
+    return { ok: false, error: "Ange antal dagar mellan 1 och 3650" };
+  }
+  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
+  sh.getRange(ROUTE_LIFETIME_CELL).setValue(parsed);
+  SpreadsheetApp.flush();
+  return { ok: true, routeLifetimeDays: parsed };
 }
 
 /**
@@ -677,6 +735,7 @@ function setRebuildStatusFormula_(sh, row) {
 function copyComputedFormulas_(sh, templateRow, destRow) {
   if (destRow < 2) return;
   var copiedC = false;
+  var copiedF = false;
   if (templateRow >= 2 && templateRow !== destRow) {
     var srcC = sh.getRange(templateRow, 3);
     if (srcC.getFormula()) {
@@ -690,10 +749,14 @@ function copyComputedFormulas_(sh, templateRow, destRow) {
     var srcF = sh.getRange(templateRow, 6);
     if (srcF.getFormula()) {
       srcF.copyTo(sh.getRange(destRow, 6), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+      copiedF = true;
     }
   }
   if (!copiedC) {
     setRebuildStatusFormula_(sh, destRow);
+  }
+  if (!copiedF) {
+    setSlutdatumFormula_(sh, destRow);
   }
 }
 
@@ -720,6 +783,7 @@ function refreshRebuildStatusFormulas() {
  * Vid ny rad kopieras formlerna från en befintlig led-rad.
  * Kolumnordning: A Nr, B Gradering, C Dags att bygga om, D Ledbyggare,
  * E Byggdatum, F Slutdatum, G Anteckningar, H Bild
+ * I1 = dagar till ombyggnad (global ledtid, redigeras av superadmin)
  */
 function saveRoute_(route, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
