@@ -972,9 +972,22 @@ function renderEditToolbar_() {
 function isWildcardRoute_(r) {
   return isWildcardNr_(r && r.Nr) || isWildcardGrade_(r && r.Gradering);
 }
-/** Förstavyn: lednummer stigande, alla wildcards (W1/W2 …) sist. */
+function buildDateKey_(r) {
+  const d = String(r && r.Byggdatum || "").trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "";
+}
+
+/** Standard: lednummer stigande, wildcards sist. Bygg om: äldsta byggdatum överst. */
 function sortRoutes_(routes) {
   return routes.slice().sort((a, b) => {
+    if (rebuildFilter === "Ja") {
+      const da = buildDateKey_(a);
+      const db = buildDateKey_(b);
+      if (da && db && da !== db) return da < db ? -1 : 1;
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+    }
+
     const aw = isWildcardRoute_(a);
     const bw = isWildcardRoute_(b);
     if (aw !== bw) return aw ? 1 : -1;
