@@ -328,8 +328,34 @@
     }
     .account-chip strong { color: var(--text); font-weight: 700; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .login-card { width: min(360px, 100%); }
+    .login-card { width: min(360px, 100%); transition: opacity .25s ease; }
+    .login-card.is-busy .form-control,
+    .login-card.is-busy .form-select { opacity: 0.55; }
     .login-card h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 6px; }
+    #login-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      min-height: 48px;
+    }
+    #login-btn .login-spinner {
+      display: none; width: 1.05rem; height: 1.05rem;
+      border: 2px solid rgba(18,21,26,0.25); border-top-color: #12151a;
+      border-radius: 50%; animation: loginSpin .7s linear infinite; flex: 0 0 auto;
+    }
+    #login-btn.is-loading .login-spinner { display: inline-block; }
+    #login-btn.is-loading { cursor: wait; }
+    #login-status {
+      display: none; margin-top: 14px; text-align: center;
+      color: var(--muted); font-size: 0.88rem;
+    }
+    #login-status.show {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      animation: riseIn .35s ease both;
+    }
+    #login-status .login-status-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+      animation: pulseDot 1.1s ease-in-out infinite;
+    }
+    @keyframes loginSpin { to { transform: rotate(360deg); } }
     .form-label {
       color: var(--muted); font-size: 0.78rem; font-weight: 600; margin-bottom: 4px;
     }
@@ -428,7 +454,14 @@
         <label class="d-flex align-items-center gap-2 mb-3" style="color:var(--muted); font-size:.9rem;">
           <input type="checkbox" id="admin-remember-me" checked> Kom ihåg mig på den här enheten
         </label>
-        <button id="login-btn" class="btn btn-accent btn-lg w-100" type="button" onclick="checkLogin()">Logga in</button>
+        <button id="login-btn" class="btn btn-accent btn-lg w-100" type="button" onclick="checkLogin()">
+          <span class="login-spinner" aria-hidden="true"></span>
+          <span class="login-btn-label">Logga in</span>
+        </button>
+        <div id="login-status" role="status" aria-live="polite">
+          <span class="login-status-dot" aria-hidden="true"></span>
+          <span>Ansluter till servern…</span>
+        </div>
         <div id="login-error" class="alert alert-danger mt-3 py-2 small" style="display:none;">Fel inloggningsuppgifter.</div>
       </div>
     </div>
@@ -1250,13 +1283,20 @@ const LOGIN_TIMEOUT_MS = 25000;
 
 function setLoginFormBusy_(busy) {
   const btn = document.getElementById("login-btn");
+  const label = btn && btn.querySelector(".login-btn-label");
+  const card = document.querySelector(".login-card");
+  const status = document.getElementById("login-status");
   const userEl = document.getElementById("admin-user");
   const pwEl = document.getElementById("admin-pw");
   const rememberEl = document.getElementById("admin-remember-me");
   if (btn) {
     btn.disabled = !!busy;
-    btn.textContent = busy ? "Loggar in…" : "Logga in";
+    btn.classList.toggle("is-loading", !!busy);
+    btn.setAttribute("aria-busy", busy ? "true" : "false");
   }
+  if (label) label.textContent = busy ? "Loggar in…" : "Logga in";
+  if (card) card.classList.toggle("is-busy", !!busy);
+  if (status) status.classList.toggle("show", !!busy);
   if (userEl) userEl.disabled = !!busy;
   if (pwEl) pwEl.disabled = !!busy;
   if (rememberEl) rememberEl.disabled = !!busy;
