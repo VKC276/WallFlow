@@ -1305,7 +1305,7 @@ function renderRouteForm(nr) {
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
-      ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Plocka ner led</button>` : ""}
+      ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Ej uppsatt</button>` : ""}
       <button class="btn btn-accent w-100" type="button" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
       ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
   `;
@@ -1343,7 +1343,7 @@ function plockaNerLed() {
   if (notes) notes.value = "";
   if (img) img.value = "";
   build.value = new Date().toISOString().slice(0, 10);
-  showToast("Leden plockad ner — tryck Spara led för att spara");
+  showToast("Markerad som Ej uppsatt — tryck Spara led för att spara");
 }
 
 function saveRoute(existingNr) {
