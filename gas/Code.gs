@@ -493,8 +493,28 @@ function canManageRouteStructure_(session) {
   return roleOf_(session) === "superadmin";
 }
 
+/** Admin + Superadmin: användarlista (skapa/ändra roll/radera). */
 function canManageUsers_(session) {
+  var r = roleOf_(session);
+  return r === "superadmin" || r === "admin";
+}
+
+/** Superadmin: livslängd (standard + per led). */
+function canManageLifetime_(session) {
   return roleOf_(session) === "superadmin";
+}
+
+function isSuperadminRole_(role) {
+  return String(role || "").trim().toLowerCase() === "superadmin";
+}
+
+function countSuperadmins_(users) {
+  var n = 0;
+  var list = users || [];
+  for (var i = 0; i < list.length; i++) {
+    if (isSuperadminRole_(list[i].role)) n++;
+  }
+  return n;
 }
 
 function verifyAdminPassword_(username, password) {
@@ -616,10 +636,15 @@ function createNewAdmin_(payload, session) {
 function updateUserRole_(username, role, session) {
   if (!canManageUsers_(session)) return { ok: false, error: "Saknar behörighet" };
   var users = readUsers_();
+  var newRole = String(role || "admin").trim().toLowerCase() || "admin";
   var found = false;
   for (var i = 0; i < users.length; i++) {
     if (users[i].username === String(username)) {
-      users[i].role = String(role || "admin").toLowerCase();
+      var oldRole = String(users[i].role || "").trim().toLowerCase();
+      if (isSuperadminRole_(oldRole) && !isSuperadminRole_(newRole) && countSuperadmins_(users) <= 1) {
+        return { ok: false, error: "Kan inte ta bort sista superadmin" };
+      }
+      users[i].role = newRole;
       found = true;
       break;
     }
@@ -634,7 +659,19 @@ function deleteUserAction_(username, session) {
   if (String(username).toLowerCase() === String(session.username).toLowerCase()) {
     return { ok: false, error: "Kan inte radera dig själv" };
   }
-  var users = readUsers_().filter(function (u) {
+  var users = readUsers_();
+  var target = null;
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].username.toLowerCase() === String(username).toLowerCase()) {
+      target = users[i];
+      break;
+    }
+  }
+  if (!target) return { ok: false, error: "Hittades inte" };
+  if (isSuperadminRole_(target.role) && countSuperadmins_(users) <= 1) {
+    return { ok: false, error: "Kan inte radera sista superadmin" };
+  }
+  users = users.filter(function (u) {
     return u.username.toLowerCase() !== String(username).toLowerCase();
   });
   writeUsers_(users);
@@ -748,7 +785,7 @@ function readRouteLifetimeDays_() {
  * Per-led livslängd redigeras i ledformuläret.
  */
 function setRouteLifetimeDays_(days, session) {
-  if (!canManageUsers_(session)) {
+  if (!canManageLifetime_(session)) {
     return { ok: false, error: "Bara superadmin kan ändra livslängd" };
   }
   var parsed = Math.round(Number(days));
@@ -870,7 +907,7 @@ function saveRoute_(route, session) {
   var imgVal = String(route.Bild || "").trim();
   var lifeVal = null;
   if (route.Livslangd != null && String(route.Livslangd).trim() !== "") {
-    if (!canManageUsers_(session)) {
+    if (!canManageLifetime_(session)) {
       return { ok: false, error: "Bara superadmin kan ändra livslängd" };
     }
     var lifeParsed = Math.round(Number(route.Livslangd));

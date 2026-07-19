@@ -874,9 +874,13 @@ function demoApi_(action, args) {
         return ok({ ok: true });
       }
       if (action === "getAllAdmins") {
+        const role = String(currentUser.role || "").toLowerCase();
+        if (role !== "superadmin" && role !== "admin") return ok([]);
         return ok((store.users || []).map((u) => ({ username: u.username, name: u.name, role: u.role })));
       }
       if (action === "createNewAdmin") {
+        const role = String(currentUser.role || "").toLowerCase();
+        if (role !== "superadmin" && role !== "admin") return fail("Saknar behörighet");
         const payload = args[0] || {};
         if ((store.users || []).some((u) => u.username === payload.username)) return fail("Användaren finns redan");
         store.users.push({ username: payload.username, name: payload.name || "", role: payload.role || "admin", password: payload.password || "changeme", FirstLogin: true });
@@ -884,15 +888,35 @@ function demoApi_(action, args) {
         return ok({ ok: true });
       }
       if (action === "updateUserRole") {
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin" && meRole !== "admin") return fail("Saknar behörighet");
         const [username, role] = args;
         const u = (store.users || []).find((x) => x.username === username);
         if (!u) return fail("Hittades inte");
-        u.role = role;
+        const newRole = String(role || "admin").toLowerCase();
+        const oldRole = String(u.role || "").toLowerCase();
+        const supers = (store.users || []).filter((x) => String(x.role || "").toLowerCase() === "superadmin").length;
+        if (oldRole === "superadmin" && newRole !== "superadmin" && supers <= 1) {
+          return fail("Kan inte ta bort sista superadmin");
+        }
+        u.role = newRole;
         saveDemoDb_(store);
         return ok({ ok: true });
       }
       if (action === "deleteUserAction") {
-        store.users = (store.users || []).filter((u) => u.username !== args[0]);
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin" && meRole !== "admin") return fail("Saknar behörighet");
+        const targetName = String(args[0] || "");
+        if (targetName.toLowerCase() === String(currentUser.username || "").toLowerCase()) {
+          return fail("Kan inte radera dig själv");
+        }
+        const target = (store.users || []).find((u) => u.username === targetName);
+        if (!target) return fail("Hittades inte");
+        const supers = (store.users || []).filter((x) => String(x.role || "").toLowerCase() === "superadmin").length;
+        if (String(target.role || "").toLowerCase() === "superadmin" && supers <= 1) {
+          return fail("Kan inte radera sista superadmin");
+        }
+        store.users = (store.users || []).filter((u) => u.username !== targetName);
         saveDemoDb_(store);
         return ok({ ok: true });
       }
@@ -967,9 +991,15 @@ function userRole_() {
   if (r === "developer") return "scout";
   return r || "admin";
 }
-function canManageUsersRole() { return userRole_() === "superadmin"; }
+/** Admin + Superadmin: användarlista. */
+function canManageUsersRole() {
+  const r = userRole_();
+  return r === "superadmin" || r === "admin";
+}
 /** Superadmin: lägga till / ta bort led-rader. Övriga ser bara redigera. */
 function canManageRouteStructureRole() { return userRole_() === "superadmin"; }
+/** Superadmin: livslängd (standard + per led). */
+function canManageLifetimeRole() { return userRole_() === "superadmin"; }
 function canEditContentRole() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || r === "scout";
@@ -981,13 +1011,21 @@ function adminRoleLabelSv(role) {
   return "Admin";
 }
 
+function isSuperadminRole_(role) {
+  return String(role || "").toLowerCase().trim() === "superadmin";
+}
+
+function countSuperadmins_(users) {
+  return (users || []).filter((u) => isSuperadminRole_(u.role)).length;
+}
+
 /** Kort behörighetsbeskrivning per roll (visas i användarhantering). */
 function adminRoleHelpSv_() {
   return `
     <ul class="small mb-0 ps-3" style="color:var(--muted); line-height:1.45;">
       <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild).</li>
-      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare: redigera befintliga leder.</li>
-      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, hantera användare och livslängd.</li>
+      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus hantera användarlistan.</li>
+      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder och styra livslängd. Minst en superadmin måste alltid finnas.</li>
     </ul>`;
 }
 function showToast(msg) {
@@ -1786,9 +1824,12 @@ function handlePasswordChange() {
 
 function renderSettingsHome() {
   const role = userRole_();
-  const roleHint = role === "superadmin"
-    ? "Superadmin kan redigera leder, lägga till/ta bort leder, hantera användare och livslängd."
-    : "Admin och Ledbyggare kan redigera befintliga leder. Superadmin styr även nya/raderade leder, användare och livslängd.";
+  let roleHint = "Ledbyggare kan redigera befintliga leder. Admin kan även hantera användare. Superadmin styr ledstruktur och livslängd.";
+  if (role === "admin") {
+    roleHint = "Admin kan redigera leder och hantera användarlistan. Superadmin styr även nya/raderade leder och livslängd.";
+  } else if (role === "superadmin") {
+    roleHint = "Superadmin kan redigera leder, lägga till/ta bort leder, hantera användare och livslängd.";
+  }
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <h3>Konto</h3>
@@ -1800,14 +1841,14 @@ function renderSettingsHome() {
         ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
-        ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
+        ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
     </div>`;
 }
 
 function renderLifetimeSettings() {
-  if (!canManageUsersRole()) return showToast("Bara superadmin");
+  if (!canManageLifetimeRole()) return showToast("Bara superadmin");
   const days = Math.max(1, Math.round(Number(db.routeLifetimeDays) || 30));
   document.getElementById("app-admin").classList.add("show");
   document.getElementById("admin-main").innerHTML = `
@@ -1824,7 +1865,7 @@ function renderLifetimeSettings() {
 }
 
 function saveLifetimeDays() {
-  if (!canManageUsersRole()) return showToast("Bara superadmin");
+  if (!canManageLifetimeRole()) return showToast("Bara superadmin");
   const el = document.getElementById("lifetime-days");
   const days = Math.round(Number(el && el.value));
   if (!Number.isFinite(days) || days < 1 || days > 3650) {
@@ -1897,7 +1938,7 @@ function renderRouteForm(nr) {
       </div>
       <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(displayName)}"></div>
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
-      ${canManageUsersRole() ? `
+      ${canManageLifetimeRole() ? `
       <div class="mb-3">
         <label class="form-label" for="f-lifetime">Livslängd (dagar)</label>
         <input id="f-lifetime" type="number" min="1" max="3650" step="1" class="form-control" value="${lifeDays}">
@@ -2401,7 +2442,7 @@ function uploadRouteImageInBackground_(nr, dataUrl, previousId) {
       const existing = db.routes.find((r) => String(r.Nr) === led);
       const patch = existing ? Object.assign({}, existing, { Bild: id }) : { Nr: led, Bild: id };
       // Undvik att bakgrundssparning kräver superadmin p.g.a. Livslangd
-      if (!canManageUsersRole()) delete patch.Livslangd;
+      if (!canManageLifetimeRole()) delete patch.Livslangd;
       google.script.run
         .withSuccessHandler((saveRes) => {
           if (!saveRes || saveRes.ok === false) {
@@ -2460,7 +2501,7 @@ function saveRoute(existingNr) {
     Anteckningar: document.getElementById("f-notes").value.trim(),
     Bild: document.getElementById("f-img").value.trim()
   };
-  if (canManageUsersRole()) {
+  if (canManageLifetimeRole()) {
     const lifeEl = document.getElementById("f-lifetime");
     if (lifeEl) {
       const life = Math.round(Number(lifeEl.value));
@@ -2597,27 +2638,33 @@ function renderUserManagement() {
     .withSuccessHandler((users) => {
       const host = document.getElementById("admin-user-list");
       if (!host) return;
-      host.innerHTML = (users || []).map((u) => `
+      const list = users || [];
+      const lastSuper = countSuperadmins_(list) <= 1;
+      host.innerHTML = list.map((u) => {
+        const isLastSuper = lastSuper && isSuperadminRole_(u.role);
+        const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
+        return `
         <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:var(--line)!important; gap:8px;">
           <div>
             <strong>${escapeHtml_(u.username)}</strong>
-            <div class="small" style="color:var(--muted);">${escapeHtml_(u.name || "")} · ${escapeHtml_(adminRoleLabelSv(u.role))}</div>
+            <div class="small" style="color:var(--muted);">${escapeHtml_(u.name || "")} · ${escapeHtml_(adminRoleLabelSv(u.role))}${isLastSuper ? " · sista superadmin" : ""}</div>
           </div>
           <div class="d-flex gap-2 align-items-center">
-            <select class="form-select form-select-sm" style="width:auto;" onchange="updateRole('${escapeHtml_(u.username)}', this.value)">
+            <select class="form-select form-select-sm" style="width:auto;" ${isLastSuper ? "disabled title=\"Kan inte ta bort sista superadmin\"" : ""} onchange="updateRole('${escapeHtml_(u.username)}', this.value)">
               <option value="scout" ${u.role === "scout" ? "selected" : ""}>Ledbyggare</option>
               <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
               <option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>
             </select>
-            <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+            <button class="btn btn-sm btn-outline-danger" type="button" ${isLastSuper || isSelf ? "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Kan inte radera sista superadmin") + "\"" : ""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
           </div>
-        </div>
-      `).join("") || `<div class="empty">Inga användare.</div>`;
+        </div>`;
+      }).join("") || `<div class="empty">Inga användare.</div>`;
     })
     .getAllAdmins();
 }
 
 function createUser() {
+  if (!canManageUsersRole()) return showToast("Saknar behörighet");
   const payload = {
     username: document.getElementById("nu-user").value.trim(),
     name: document.getElementById("nu-name").value.trim(),
@@ -2634,14 +2681,21 @@ function createUser() {
     .createNewAdmin(payload);
 }
 function updateRole(username, role) {
+  if (!canManageUsersRole()) return showToast("Saknar behörighet");
   google.script.run
     .withSuccessHandler((res) => {
-      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte uppdatera");
+      if (!res || res.ok === false) {
+        showToast((res && res.error) || "Kunde inte uppdatera");
+        renderUserManagement();
+        return;
+      }
       showToast("Roll uppdaterad");
+      renderUserManagement();
     })
     .updateUserRole(username, role);
 }
 function deleteUser(username) {
+  if (!canManageUsersRole()) return showToast("Saknar behörighet");
   if (!confirm("Radera användare " + username + "?")) return;
   google.script.run
     .withSuccessHandler((res) => {
