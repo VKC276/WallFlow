@@ -1398,17 +1398,12 @@ function rebuildBadgeHtml_(r) {
   return "";
 }
 
-/** Lista: statusikon i stället för textetikett. */
+/** Lista: text för ombyggnad, bock för aktuell. */
 function rebuildListMarkerHtml_(r) {
   if (isEjUppsattGrade_(r && r.Gradering)) return "";
   const status = String(r && r.DagsAttByggaOm || "").trim();
   if (status === "Ja") {
-    return `
-    <span class="route-status-icon is-rebuild" title="Bygg om" aria-label="Bygg om">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4L15 12l-3-3 2.7-2.7z"/>
-      </svg>
-    </span>`;
+    return `<span class="route-status-label" title="Dags att bygga om">Dags att bygga om</span>`;
   }
   if (status === "Nej") {
     return `
@@ -1427,7 +1422,7 @@ function routeRowHtml_(r) {
   const notes = String(r.Anteckningar || "").trim();
   const meta = [r.Ledbyggare, r.Byggdatum].filter(Boolean).map((x) => escapeHtml_(x)).join(" · ") || "—";
   const status = String(r.DagsAttByggaOm || "").trim();
-  const statusLabel = status === "Ja" ? ", Bygg om" : status === "Nej" ? ", Aktuell" : "";
+  const statusLabel = status === "Ja" ? ", Dags att bygga om" : status === "Nej" ? ", Aktuell" : "";
   return `
     <div class="route-row" style="--route-color:${colorHex_(r.Gradering)}" onclick="openRoute('${escapeHtml_(routeKey_(r))}')" aria-label="${escapeHtml_(title)}, ${escapeHtml_(r.Gradering || "")}${statusLabel}">
       <div class="route-main">
