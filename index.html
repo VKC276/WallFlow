@@ -172,12 +172,16 @@
       stroke-width: 2;
       filter: brightness(1.08);
     }
+    .color-dist-center-hit {
+      cursor: pointer;
+    }
     .color-dist-center-label {
       fill: var(--text);
       font-family: var(--font-display);
       font-size: 22px;
       font-weight: 700;
       text-anchor: middle;
+      pointer-events: none;
     }
     .color-dist-center-sub {
       fill: var(--muted);
@@ -185,6 +189,7 @@
       font-size: 11px;
       font-weight: 600;
       text-anchor: middle;
+      pointer-events: none;
     }
     .color-dist-grid {
       display: grid;
@@ -1100,6 +1105,19 @@ function setColorFilter(key) {
   filterData();
 }
 
+/** Rensa sök + status + färg och visa allt under Fördelning. */
+function clearAllFiltersToDistribution_() {
+  const search = document.getElementById("mainSearch");
+  if (search) search.value = "";
+  rebuildFilter = "ALL";
+  colorFilter = "ALL";
+  if (currentView !== "colors") switchView("colors");
+  else {
+    renderFilters();
+    filterData();
+  }
+}
+
 function switchView(view) {
   currentView = view;
   document.getElementById("view-flow").style.display = view === "flow" ? "block" : "none";
@@ -1242,13 +1260,17 @@ function pieSlicePath_(cx, cy, r, startAngle, endAngle) {
 
 function buildColorPieSvg_(slices, total) {
   const cx = 100, cy = 100, r = 78, inner = 44;
+  const centerHit = `
+      <circle class="color-dist-center-hit" cx="${cx}" cy="${cy}" r="${inner}" fill="#171b22"
+        onclick="clearAllFiltersToDistribution_()" role="button" tabindex="0"
+        title="Visa alla — rensa filter"></circle>
+      <text class="color-dist-center-label" x="${cx}" y="${cy - 2}">${total}</text>
+      <text class="color-dist-center-sub" x="${cx}" y="${cy + 16}">leder</text>`;
   if (!total) {
     return `
       <svg class="color-dist-pie" viewBox="0 0 200 200" role="img" aria-label="Ingen data">
         <circle cx="${cx}" cy="${cy}" r="${r}" fill="rgba(255,255,255,0.06)"></circle>
-        <circle cx="${cx}" cy="${cy}" r="${inner}" fill="#171b22"></circle>
-        <text class="color-dist-center-label" x="${cx}" y="${cy - 2}">0</text>
-        <text class="color-dist-center-sub" x="${cx}" y="${cy + 16}">leder</text>
+        ${centerHit}
       </svg>`;
   }
 
@@ -1265,9 +1287,7 @@ function buildColorPieSvg_(slices, total) {
   return `
     <svg class="color-dist-pie" viewBox="0 0 200 200" role="img" aria-label="Fördelning">
       ${paths}
-      <circle cx="${cx}" cy="${cy}" r="${inner}" fill="#171b22"></circle>
-      <text class="color-dist-center-label" x="${cx}" y="${cy - 2}">${total}</text>
-      <text class="color-dist-center-sub" x="${cx}" y="${cy + 16}">leder</text>
+      ${centerHit}
     </svg>`;
 }
 
@@ -1308,7 +1328,7 @@ function renderColors(routes) {
   document.getElementById("view-colors").innerHTML = `
     <div class="hero-line">
       <h1>Fördelning</h1>
-      <p>Cirkeldiagram per gradering — tryck på en färg för att se alla leder i den färgen.</p>
+      <p>Tryck på en färg för att filtrera, eller i mitten för att visa alla.</p>
     </div>
     <div class="color-dist">
       <div class="color-dist-pie-wrap">
