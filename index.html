@@ -1008,10 +1008,21 @@ function isListableRoute_(r) {
   if (isListableGrade_(r.Gradering)) return true;
   return isWildcardNr_(r.Nr);
 }
+/** Normalisera roll (samma regler som GAS). */
+function normalizeRole_(role) {
+  let r = String(role == null ? "" : role).trim().toLowerCase();
+  r = r.replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o");
+  if (!r) return "admin";
+  if (r === "superadmin" || r === "super" || r === "super-admin" || r === "super_admin") return "superadmin";
+  if (r === "scout" || r === "developer" || r === "ledbyggare" || r === "sattare" || r === "setter") return "scout";
+  if (r === "admin" || r === "administrator" || r === "administratoer") return "admin";
+  if (r.includes("super")) return "superadmin";
+  if (r.includes("ledbygg") || r.includes("satt") || r.includes("scout")) return "scout";
+  if (r.includes("admin")) return "admin";
+  return "admin";
+}
 function userRole_() {
-  const r = String(currentUser && currentUser.role || "").toLowerCase().trim();
-  if (r === "developer") return "scout";
-  return r || "admin";
+  return normalizeRole_(currentUser && currentUser.role);
 }
 /** Admin + Superadmin: användarlista. */
 function canManageUsersRole() {
@@ -1027,19 +1038,18 @@ function canEditContentRole() {
   return r === "superadmin" || r === "admin" || r === "scout";
 }
 function adminRoleLabelSv(role) {
-  const r = String(role || userRole_() || "").toLowerCase().trim();
+  const r = normalizeRole_(role || userRole_());
   if (r === "superadmin") return "Superadmin";
-  if (r === "scout" || r === "developer") return "Ledbyggare";
+  if (r === "scout") return "Ledbyggare";
   return "Admin";
 }
 
 function isSuperadminRole_(role) {
-  return String(role || "").toLowerCase().trim() === "superadmin";
+  return normalizeRole_(role) === "superadmin";
 }
 
 function isLedbyggareRole_(role) {
-  const r = String(role || "").toLowerCase().trim();
-  return r === "scout" || r === "developer";
+  return normalizeRole_(role) === "scout";
 }
 
 function countSuperadmins_(users) {
@@ -1104,7 +1114,7 @@ function restoreSession_() {
       authorized: true,
       username: s.username,
       name: s.name || "",
-      role: s.role || "admin",
+      role: normalizeRole_(s.role || "admin"),
       firstLogin: !!s.firstLogin
     };
     return true;
@@ -1233,7 +1243,7 @@ function bootAppData_() {
       // Uppdatera visningsnamn från Users-fliken (aldrig användarnamn som Ledbyggare-default)
       if (data && data.me && currentUser.authorized) {
         if (data.me.name) currentUser.name = String(data.me.name).trim();
-        if (data.me.role) currentUser.role = data.me.role;
+        if (data.me.role) currentUser.role = normalizeRole_(data.me.role);
         saveSession_(!!(localStorage.getItem(SESSION_STORAGE_KEY)));
       }
       showAppShell_();
@@ -1784,7 +1794,7 @@ function checkLogin() {
       }
       currentUser = {
         authorized: true,
-        role: res.role || "admin",
+        role: normalizeRole_(res.role || "admin"),
         username: res.username || user,
         name: res.name || "",
         firstLogin: !!res.firstLogin
@@ -2721,7 +2731,14 @@ function createUser() {
   }
   google.script.run
     .withSuccessHandler((res) => {
-      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte skapa");
+      if (!res || res.ok === false) {
+        const err = (res && res.error) || "Kunde inte skapa";
+        // Vanligt om gammal GAS-deployment fortfarande körs (admin saknade user-mgmt)
+        if (/saknar behörighet/i.test(err) && userRole_() === "admin") {
+          return showToast("Saknar behörighet — uppdatera GAS (ny Web App-deployment) med senaste Code.gs");
+        }
+        return showToast(err);
+      }
       showToast(userRole_() === "admin" ? "Ledbyggare skapad" : "Användare skapad");
       renderUserManagement();
     })

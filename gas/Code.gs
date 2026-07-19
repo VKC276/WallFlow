@@ -96,6 +96,8 @@ function dispatch_(action, token, args) {
   if (!publicActions[action]) {
     session = getSession_(token);
     if (!session) return { ok: false, error: "Ej inloggad" };
+    // Hämta aktuell roll från Users (normaliserad) — undvik stale/felstavad session-roll
+    session = refreshSessionRole_(session);
   }
 
   switch (action) {
@@ -410,7 +412,7 @@ function readUsers_() {
       username: String(u.Username || u.username || "").trim(),
       passwordHash: String(u.passwordHash || ""),
       salt: String(u.salt || ""),
-      role: String(u.role || "admin").trim().toLowerCase() || "admin",
+      role: normalizeRole_(u.role || u.Role || "admin"),
       name: userDisplayName_(u),
       FirstLogin: String(u.FirstLogin == null ? "" : u.FirstLogin).trim(),
       __row: u.__row
@@ -468,19 +470,53 @@ function getSession_(token) {
     }
     // Förnya cache
     cache.put(key, raw, Math.min(21600, Math.floor((obj.exp - Date.now()) / 1000)));
-    return { username: String(obj.username), role: String(obj.role || "admin") };
+    return { username: String(obj.username), role: normalizeRole_(obj.role || "admin") };
   } catch (e) {
     return null;
   }
 }
 
+/**
+ * Normalisera rollvärden från sheet/UI (svenska etiketter, alias, blanksteg).
+ * Returnerar alltid: superadmin | admin | scout
+ */
+function normalizeRole_(role) {
+  var r = String(role == null ? "" : role).trim().toLowerCase();
+  // ta bort accenter/enklare varianter
+  r = r.replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o");
+  if (!r) return "admin";
+  if (r === "superadmin" || r === "super" || r === "super-admin" || r === "super_admin") return "superadmin";
+  if (r === "scout" || r === "developer" || r === "ledbyggare" || r === "sattare" || r === "setter") return "scout";
+  if (r === "admin" || r === "administrator" || r === "administratoer") return "admin";
+  // Okänt värde: försök gissa vanliga fel
+  if (r.indexOf("super") >= 0) return "superadmin";
+  if (r.indexOf("ledbygg") >= 0 || r.indexOf("satt") >= 0 || r.indexOf("scout") >= 0) return "scout";
+  if (r.indexOf("admin") >= 0) return "admin";
+  return "admin";
+}
+
 function roleOf_(session) {
-  return String(session && session.role || "").toLowerCase();
+  return normalizeRole_(session && session.role);
+}
+
+/** Uppdatera session.role från Users-flikens aktuella värde. */
+function refreshSessionRole_(session) {
+  if (!session || !session.username) return session;
+  var users = readUsers_();
+  var uname = String(session.username || "").toLowerCase();
+  for (var i = 0; i < users.length; i++) {
+    if (String(users[i].username || "").toLowerCase() === uname) {
+      session.role = normalizeRole_(users[i].role);
+      return session;
+    }
+  }
+  session.role = normalizeRole_(session.role);
+  return session;
 }
 
 function canEdit_(session) {
   var r = roleOf_(session);
-  return r === "superadmin" || r === "admin" || r === "scout" || r === "developer";
+  return r === "superadmin" || r === "admin" || r === "scout";
 }
 
 function canDelete_(session) {
@@ -505,12 +541,11 @@ function canManageLifetime_(session) {
 }
 
 function isSuperadminRole_(role) {
-  return String(role || "").trim().toLowerCase() === "superadmin";
+  return normalizeRole_(role) === "superadmin";
 }
 
 function isLedbyggareRole_(role) {
-  var r = String(role || "").trim().toLowerCase();
-  return r === "scout" || r === "developer";
+  return normalizeRole_(role) === "scout";
 }
 
 function isAdminActor_(session) {
@@ -622,7 +657,7 @@ function createNewAdmin_(payload, session) {
   obj = obj || {};
   var username = String(obj.username || "").trim();
   var name = String(obj.name || "").trim();
-  var role = String(obj.role || "admin").trim().toLowerCase() || "admin";
+  var role = normalizeRole_(obj.role || "admin");
   var password = String(obj.password || "");
 
   if (!username || !password) return { ok: false, error: "Användarnamn och lösenord krävs" };
@@ -658,11 +693,11 @@ function createNewAdmin_(payload, session) {
 function updateUserRole_(username, role, session) {
   if (!canManageUsers_(session)) return { ok: false, error: "Saknar behörighet" };
   var users = readUsers_();
-  var newRole = String(role || "admin").trim().toLowerCase() || "admin";
+  var newRole = normalizeRole_(role || "admin");
   var found = false;
   for (var i = 0; i < users.length; i++) {
-    if (users[i].username === String(username)) {
-      var oldRole = String(users[i].role || "").trim().toLowerCase();
+    if (String(users[i].username || "").toLowerCase() === String(username || "").toLowerCase()) {
+      var oldRole = normalizeRole_(users[i].role);
 
       // Admin får bara hantera ledbyggare (ingen rollhöjning)
       if (isAdminActor_(session)) {
