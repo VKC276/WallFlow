@@ -760,21 +760,50 @@ function demoApi_(action, args) {
         if (!okGrade) {
           return fail("Ogiltig gradering. Tillåtna: " + grades.join(", ") + ", Wildcard, Ej uppsatt");
         }
+        if (route.Livslangd != null && String(route.Livslangd).trim() !== "") {
+          if (!isSuper) return fail("Bara superadmin kan ändra livslängd");
+          const life = Math.round(Number(route.Livslangd));
+          if (!Number.isFinite(life) || life < 1 || life > 3650) {
+            return fail("Livslängd måste vara mellan 1 och 3650 dagar");
+          }
+          route.Livslangd = life;
+        } else if (!route.Livslangd) {
+          route.Livslangd = Number(store.routeLifetimeDays) || 30;
+        }
+        const applyLife_ = (r) => {
+          const days = Math.max(1, Math.round(Number(r.Livslangd) || store.routeLifetimeDays || 30));
+          r.Livslangd = days;
+          const build = String(r.Byggdatum || "").slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(build)) return r;
+          const d = new Date(build + "T12:00:00");
+          if (isNaN(d.getTime())) return r;
+          d.setDate(d.getDate() + days);
+          r.Slutdatum = d.toISOString().slice(0, 10);
+          if (isEjUppsattGrade_(r.Gradering)) r.DagsAttByggaOm = "-";
+          else {
+            const today = new Date();
+            today.setHours(12, 0, 0, 0);
+            r.DagsAttByggaOm = d < today ? "Ja" : "Nej";
+          }
+          return r;
+        };
         if (route.Nr) {
           const i = store.routes.findIndex((r) => String(r.Nr) === String(route.Nr));
           if (i >= 0) {
-            store.routes[i] = { ...store.routes[i], ...route };
+            store.routes[i] = applyLife_({ ...store.routes[i], ...route });
+            route.Nr = store.routes[i].Nr;
+            Object.assign(route, store.routes[i]);
           } else if (!isSuper) {
             return fail("Bara superadmin kan lägga till leder");
           } else {
-            store.routes.push(route);
+            store.routes.push(applyLife_(route));
           }
         } else if (!isSuper) {
           return fail("Bara superadmin kan lägga till leder");
         } else {
           const max = store.routes.reduce((m, r) => Math.max(m, Number(r.Nr) || 0), 0);
           route.Nr = String(max + 1);
-          store.routes.push(route);
+          store.routes.push(applyLife_(route));
         }
         saveDemoDb_(store);
         return ok({ ok: true, route });
@@ -820,23 +849,6 @@ function demoApi_(action, args) {
           return fail("Ange antal dagar mellan 1 och 3650");
         }
         store.routeLifetimeDays = parsed;
-        store.routes = (store.routes || []).map((r) => {
-          const build = String(r.Byggdatum || "").slice(0, 10);
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(build)) return r;
-          const d = new Date(build + "T12:00:00");
-          if (isNaN(d.getTime())) return r;
-          d.setDate(d.getDate() + parsed);
-          const slut = d.toISOString().slice(0, 10);
-          const next = { ...r, Slutdatum: slut };
-          if (isEjUppsattGrade_(r.Gradering)) {
-            next.DagsAttByggaOm = "-";
-          } else {
-            const today = new Date();
-            today.setHours(12, 0, 0, 0);
-            next.DagsAttByggaOm = d < today ? "Ja" : "Nej";
-          }
-          return next;
-        });
         saveDemoDb_(store);
         return ok({ ok: true, routeLifetimeDays: parsed });
       }
@@ -1043,6 +1055,10 @@ function routeByNr_(nr) {
   return db.routes.find((r) => String(r.Nr) === String(nr));
 }
 function normalizeRoute_(r) {
+  const lifeRaw = r.Livslangd != null ? r.Livslangd : r.Livslängd;
+  let life = Math.round(Number(lifeRaw));
+  if (!Number.isFinite(life) || life < 1) life = Math.max(1, Math.round(Number(db.routeLifetimeDays) || 30));
+  if (life > 3650) life = 3650;
   return {
     Nr: r.Nr == null ? "" : String(r.Nr),
     Gradering: String(r.Gradering || "").trim(),
@@ -1058,7 +1074,8 @@ function normalizeRoute_(r) {
     Byggdatum: String(r.Byggdatum || "").slice(0, 10),
     Slutdatum: String(r.Slutdatum || "").slice(0, 10),
     Anteckningar: String(r.Anteckningar || ""),
-    Bild: String(r.Bild || "")
+    Bild: String(r.Bild || ""),
+    Livslangd: life
   };
 }
 
@@ -1488,6 +1505,7 @@ function openRoute(key) {
       <div class="detail-cell"><label>Gradering</label><strong><span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>${escapeHtml_(r.Gradering || "—")}</strong></div>
       <div class="detail-cell"><label>Ledbyggare</label><strong>${escapeHtml_(r.Ledbyggare || "—")}</strong></div>
       <div class="detail-cell"><label>Byggdatum</label><strong>${escapeHtml_(r.Byggdatum || "—")}</strong></div>
+      <div class="detail-cell"><label>Livslängd</label><strong>${escapeHtml_(r.Livslangd != null ? (r.Livslangd + " dagar") : "—")}</strong></div>
       <div class="detail-cell"><label>Dags att bygga om</label><strong>${escapeHtml_(r.DagsAttByggaOm || "—")}</strong></div>
     </div>
     <div class="detail-cell">
@@ -1687,8 +1705,8 @@ function renderLifetimeSettings() {
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>Livslängd</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Antal dagar från byggdatum till slutdatum. Värdet sparas i kolumn <strong>I</strong> på varje led-rad
-        (formeln <code>=OM(E2=0;"";E2+I2)</code>) och uppdateras för alla leder vid sparning.
+        Standardlivslängd för <strong>nya</strong> leder. Befintliga leder ändras under Redigera led
+        (kolumn I per rad, formeln <code>=OM(E2=0;"";E2+I2)</code>).
       </p>
       <label class="form-label" for="lifetime-days">Dagar</label>
       <input id="lifetime-days" type="number" min="1" max="3650" step="1" class="form-control mb-3" value="${days}">
@@ -1742,10 +1760,13 @@ function renderRouteForm(nr) {
     return;
   }
   const grades = availableColors_();
+  const defaultLife = Math.max(1, Math.round(Number(db.routeLifetimeDays) || 30));
   const route = r || {
     Nr: "", Gradering: grades[0] || "Grön", Ledbyggare: currentDisplayName_(),
-    Byggdatum: new Date().toISOString().slice(0, 10), Anteckningar: "", Bild: ""
+    Byggdatum: new Date().toISOString().slice(0, 10), Anteckningar: "", Bild: "",
+    Livslangd: defaultLife
   };
+  const lifeDays = Math.max(1, Math.round(Number(route.Livslangd) || defaultLife));
   // Behåll specialgraderingar på befintliga leder även om de saknas i Grades-listan
   const formGrades = grades.slice();
   const ensureFormGrade = (g) => {
@@ -1767,6 +1788,12 @@ function renderRouteForm(nr) {
       </div>
       <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(displayName)}"></div>
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
+      ${canManageUsersRole() ? `
+      <div class="mb-3">
+        <label class="form-label" for="f-lifetime">Livslängd (dagar)</label>
+        <input id="f-lifetime" type="number" min="1" max="3650" step="1" class="form-control" value="${lifeDays}">
+        <div class="form-text" style="color:var(--muted); font-size:.78rem;">Styr slutdatum via kolumn I i sheetet.</div>
+      </div>` : ""}
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="img-editor" id="img-editor">
         <label class="form-label">Bild</label>
@@ -2319,6 +2346,16 @@ function saveRoute(existingNr) {
     Anteckningar: document.getElementById("f-notes").value.trim(),
     Bild: document.getElementById("f-img").value.trim()
   };
+  if (canManageUsersRole()) {
+    const lifeEl = document.getElementById("f-lifetime");
+    if (lifeEl) {
+      const life = Math.round(Number(lifeEl.value));
+      if (!Number.isFinite(life) || life < 1 || life > 3650) {
+        return showToast("Livslängd måste vara mellan 1 och 3650 dagar");
+      }
+      route.Livslangd = life;
+    }
+  }
   if (!isListableGrade_(route.Gradering)) {
     return showToast("Välj en giltig gradering");
   }

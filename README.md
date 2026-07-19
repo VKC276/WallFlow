@@ -18,14 +18,14 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 | Slutdatum | Planerat slut / ombyggnadsdatum (`=OM(E2=0;"";E2+I2)`) |
 | Anteckningar | Fri text |
 | Bild | Drive-fil-ID (uppladdad) eller URL |
-| **I** | Antal dagar från byggdatum till slutdatum (samma värde på varje led-rad; redigeras av superadmin i appen) |
+| **I** | Livslängd i dagar per led (redigeras av superadmin i Redigera led; standard för nya leder under Inställningar → Livslängd) |
 
 **Bilder:** Appen kan ta foto / välja bild, rita ledlinje och ladda upp till Drive-mappen **`Bilder`** (skapas bredvid kalkylarket). **En bild per led** (`led-{nr}.jpg`) — vid ny uppladdning, borttagning eller radering av led rensas gamla filer så mappen hålls ren. Kräver Drive-behörighet för WallFlow-GAS.
 
 **Formel i kolumn F (Slutdatum)**
 
 - `=OM(E2=0;"";E2+I2)` (svenska UI) / engelsk `IF(E2=0,"",E2+I2)` via Apps Script  
-- Kolumn **I** på samma rad styr livslängden; ändras för alla leder under Inställningar → **Livslängd** (superadmin).
+- Kolumn **I** på samma rad styr livslängden per led (superadmin i Redigera led). Inställningar → **Livslängd** sätter standard för nya leder.
 
 **Formel i kolumn C**
 

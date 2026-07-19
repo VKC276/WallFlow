@@ -257,6 +257,13 @@ function isRouteRow_(obj) {
 function mapRoute_(obj) {
   var nrRaw = obj["Nr"];
   var nr = (nrRaw === "" || nrRaw === null || nrRaw === undefined) ? "" : String(nrRaw).trim();
+  var lifeRaw = obj["Livslangd"];
+  if (lifeRaw === undefined || lifeRaw === null || lifeRaw === "") {
+    lifeRaw = obj["Livslängd"];
+  }
+  var life = (lifeRaw === undefined || lifeRaw === null || lifeRaw === "")
+    ? DEFAULT_ROUTE_LIFETIME_DAYS
+    : normalizeRouteLifetimeDays_(lifeRaw);
   return {
     Nr: nr,
     Gradering: String(obj["Gradering"] == null ? "" : obj["Gradering"]).trim(),
@@ -266,6 +273,7 @@ function mapRoute_(obj) {
     Slutdatum: formatDate_(obj["Slutdatum"]),
     Anteckningar: String(obj["Anteckningar"] == null ? "" : obj["Anteckningar"]).trim(),
     Bild: String(obj["Bild"] == null ? "" : obj["Bild"]).trim(),
+    Livslangd: life,
     __row: obj.__row
   };
 }
@@ -322,11 +330,18 @@ function isAllowedGrade_(name) {
 }
 
 function readRoutes_() {
+  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
   var table = readTable_(WALLFLOW_SHEET_ROUTES);
   var out = [];
   for (var i = 0; i < table.rows.length; i++) {
     if (!isRouteRow_(table.rows[i])) continue;
-    out.push(mapRoute_(table.rows[i]));
+    var route = mapRoute_(table.rows[i]);
+    // Kolumn I saknar ofta header — läs per rad
+    try {
+      var rawI = sh.getRange(route.__row, ROUTE_LIFETIME_COL).getValue();
+      if (rawI !== "" && rawI != null) route.Livslangd = normalizeRouteLifetimeDays_(rawI);
+    } catch (eI) { /* behåll default */ }
+    out.push(route);
   }
   out.sort(function (a, b) {
     // Numeriska lednummer först, wildcards (W1/W2 …) sist
@@ -704,8 +719,12 @@ function normalizeRouteLifetimeDays_(n) {
   return days;
 }
 
-/** Läs ledtid från första led-radens kolumn I (fallback I2 / default). */
+/** Standardlivslängd för nya leder (script property, fallback första radens I / 30). */
 function readRouteLifetimeDays_() {
+  try {
+    var prop = PropertiesService.getScriptProperties().getProperty("routeLifetimeDaysDefault");
+    if (prop !== null && prop !== "") return normalizeRouteLifetimeDays_(prop);
+  } catch (eProp) { /* ignore */ }
   try {
     var sh = sheet_(WALLFLOW_SHEET_ROUTES);
     var table = readTable_(WALLFLOW_SHEET_ROUTES);
@@ -724,24 +743,9 @@ function readRouteLifetimeDays_() {
   }
 }
 
-/** Skriv samma ledtid till kolumn I på alla led-rader (matchar F-formeln E+I). */
-function writeRouteLifetimeDaysToAllRows_(days) {
-  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
-  var table = readTable_(WALLFLOW_SHEET_ROUTES);
-  var n = 0;
-  for (var i = 0; i < table.rows.length; i++) {
-    if (!isRouteRow_(table.rows[i])) continue;
-    sh.getRange(table.rows[i].__row, ROUTE_LIFETIME_COL).setValue(days);
-    n++;
-  }
-  // Se till att I2 finns även om inga led-rader matchade
-  if (n === 0) sh.getRange(2, ROUTE_LIFETIME_COL).setValue(days);
-  return n;
-}
-
 /**
- * Superadmin: skriv antal dagar till kolumn I på varje led.
- * Slutdatum (F) med =E+I räknas om automatiskt.
+ * Superadmin: sätt standardlivslängd för nya leder (ändrar inte befintliga).
+ * Per-led livslängd redigeras i ledformuläret.
  */
 function setRouteLifetimeDays_(days, session) {
   if (!canManageUsers_(session)) {
@@ -751,9 +755,8 @@ function setRouteLifetimeDays_(days, session) {
   if (!isFinite(parsed) || parsed < 1 || parsed > 3650) {
     return { ok: false, error: "Ange antal dagar mellan 1 och 3650" };
   }
-  var updated = writeRouteLifetimeDaysToAllRows_(parsed);
-  SpreadsheetApp.flush();
-  return { ok: true, routeLifetimeDays: parsed, updatedRows: updated };
+  PropertiesService.getScriptProperties().setProperty("routeLifetimeDaysDefault", String(parsed));
+  return { ok: true, routeLifetimeDays: parsed };
 }
 
 /**
@@ -820,7 +823,7 @@ function refreshRebuildStatusFormulas() {
  * Vid ny rad kopieras formlerna från en befintlig led-rad.
  * Kolumnordning: A Nr, B Gradering, C Dags att bygga om, D Ledbyggare,
  * E Byggdatum, F Slutdatum, G Anteckningar, H Bild
- * I = dagar till ombyggnad per rad (F = E+I; redigeras av superadmin för alla rader)
+ * I = livslängd per rad (F = E+I; redigeras av superadmin per led)
  */
 function saveRoute_(route, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
@@ -865,6 +868,17 @@ function saveRoute_(route, session) {
   var buildVal = route.Byggdatum || "";
   var noteVal = route.Anteckningar || "";
   var imgVal = String(route.Bild || "").trim();
+  var lifeVal = null;
+  if (route.Livslangd != null && String(route.Livslangd).trim() !== "") {
+    if (!canManageUsers_(session)) {
+      return { ok: false, error: "Bara superadmin kan ändra livslängd" };
+    }
+    var lifeParsed = Math.round(Number(route.Livslangd));
+    if (!isFinite(lifeParsed) || lifeParsed < 1 || lifeParsed > 3650) {
+      return { ok: false, error: "Livslängd måste vara mellan 1 och 3650 dagar" };
+    }
+    lifeVal = lifeParsed;
+  }
   var prevImg = "";
   if (!creating && rowNum > 0) {
     prevImg = String(sh.getRange(rowNum, 8).getDisplayValue() || sh.getRange(rowNum, 8).getValue() || "").trim();
@@ -878,6 +892,9 @@ function saveRoute_(route, session) {
     sh.getRange(rowNum, 5).setValue(buildVal);        // E Byggdatum
     sh.getRange(rowNum, 7).setValue(noteVal);         // G Anteckningar
     sh.getRange(rowNum, 8).setValue(imgVal);          // H Bild
+    if (lifeVal != null) {
+      sh.getRange(rowNum, ROUTE_LIFETIME_COL).setValue(lifeVal); // I Livslängd
+    }
   } else {
     var table = readTable_(WALLFLOW_SHEET_ROUTES);
     var lastRouteRow = 1;
@@ -896,6 +913,9 @@ function saveRoute_(route, session) {
     sh.getRange(newRow, 8).setValue(imgVal);          // H Bild
     // Kopiera/sätt formler för C + F och ledtid i I
     copyComputedFormulas_(sh, templateRow > 0 ? templateRow : -1, newRow);
+    if (lifeVal != null) {
+      sh.getRange(newRow, ROUTE_LIFETIME_COL).setValue(lifeVal);
+    }
     rowNum = newRow;
   }
 
@@ -911,6 +931,7 @@ function saveRoute_(route, session) {
 
   SpreadsheetApp.flush();
   var rowValues = sh.getRange(rowNum, 1, 1, ROUTE_HEADERS.length).getValues()[0];
+  var lifeOut = sh.getRange(rowNum, ROUTE_LIFETIME_COL).getValue();
   var saved = mapRoute_({
     "Nr": rowValues[0],
     "Gradering": rowValues[1],
@@ -920,6 +941,7 @@ function saveRoute_(route, session) {
     "Slutdatum": rowValues[5],
     "Anteckningar": rowValues[6],
     "Bild": rowValues[7],
+    "Livslangd": lifeOut,
     __row: rowNum
   });
   return { ok: true, route: saved };
