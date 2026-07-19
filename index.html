@@ -309,13 +309,11 @@
       flex: 0 0 auto;
     }
     .route-status-icon svg { display: block; }
+    .route-status-icon.is-rebuild {
+      color: var(--rebuild); background: color-mix(in srgb, var(--rebuild) 16%, transparent);
+    }
     .route-status-icon.is-ok {
       color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent);
-    }
-    .route-status-label {
-      display: block; max-width: 5.6rem; text-align: right;
-      font-size: 0.68rem; font-weight: 700; line-height: 1.2;
-      color: var(--rebuild); flex: 0 0 auto;
     }
     .empty { text-align: center; color: var(--muted); padding: 40px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
     .modern-nav {
@@ -1398,12 +1396,20 @@ function rebuildBadgeHtml_(r) {
   return "";
 }
 
-/** Lista: text för ombyggnad, bock för aktuell. */
+/** Lista: timglas för ombyggnad, bock för aktuell. */
 function rebuildListMarkerHtml_(r) {
   if (isEjUppsattGrade_(r && r.Gradering)) return "";
   const status = String(r && r.DagsAttByggaOm || "").trim();
   if (status === "Ja") {
-    return `<span class="route-status-label" title="Dags att bygga om">Dags att bygga om</span>`;
+    return `
+    <span class="route-status-icon is-rebuild" title="Dags att bygga om" aria-label="Dags att bygga om">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 4h14"/>
+        <path d="M5 20h14"/>
+        <path d="M7 4c0 5 5 6 5 8s-5 3-5 8"/>
+        <path d="M17 4c0 5-5 6-5 8s5 3 5 8"/>
+      </svg>
+    </span>`;
   }
   if (status === "Nej") {
     return `
