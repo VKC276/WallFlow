@@ -1245,6 +1245,8 @@ function closeSettings() {
 }
 
 let loginInFlight_ = false;
+let loginTimeoutId_ = null;
+const LOGIN_TIMEOUT_MS = 25000;
 
 function setLoginFormBusy_(busy) {
   const btn = document.getElementById("login-btn");
@@ -1260,6 +1262,28 @@ function setLoginFormBusy_(busy) {
   if (rememberEl) rememberEl.disabled = !!busy;
 }
 
+function clearLoginTimeout_() {
+  if (loginTimeoutId_ != null) {
+    clearTimeout(loginTimeoutId_);
+    loginTimeoutId_ = null;
+  }
+}
+
+function endLoginAttempt_(opts) {
+  const { error, toast } = opts || {};
+  clearLoginTimeout_();
+  loginInFlight_ = false;
+  setLoginFormBusy_(false);
+  if (error) {
+    const errEl = document.getElementById("login-error");
+    if (errEl) {
+      errEl.textContent = typeof error === "string" ? error : "Fel inloggningsuppgifter.";
+      errEl.style.display = "block";
+    }
+  }
+  if (toast) showToast(toast);
+}
+
 function checkLogin() {
   if (loginInFlight_) return;
   const user = document.getElementById("admin-user").value.trim();
@@ -1267,14 +1291,23 @@ function checkLogin() {
   if (!user || !pw) return;
   const remember = !!document.getElementById("admin-remember-me").checked;
   document.getElementById("login-error").style.display = "none";
+  document.getElementById("login-error").textContent = "Fel inloggningsuppgifter.";
   loginInFlight_ = true;
   setLoginFormBusy_(true);
+  clearLoginTimeout_();
+  loginTimeoutId_ = setTimeout(() => {
+    if (!loginInFlight_) return;
+    endLoginAttempt_({
+      error: "Inget svar från servern. Kontrollera nätverket och försök igen.",
+      toast: "Inloggningen tog för lång tid"
+    });
+  }, LOGIN_TIMEOUT_MS);
+
   google.script.run
     .withSuccessHandler((res) => {
+      if (!loginInFlight_) return; // timeout har redan låst upp
       if (!res || !res.authorized) {
-        loginInFlight_ = false;
-        setLoginFormBusy_(false);
-        document.getElementById("login-error").style.display = "block";
+        endLoginAttempt_({ error: true });
         return;
       }
       currentUser = {
@@ -1288,15 +1321,18 @@ function checkLogin() {
       else setRememberedAdminUsername("");
       saveSession_(remember);
       document.getElementById("admin-pw").value = "";
+      clearLoginTimeout_();
       loginInFlight_ = false;
       setLoginFormBusy_(false);
       showToast("Inloggad");
       bootAppData_();
     })
     .withFailureHandler(() => {
-      loginInFlight_ = false;
-      setLoginFormBusy_(false);
-      document.getElementById("login-error").style.display = "block";
+      if (!loginInFlight_) return;
+      endLoginAttempt_({
+        error: "Kunde inte nå servern. Försök igen.",
+        toast: "Anslutningen misslyckades"
+      });
     })
     .verifyAdminPassword(user, pw);
 }
