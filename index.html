@@ -387,7 +387,27 @@
       width: 14px; height: 14px; border-radius: 50%; display: inline-block; vertical-align: -2px;
       margin-right: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
     }
-    .topo-img { width: 100%; border-radius: 14px; margin-top: 10px; border: 1px solid var(--line); }
+    .topo-img {
+      width: 100%; max-height: 160px; object-fit: cover; object-position: center;
+      border-radius: 14px; margin-top: 10px; border: 1px solid var(--line);
+      cursor: zoom-in; display: block; background: #0a0c10;
+    }
+    .route-img-lightbox {
+      position: fixed; inset: 0; z-index: 130;
+      background: rgba(5, 6, 8, 0.94);
+      display: none; align-items: center; justify-content: center;
+      padding: 12px; padding-top: max(12px, env(safe-area-inset-top));
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      cursor: zoom-out;
+    }
+    .route-img-lightbox.open { display: flex; }
+    .route-img-lightbox img {
+      max-width: 100%; max-height: 100%; width: auto; height: auto;
+      object-fit: contain; border-radius: 8px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      cursor: zoom-out;
+    }
+    body.route-img-lightbox-open { overflow: hidden; }
     .img-editor { margin-bottom: 14px; }
     .img-editor-empty {
       padding: 22px 16px; text-align: center; color: var(--muted); font-size: 0.9rem;
@@ -507,6 +527,10 @@
       <button class="btn btn-ghost" type="button" onclick="clearRouteImageStrokes_()">Rensa</button>
       <button class="btn btn-accent" type="button" onclick="confirmRouteImageMark_()">Klar</button>
     </div>
+  </div>
+
+  <div id="route-img-lightbox" class="route-img-lightbox" aria-hidden="true" onclick="toggleRouteImageLightbox_()">
+    <img id="route-img-lightbox-img" alt="Ledbild i full storlek">
   </div>
 
   <div id="login-panel">
@@ -1331,7 +1355,8 @@ function openRoute(key) {
   if (!r) return;
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
   document.getElementById("panel-title").textContent = title;
-  const img = routeImageSrc_(r.Bild);
+  const thumb = routeImageSrc_(r.Bild, 400);
+  const full = routeImageSrc_(r.Bild, 1600);
   const badge = rebuildBadgeHtml_(r);
   document.getElementById("panel-body").innerHTML = `
     ${badge ? `<div class="mb-2">${badge}</div>` : ""}
@@ -1347,7 +1372,7 @@ function openRoute(key) {
       <label>Anteckningar</label>
       <div style="white-space:pre-wrap; margin-top:4px;">${escapeHtml_(r.Anteckningar || "Inga anteckningar.")}</div>
     </div>
-    ${img ? `<img class="topo-img" src="${escapeHtml_(img)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy">` : ""}
+    ${thumb ? `<img class="topo-img" src="${escapeHtml_(thumb)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy" role="button" tabindex="0" title="Visa i full storlek" onclick="event.stopPropagation(); toggleRouteImageLightbox_('${escapeHtml_(full)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); toggleRouteImageLightbox_('${escapeHtml_(full)}');}">` : ""}
     ${currentUser.authorized && canEditContentRole() && r.Nr ? `
       <button class="btn btn-accent w-100 mt-3" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera led</button>
       ${canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera led</button>` : ""}
@@ -1356,6 +1381,7 @@ function openRoute(key) {
   document.getElementById("panel").classList.add("open");
 }
 function closePanel() {
+  closeRouteImageLightbox_();
   if (routeImgEditor_ && routeImgEditor_.open) cancelRouteImageMark_();
   document.getElementById("panel").classList.remove("open");
 }
@@ -1625,11 +1651,38 @@ function plockaNerLed() {
   showToast("Markerad som Ej uppsatt — tryck Spara led för att spara");
 }
 
-function routeImageSrc_(bild) {
+function routeImageSrc_(bild, size) {
   const b = String(bild || "").trim();
   if (!b) return "";
   if (b.startsWith("http") || b.startsWith("data:")) return b;
-  return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(b) + "=s800";
+  const px = Math.max(100, Math.min(2048, Number(size) || 800));
+  return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(b) + "=s" + px;
+}
+
+function toggleRouteImageLightbox_(src) {
+  const lb = document.getElementById("route-img-lightbox");
+  const img = document.getElementById("route-img-lightbox-img");
+  if (!lb || !img) return;
+  if (lb.classList.contains("open")) {
+    closeRouteImageLightbox_();
+    return;
+  }
+  const url = String(src || "").trim();
+  if (!url) return;
+  img.src = url;
+  lb.classList.add("open");
+  lb.setAttribute("aria-hidden", "false");
+  document.body.classList.add("route-img-lightbox-open");
+}
+
+function closeRouteImageLightbox_() {
+  const lb = document.getElementById("route-img-lightbox");
+  const img = document.getElementById("route-img-lightbox-img");
+  if (!lb) return;
+  lb.classList.remove("open");
+  lb.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("route-img-lightbox-open");
+  if (img) img.removeAttribute("src");
 }
 
 /* ---------- Bildredigerare: foto → helskärmsmarkering → förhandsvisning ---------- */
