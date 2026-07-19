@@ -460,10 +460,12 @@ const COLOR_HEX = {
   "Svart": "#2c3e50",
   "Vit": "#ecf0f1",
   "Wildcard": "#c4a35a",
-  "Wildcards": "#c4a35a"
+  "Wildcards": "#c4a35a",
+  "Ej uppsatt": "#6b7280"
 };
 const DEFAULT_GRADES = ["Grön", "Blå", "Röd", "Svart", "Vit"];
 const WILDCARD_NAMES = ["wildcard", "wildcards"];
+const EJ_UPPSATT_GRADE = "Ej uppsatt";
 
 let __sessionToken = null;
 let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
@@ -568,9 +570,9 @@ function demoApi_(action, args) {
         const isSuper = role === "superadmin";
         const grades = store.grades || DEFAULT_GRADES;
         const g = String(route.Gradering || "").trim().toLowerCase();
-        const okGrade = WILDCARD_NAMES.includes(g) || grades.some((x) => String(x).toLowerCase() === g);
+        const okGrade = WILDCARD_NAMES.includes(g) || g === "ej uppsatt" || grades.some((x) => String(x).toLowerCase() === g);
         if (!okGrade) {
-          return fail("Ogiltig gradering. Tillåtna: " + grades.join(", ") + ", Wildcard");
+          return fail("Ogiltig gradering. Tillåtna: " + grades.join(", ") + ", Wildcard, Ej uppsatt");
         }
         if (route.Nr) {
           const i = store.routes.findIndex((r) => String(r.Nr) === String(route.Nr));
@@ -652,6 +654,9 @@ function gradeList_() {
 function isWildcardGrade_(name) {
   return WILDCARD_NAMES.includes(String(name || "").trim().toLowerCase());
 }
+function isEjUppsattGrade_(name) {
+  return String(name || "").trim().toLowerCase() === EJ_UPPSATT_GRADE.toLowerCase();
+}
 function isWildcardNr_(nr) {
   return /^w\d+$/i.test(String(nr == null ? "" : nr).trim());
 }
@@ -659,9 +664,9 @@ function isAllowedGrade_(name) {
   const t = String(name || "").trim().toLowerCase();
   return gradeList_().some((g) => String(g).toLowerCase() === t);
 }
-/** Grades + Wildcard — visas i lista/filter (Wildcard behöver inte finnas i Grades-fliken). */
+/** Grades + Wildcard + Ej uppsatt — visas i lista/filter. */
 function isListableGrade_(name) {
-  return isAllowedGrade_(name) || isWildcardGrade_(name);
+  return isAllowedGrade_(name) || isWildcardGrade_(name) || isEjUppsattGrade_(name);
 }
 /** Lista: Grades/Wildcard-färg, eller lednummer W1/W2 … */
 function isListableRoute_(r) {
@@ -870,14 +875,19 @@ function bootAppData_() {
     .getAppData();
 }
 
-/** Grades i sheet-ordning, plus Wildcard om sådana leder finns (inkl. W1/W2). */
+/** Grades i sheet-ordning, plus Wildcard / Ej uppsatt om de används. */
 function availableColors_() {
   const list = gradeList_();
+  const ensure = (label) => {
+    if (!label) return;
+    if (!list.some((g) => String(g).toLowerCase() === String(label).toLowerCase())) list.push(label);
+  };
   const wc = db.routes.find((r) => isWildcardGrade_(r.Gradering) || isWildcardNr_(r.Nr));
-  if (wc) {
-    const label = isWildcardGrade_(wc.Gradering) ? String(wc.Gradering).trim() : "Wildcard";
-    if (!list.some((g) => String(g).toLowerCase() === label.toLowerCase())) list.push(label);
-  }
+  if (wc) ensure(isWildcardGrade_(wc.Gradering) ? String(wc.Gradering).trim() : "Wildcard");
+  // Ej uppsatt ska alltid gå att välja/filtrera (ligger under Grades i sheetet)
+  ensure(EJ_UPPSATT_GRADE);
+  const eu = db.routes.find((r) => isEjUppsattGrade_(r.Gradering));
+  if (eu) ensure(String(eu.Gradering).trim());
   return list;
 }
 
@@ -1272,11 +1282,14 @@ function renderRouteForm(nr) {
     Nr: "", Gradering: grades[0] || "Grön", Ledbyggare: currentDisplayName_(),
     Byggdatum: new Date().toISOString().slice(0, 10), Anteckningar: "", Bild: ""
   };
-  // Behåll Wildcard på befintliga leder även om den inte finns i Grades
+  // Behåll specialgraderingar på befintliga leder även om de saknas i Grades-listan
   const formGrades = grades.slice();
-  if (isWildcardGrade_(route.Gradering) && !formGrades.some((g) => String(g).toLowerCase() === String(route.Gradering).toLowerCase())) {
-    formGrades.push(route.Gradering);
-  }
+  const ensureFormGrade = (g) => {
+    if (!g) return;
+    if (!formGrades.some((x) => String(x).toLowerCase() === String(g).toLowerCase())) formGrades.push(g);
+  };
+  ensureFormGrade(EJ_UPPSATT_GRADE);
+  if (isWildcardGrade_(route.Gradering) || isEjUppsattGrade_(route.Gradering)) ensureFormGrade(route.Gradering);
   const selectedGrade = isListableGrade_(route.Gradering) ? route.Gradering : formGrades[0];
   const colorOpts = formGrades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
   const nrReadonly = !!nr || !canManageRouteStructureRole();
@@ -1292,6 +1305,7 @@ function renderRouteForm(nr) {
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
       <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
+      ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Plocka ner led</button>` : ""}
       <button class="btn btn-accent w-100" type="button" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
       ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
   `;
@@ -1306,6 +1320,30 @@ function renderRouteForm(nr) {
       }, { once: true });
     }
   }
+}
+
+/** Töm redigeringsfält och sätt dagens datum; gradering → Ej uppsatt. */
+function plockaNerLed() {
+  const grad = document.getElementById("f-grad");
+  const setter = document.getElementById("f-setter");
+  const build = document.getElementById("f-build");
+  const notes = document.getElementById("f-notes");
+  const img = document.getElementById("f-img");
+  if (!grad || !build) return;
+  // Säkerställ att Ej uppsatt finns som alternativ
+  const hasOpt = Array.from(grad.options).some((o) => String(o.value).toLowerCase() === EJ_UPPSATT_GRADE.toLowerCase());
+  if (!hasOpt) {
+    const opt = document.createElement("option");
+    opt.value = EJ_UPPSATT_GRADE;
+    opt.textContent = EJ_UPPSATT_GRADE;
+    grad.appendChild(opt);
+  }
+  grad.value = EJ_UPPSATT_GRADE;
+  if (setter) setter.value = "";
+  if (notes) notes.value = "";
+  if (img) img.value = "";
+  build.value = new Date().toISOString().slice(0, 10);
+  showToast("Leden plockad ner — tryck Spara led för att spara");
 }
 
 function saveRoute(existingNr) {

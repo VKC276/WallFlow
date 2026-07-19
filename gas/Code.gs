@@ -283,10 +283,14 @@ function isWildcardGrade_(name) {
   return target === "wildcard" || target === "wildcards";
 }
 
+function isEjUppsattGrade_(name) {
+  return String(name || "").trim().toLowerCase() === "ej uppsatt";
+}
+
 function isAllowedGrade_(name) {
   var target = String(name || "").trim().toLowerCase();
-  // Wildcard redovisas i appen även om den inte finns i Grades-fliken
-  if (isWildcardGrade_(target)) return true;
+  // Specialgraderingar som alltid får sparas/listas
+  if (isWildcardGrade_(target) || isEjUppsattGrade_(target)) return true;
   var grades = readGrades_();
   for (var i = 0; i < grades.length; i++) {
     if (String(grades[i]).toLowerCase() === target) return true;
