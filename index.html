@@ -1687,8 +1687,8 @@ function renderLifetimeSettings() {
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>Dagar till ombyggnad</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Antal dagar från byggdatum till slutdatum. Värdet sparas i cell <strong>I1</strong> på fliken Alla leder
-        och används av slutdatumformeln i sheetet.
+        Antal dagar från byggdatum till slutdatum. Värdet sparas i kolumn <strong>I</strong> på varje led-rad
+        (formeln <code>=OM(E2=0;"";E2+I2)</code>) och uppdateras för alla leder vid sparning.
       </p>
       <label class="form-label" for="lifetime-days">Antal dagar</label>
       <input id="lifetime-days" type="number" min="1" max="3650" step="1" class="form-control mb-3" value="${days}">
@@ -1712,7 +1712,7 @@ function saveLifetimeDays() {
       db.routeLifetimeDays = Number(res.routeLifetimeDays) || days;
       showToast("Ledtid sparad: " + db.routeLifetimeDays + " dagar");
       renderSettingsHome();
-      // Ladda om leder så slutdatum/status speglar nya I1
+      // Ladda om leder så slutdatum/status speglar kolumn I
       google.script.run
         .withSuccessHandler((data) => {
           db.routes = ((data && data.routes) || []).map(normalizeRoute_);

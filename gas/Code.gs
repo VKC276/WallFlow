@@ -31,8 +31,11 @@ var WALLFLOW_SHEET_ROUTES = "Alla leder";
 var WALLFLOW_SHEET_GRADES = "Grades";
 var WALLFLOW_SHEET_USERS = "Users";
 
-/** Cell I1: antal dagar från Byggdatum (E) till Slutdatum (F). Ingår inte i ROUTE_HEADERS. */
-var ROUTE_LIFETIME_CELL = "I1";
+/**
+ * Kolumn I (per led-rad): antal dagar från Byggdatum (E) till Slutdatum (F).
+ * Formel i F: =OM(E2=0;"";E2+I2) — ingår inte i ROUTE_HEADERS.
+ */
+var ROUTE_LIFETIME_COL = 9; // I
 var DEFAULT_ROUTE_LIFETIME_DAYS = 30;
 
 var ROUTE_HEADERS = [
@@ -676,9 +679,12 @@ function rebuildStatusFormula_(row) {
   return '=IF(E' + row + '=0,"",IF(UPPER(B' + row + ')="EJ UPPSATT","-",IF(F' + row + '-TODAY()<0,"Ja","Nej")))';
 }
 
-/** F = Byggdatum + dagar i I1 (absolut referens så alla rader delar samma ledtid). */
+/**
+ * F = Byggdatum + dagar i samma rads kolumn I.
+ * UI-motsvarighet: =OM(E2=0;"";E2+I2)
+ */
 function slutdatumFormula_(row) {
-  return '=IF(OR(E' + row + '="",E' + row + '=0),"",E' + row + '+$I$1)';
+  return '=IF(E' + row + '=0,"",E' + row + '+I' + row + ')';
 }
 
 function setRebuildStatusFormula_(sh, row) {
@@ -698,21 +704,44 @@ function normalizeRouteLifetimeDays_(n) {
   return days;
 }
 
-/** Läs antal dagar till slutdatum från Alla leder!I1. */
+/** Läs ledtid från första led-radens kolumn I (fallback I2 / default). */
 function readRouteLifetimeDays_() {
   try {
     var sh = sheet_(WALLFLOW_SHEET_ROUTES);
-    var raw = sh.getRange(ROUTE_LIFETIME_CELL).getValue();
-    if (raw === "" || raw == null) return DEFAULT_ROUTE_LIFETIME_DAYS;
-    return normalizeRouteLifetimeDays_(raw);
+    var table = readTable_(WALLFLOW_SHEET_ROUTES);
+    for (var i = 0; i < table.rows.length; i++) {
+      if (!isRouteRow_(table.rows[i])) continue;
+      var raw = sh.getRange(table.rows[i].__row, ROUTE_LIFETIME_COL).getValue();
+      if (raw !== "" && raw != null && isFinite(Number(raw)) && Number(raw) > 0) {
+        return normalizeRouteLifetimeDays_(raw);
+      }
+    }
+    var fallback = sh.getRange(2, ROUTE_LIFETIME_COL).getValue();
+    if (fallback !== "" && fallback != null) return normalizeRouteLifetimeDays_(fallback);
+    return DEFAULT_ROUTE_LIFETIME_DAYS;
   } catch (e) {
     return DEFAULT_ROUTE_LIFETIME_DAYS;
   }
 }
 
+/** Skriv samma ledtid till kolumn I på alla led-rader (matchar F-formeln E+I). */
+function writeRouteLifetimeDaysToAllRows_(days) {
+  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
+  var table = readTable_(WALLFLOW_SHEET_ROUTES);
+  var n = 0;
+  for (var i = 0; i < table.rows.length; i++) {
+    if (!isRouteRow_(table.rows[i])) continue;
+    sh.getRange(table.rows[i].__row, ROUTE_LIFETIME_COL).setValue(days);
+    n++;
+  }
+  // Se till att I2 finns även om inga led-rader matchade
+  if (n === 0) sh.getRange(2, ROUTE_LIFETIME_COL).setValue(days);
+  return n;
+}
+
 /**
- * Superadmin: skriv antal dagar till I1.
- * Befintliga F-formler som använder $I$1 räknas om automatiskt.
+ * Superadmin: skriv antal dagar till kolumn I på varje led.
+ * Slutdatum (F) med =E+I räknas om automatiskt.
  */
 function setRouteLifetimeDays_(days, session) {
   if (!canManageUsers_(session)) {
@@ -722,10 +751,9 @@ function setRouteLifetimeDays_(days, session) {
   if (!isFinite(parsed) || parsed < 1 || parsed > 3650) {
     return { ok: false, error: "Ange antal dagar mellan 1 och 3650" };
   }
-  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
-  sh.getRange(ROUTE_LIFETIME_CELL).setValue(parsed);
+  var updated = writeRouteLifetimeDaysToAllRows_(parsed);
   SpreadsheetApp.flush();
-  return { ok: true, routeLifetimeDays: parsed };
+  return { ok: true, routeLifetimeDays: parsed, updatedRows: updated };
 }
 
 /**
@@ -751,6 +779,15 @@ function copyComputedFormulas_(sh, templateRow, destRow) {
       srcF.copyTo(sh.getRange(destRow, 6), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
       copiedF = true;
     }
+    // Kopiera ledtid (I) från mallrad — F använder relativ I-referens
+    var srcI = sh.getRange(templateRow, ROUTE_LIFETIME_COL).getValue();
+    if (srcI !== "" && srcI != null && isFinite(Number(srcI)) && Number(srcI) > 0) {
+      sh.getRange(destRow, ROUTE_LIFETIME_COL).setValue(normalizeRouteLifetimeDays_(srcI));
+    } else {
+      sh.getRange(destRow, ROUTE_LIFETIME_COL).setValue(readRouteLifetimeDays_());
+    }
+  } else {
+    sh.getRange(destRow, ROUTE_LIFETIME_COL).setValue(readRouteLifetimeDays_());
   }
   if (!copiedC) {
     setRebuildStatusFormula_(sh, destRow);
@@ -783,7 +820,7 @@ function refreshRebuildStatusFormulas() {
  * Vid ny rad kopieras formlerna från en befintlig led-rad.
  * Kolumnordning: A Nr, B Gradering, C Dags att bygga om, D Ledbyggare,
  * E Byggdatum, F Slutdatum, G Anteckningar, H Bild
- * I1 = dagar till ombyggnad (global ledtid, redigeras av superadmin)
+ * I = dagar till ombyggnad per rad (F = E+I; redigeras av superadmin för alla rader)
  */
 function saveRoute_(route, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
@@ -857,10 +894,8 @@ function saveRoute_(route, session) {
     sh.getRange(newRow, 5).setValue(buildVal);        // E Byggdatum
     sh.getRange(newRow, 7).setValue(noteVal);         // G Anteckningar
     sh.getRange(newRow, 8).setValue(imgVal);          // H Bild
-    // Kopiera formler för C (Dags att bygga om) och F (Slutdatum) från mallrad
-    if (templateRow > 0) {
-      copyComputedFormulas_(sh, templateRow, newRow);
-    }
+    // Kopiera/sätt formler för C + F och ledtid i I
+    copyComputedFormulas_(sh, templateRow > 0 ? templateRow : -1, newRow);
     rowNum = newRow;
   }
 

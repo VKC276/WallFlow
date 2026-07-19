@@ -15,17 +15,17 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 | Dags att bygga om | Formel → `Ja` / `Nej` / `-` (vid Ej uppsatt) |
 | Ledbyggare | Vem som satt leden |
 | Byggdatum | När den sattes |
-| Slutdatum | Planerat slut / ombyggnadsdatum (`=E{n}+$I$1`) |
+| Slutdatum | Planerat slut / ombyggnadsdatum (`=OM(E2=0;"";E2+I2)`) |
 | Anteckningar | Fri text |
 | Bild | Drive-fil-ID (uppladdad) eller URL |
-| **I1** | Antal dagar från byggdatum till slutdatum (redigeras av superadmin i appen) |
+| **I** | Antal dagar från byggdatum till slutdatum (samma värde på varje led-rad; redigeras av superadmin i appen) |
 
 **Bilder:** Appen kan ta foto / välja bild, rita ledlinje och ladda upp till Drive-mappen **`Bilder`** (skapas bredvid kalkylarket). **En bild per led** (`led-{nr}.jpg`) — vid ny uppladdning, borttagning eller radering av led rensas gamla filer så mappen hålls ren. Kräver Drive-behörighet för WallFlow-GAS.
 
 **Formel i kolumn F (Slutdatum)**
 
-- `=OM(ELLER(E9="";E9=0);"";E9+$I$1)` (svenska UI) / engelsk `IF` via Apps Script  
-- Cell **I1** styr ledtiden; ändras under Inställningar → **Dagar till ombyggnad** (superadmin).
+- `=OM(E2=0;"";E2+I2)` (svenska UI) / engelsk `IF(E2=0,"",E2+I2)` via Apps Script  
+- Kolumn **I** på samma rad styr ledtiden; ändras för alla leder under Inställningar → **Dagar till ombyggnad** (superadmin).
 
 **Formel i kolumn C**
 
@@ -33,7 +33,7 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
   `=OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))`
 - **Via Apps Script:** måste vara engelsk `IF` + komma (annars `#NAME?` på `OM`). Samma logik.
 
-Nya rader kopierar helst en fungerande formel från en befintlig rad, annars sätts `IF(...)` för C och `E+$I$1` för F. Kör `refreshRebuildStatusFormulas` efter deploy för att laga rader med `#NAME?`.
+Nya rader kopierar helst en fungerande formel från en befintlig rad, annars sätts `IF(...)` för C och `E+I` för F (plus ledtid i I). Kör `refreshRebuildStatusFormulas` efter deploy för att laga rader med `#NAME?`.
 
 ### Flik `Grades`
 
