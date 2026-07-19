@@ -848,7 +848,7 @@ function bootAppData_() {
     .withSuccessHandler((data) => {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
-      if (colorFilter !== "ALL" && !isAllowedGrade_(colorFilter)) colorFilter = "ALL";
+      if (colorFilter !== "ALL" && !isListableGrade_(colorFilter)) colorFilter = "ALL";
       // Uppdatera visningsnamn från Users-fliken (aldrig användarnamn som Ledbyggare-default)
       if (data && data.me && currentUser.authorized) {
         if (data.me.name) currentUser.name = String(data.me.name).trim();
@@ -950,10 +950,7 @@ function routeMatches_(r, tokens) {
 }
 function routeMatchesColorFilter_(r) {
   if (colorFilter === "ALL") return true;
-  if (r.Gradering === colorFilter) return true;
-  // W1/W2 utan Wildcard-text i Gradering ska ändå matcha Wildcard-chip
-  if (WILDCARD_NAMES.includes(String(colorFilter).toLowerCase()) && isWildcardNr_(r.Nr)) return true;
-  return false;
+  return gradeBucketKey_(r) === gradeBucketKey_({ Gradering: colorFilter, Nr: "" });
 }
 function visibleRoutes_() {
   const tokens = getSearchTokens_();
