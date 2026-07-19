@@ -616,10 +616,10 @@
     <div class="login-inner">
       <div class="login-card">
         <h2>WallFlow</h2>
-        <p class="mb-4" style="color:var(--muted);">Logga in för att se och uppdatera ledbyggnationen.</p>
+        <p class="login-lead">Logga in för att se och uppdatera ledbyggnationen.</p>
         <div class="mb-3"><input id="admin-user" class="form-control form-control-lg" placeholder="Användarnamn" autocomplete="username"></div>
         <div class="mb-3"><input id="admin-pw" class="form-control form-control-lg" type="password" placeholder="Lösenord" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkLogin()"></div>
-        <label class="d-flex align-items-center gap-2 mb-3" style="color:var(--muted); font-size:.9rem;">
+        <label class="login-remember d-flex align-items-center gap-2 mb-3">
           <input type="checkbox" id="admin-remember-me" checked> Kom ihåg mig på den här enheten
         </label>
         <button id="login-btn" class="btn btn-accent btn-lg w-100" type="button" onclick="checkLogin()">
