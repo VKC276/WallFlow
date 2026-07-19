@@ -1867,7 +1867,7 @@ function renderSettingsHome() {
       <div class="d-flex flex-wrap gap-2">
         ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
-        ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">Användare</button>` : ""}
+        ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</button>` : ""}
         ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
@@ -2729,6 +2729,10 @@ function createUser() {
 }
 function updateRole(username, role) {
   if (!canManageUsersRole()) return showToast("Saknar behörighet");
+  if (userRole_() === "admin") {
+    showToast("Admin kan bara hantera ledbyggare");
+    return renderUserManagement();
+  }
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
@@ -2743,7 +2747,7 @@ function updateRole(username, role) {
 }
 function deleteUser(username) {
   if (!canManageUsersRole()) return showToast("Saknar behörighet");
-  if (!confirm("Radera användare " + username + "?")) return;
+  if (!confirm("Radera " + (userRole_() === "admin" ? "ledbyggare" : "användare") + " " + username + "?")) return;
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte radera");
