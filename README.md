@@ -19,13 +19,13 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 | Anteckningar | Fri text |
 | Bild | Drive-fil-ID eller URL |
 
-**Formel i kolumn C** (svensk locale — `OM` och `;`, inte engelsk `IF`):
+**Formel i kolumn C**
 
-```
-=OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
-```
+- **Manuellt i sheetet (svenska):** `OM` + semikolon  
+  `=OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))`
+- **Via Apps Script:** måste vara engelsk `IF` + komma (annars `#NAME?` på `OM`). Samma logik.
 
-Nya rader från appen får samma OM-formel. Efter GAS-deploy kan du även köra `refreshRebuildStatusFormulas` i Apps Script för att uppdatera alla led-rader.
+Nya rader kopierar helst en fungerande formel från en befintlig rad, annars sätts `IF(...)`. Kör `refreshRebuildStatusFormulas` efter deploy för att laga rader med `#NAME?`.
 
 ### Flik `Grades`
 

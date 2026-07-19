@@ -644,12 +644,18 @@ function findFormulaTemplateRow_(sh, preferRow) {
 }
 
 /**
- * Formel för C (Dags att bygga om) — svensk Sheets-locale (OM + semikolon).
- * Engelsk IF/komma fungerar inte i svenska kalkylark.
- * Exempel: =OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
+ * Formel för C via Apps Script setFormula.
+ *
+ * Viktigt: setFormula använder den engelska formelmotorn.
+ * Skriver man OM(...) via script → #NAME?
+ * I sheetets UI (svenska) skriver man OM med semikolon manuellt.
+ * Via script måste det vara IF med komma — samma logik, fungerar i SE-ark.
+ *
+ * UI-motsvarighet:
+ * =OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
  */
 function rebuildStatusFormula_(row) {
-  return '=OM(E' + row + '=0;"";OM(B' + row + '="Ej uppsatt";"-";OM(F' + row + '-TODAY()<0;"Ja";"Nej")))';
+  return '=IF(E' + row + '=0,"",IF(UPPER(B' + row + ')="EJ UPPSATT","-",IF(F' + row + '-TODAY()<0,"Ja","Nej")))';
 }
 
 function setRebuildStatusFormula_(sh, row) {
@@ -658,21 +664,35 @@ function setRebuildStatusFormula_(sh, row) {
 }
 
 /**
- * Kopiera formel för F (Slutdatum) från mallrad; sätt alltid aktuell C-formel.
+ * C och F: kopiera från fungerande mallrad om den räknar rätt.
+ * Annars sätt engelsk IF via setFormula (OM via setFormula → #NAME?).
  */
 function copyComputedFormulas_(sh, templateRow, destRow) {
   if (destRow < 2) return;
-  setRebuildStatusFormula_(sh, destRow);
+  var copiedC = false;
   if (templateRow >= 2 && templateRow !== destRow) {
+    var srcC = sh.getRange(templateRow, 3);
+    if (srcC.getFormula()) {
+      var cDisplay = String(srcC.getDisplayValue() || "");
+      // Kopiera bara om mallcellen inte är fel (#NAME?, #REF!, …)
+      if (cDisplay.charAt(0) !== "#") {
+        srcC.copyTo(sh.getRange(destRow, 3), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+        copiedC = true;
+      }
+    }
     var srcF = sh.getRange(templateRow, 6);
     if (srcF.getFormula()) {
       srcF.copyTo(sh.getRange(destRow, 6), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
     }
   }
+  if (!copiedC) {
+    setRebuildStatusFormula_(sh, destRow);
+  }
 }
 
 /**
- * Engångsjobb: uppdatera C-formeln på alla led-rader.
+ * Engångsjobb: sätt engelsk IF-formel på C för alla led-rader
+ * (fixar #NAME? efter felaktig OM via setFormula).
  * Kör manuellt i Apps Script-editorn efter deploy.
  */
 function refreshRebuildStatusFormulas() {
