@@ -1143,12 +1143,17 @@ function setColorFilter(key) {
   filterData();
 }
 
-/** Rensa sök + status + färg och visa allt under Fördelning. */
-function clearAllFiltersToDistribution_() {
+/** Rensa sök + status + färg. */
+function clearAllFilters_() {
   const search = document.getElementById("mainSearch");
   if (search) search.value = "";
   rebuildFilter = "ALL";
   colorFilter = "ALL";
+}
+
+/** Rensa filter och visa allt under Fördelning. */
+function clearAllFiltersToDistribution_() {
+  clearAllFilters_();
   if (currentView !== "colors") switchView("colors");
   else {
     renderFilters();
@@ -1157,6 +1162,7 @@ function clearAllFiltersToDistribution_() {
 }
 
 function switchView(view) {
+  if (view !== currentView) clearAllFilters_();
   currentView = view;
   document.getElementById("view-flow").style.display = view === "flow" ? "block" : "none";
   document.getElementById("view-colors").style.display = view === "colors" ? "block" : "none";
