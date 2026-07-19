@@ -212,12 +212,20 @@ function normalizeJaNej_(v) {
   return String(v == null ? "" : v).trim();
 }
 
+function isWildcardNr_(nr) {
+  // W1, W2, w12 …
+  return /^w\d+$/i.test(String(nr == null ? "" : nr).trim());
+}
+
 function isRouteRow_(obj) {
   var nr = String(obj["Nr"] == null ? "" : obj["Nr"]).trim();
   var grad = String(obj["Gradering"] == null ? "" : obj["Gradering"]).trim();
   var rebuild = String(obj["Dags att bygga om"] == null ? "" : obj["Dags att bygga om"]).trim().toLowerCase();
   if (rebuild === "antal") return false;
+  // Vanliga numeriska leder
   if (nr && !isNaN(Number(nr))) return true;
+  // Wildcard-nummer t.ex. W1, W2
+  if (isWildcardNr_(nr)) return true;
   // Wildcard-rader utan Nr men med gradering
   if (!nr && grad && (rebuild === "ja" || rebuild === "nej")) return true;
   return false;
@@ -301,7 +309,15 @@ function readRoutes_() {
     if (aNum && bNum) return na - nb;
     if (aNum) return -1;
     if (bNum) return 1;
-    return String(a.Gradering).localeCompare(String(b.Gradering), "sv");
+    // W1, W2 … efter numeriska
+    var aw = isWildcardNr_(a.Nr);
+    var bw = isWildcardNr_(b.Nr);
+    if (aw && bw) {
+      return (Number(String(a.Nr).replace(/^w/i, "")) || 0) - (Number(String(b.Nr).replace(/^w/i, "")) || 0);
+    }
+    if (aw) return -1;
+    if (bw) return 1;
+    return String(a.Nr || a.Gradering).localeCompare(String(b.Nr || b.Gradering), "sv");
   });
   return out;
 }
@@ -649,7 +665,8 @@ function saveRoute_(route, session) {
     }
   }
 
-  var nrVal = Number(nr) || nr;
+  // Behåll W1/W2 som text; skriv bara rena siffror som Number
+  var nrVal = (/^\d+$/.test(nr)) ? Number(nr) : nr;
   var gradVal = route.Gradering || "";
   var setterVal = route.Ledbyggare || "";
   var buildVal = route.Byggdatum || "";

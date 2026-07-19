@@ -518,7 +518,8 @@ function seedDemoDb_() {
       { Nr: "5", Gradering: "Svart", DagsAttByggaOm: "Ja", Ledbyggare: "August", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" },
       { Nr: "8", Gradering: "Grön", DagsAttByggaOm: "Ja", Ledbyggare: "Patric", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" },
       { Nr: "4", Gradering: "Vit", DagsAttByggaOm: "Ja", Ledbyggare: "August och Gustav", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" },
-      { Nr: "99", Gradering: "Wildcard", DagsAttByggaOm: "Nej", Ledbyggare: "Patric", Byggdatum: "2026-06-01", Slutdatum: "2026-07-01", Anteckningar: "Mixade grepp", Bild: "" }
+      { Nr: "W1", Gradering: "Wildcard", DagsAttByggaOm: "Nej", Ledbyggare: "Patric", Byggdatum: "2026-06-01", Slutdatum: "2026-07-01", Anteckningar: "Mixade grepp", Bild: "" },
+      { Nr: "W2", Gradering: "Wildcard", DagsAttByggaOm: "Ja", Ledbyggare: "Jesper", Byggdatum: "2026-05-10", Slutdatum: "2026-06-10", Anteckningar: "", Bild: "" }
     ],
     users: [{ username: "admin", name: "Admin", role: "superadmin", password: "wallflow", FirstLogin: false }]
   };
@@ -651,6 +652,9 @@ function gradeList_() {
 function isWildcardGrade_(name) {
   return WILDCARD_NAMES.includes(String(name || "").trim().toLowerCase());
 }
+function isWildcardNr_(nr) {
+  return /^w\d+$/i.test(String(nr == null ? "" : nr).trim());
+}
 function isAllowedGrade_(name) {
   const t = String(name || "").trim().toLowerCase();
   return gradeList_().some((g) => String(g).toLowerCase() === t);
@@ -658,6 +662,12 @@ function isAllowedGrade_(name) {
 /** Grades + Wildcard — visas i lista/filter (Wildcard behöver inte finnas i Grades-fliken). */
 function isListableGrade_(name) {
   return isAllowedGrade_(name) || isWildcardGrade_(name);
+}
+/** Lista: Grades/Wildcard-färg, eller lednummer W1/W2 … */
+function isListableRoute_(r) {
+  if (!r) return false;
+  if (isListableGrade_(r.Gradering)) return true;
+  return isWildcardNr_(r.Nr);
 }
 function userRole_() {
   const r = String(currentUser && currentUser.role || "").toLowerCase().trim();
@@ -774,7 +784,13 @@ function sortRoutes_(routes) {
     if (aNum && bNum) return na - nb;
     if (aNum) return -1;
     if (bNum) return 1;
-    return String(a.Gradering || "").localeCompare(String(b.Gradering || ""), "sv");
+    const aw = isWildcardNr_(a.Nr), bw = isWildcardNr_(b.Nr);
+    if (aw && bw) {
+      return (Number(String(a.Nr).replace(/^w/i, "")) || 0) - (Number(String(b.Nr).replace(/^w/i, "")) || 0);
+    }
+    if (aw) return -1;
+    if (bw) return 1;
+    return String(a.Nr || a.Gradering || "").localeCompare(String(b.Nr || b.Gradering || ""), "sv");
   });
 }
 function routeKey_(r) {
@@ -849,12 +865,12 @@ function bootAppData_() {
     .getAppData();
 }
 
-/** Grades i sheet-ordning, plus Wildcard om sådana leder finns. */
+/** Grades i sheet-ordning, plus Wildcard om sådana leder finns (inkl. W1/W2). */
 function availableColors_() {
   const list = gradeList_();
-  const wc = db.routes.find((r) => isWildcardGrade_(r.Gradering));
+  const wc = db.routes.find((r) => isWildcardGrade_(r.Gradering) || isWildcardNr_(r.Nr));
   if (wc) {
-    const label = String(wc.Gradering || "Wildcard").trim();
+    const label = isWildcardGrade_(wc.Gradering) ? String(wc.Gradering).trim() : "Wildcard";
     if (!list.some((g) => String(g).toLowerCase() === label.toLowerCase())) list.push(label);
   }
   return list;
@@ -897,20 +913,26 @@ function routeMatches_(r, tokens) {
   const hay = [r.Nr, r.Gradering, r.DagsAttByggaOm, r.Ledbyggare, r.Byggdatum, r.Slutdatum, r.Anteckningar].join(" ").toLowerCase();
   return tokens.every((t) => hay.includes(t));
 }
+function routeMatchesColorFilter_(r) {
+  if (colorFilter === "ALL") return true;
+  if (r.Gradering === colorFilter) return true;
+  // W1/W2 utan Wildcard-text i Gradering ska ändå matcha Wildcard-chip
+  if (WILDCARD_NAMES.includes(String(colorFilter).toLowerCase()) && isWildcardNr_(r.Nr)) return true;
+  return false;
+}
 function visibleRoutes_() {
   const tokens = getSearchTokens_();
   return sortRoutes_(db.routes.filter((r) => {
-    // Grades + Wildcard
-    if (!isListableGrade_(r.Gradering)) return false;
+    if (!isListableRoute_(r)) return false;
     if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
-    if (colorFilter !== "ALL" && r.Gradering !== colorFilter) return false;
+    if (!routeMatchesColorFilter_(r)) return false;
     return routeMatches_(r, tokens);
   }));
 }
 function counts_() {
   let ja = 0, nej = 0, total = 0;
   db.routes.forEach((r) => {
-    if (!isListableGrade_(r.Gradering)) return;
+    if (!isListableRoute_(r)) return;
     total++;
     if (r.DagsAttByggaOm === "Ja") ja++;
     else if (r.DagsAttByggaOm === "Nej") nej++;
@@ -945,10 +967,10 @@ function renderFlow(routes) {
 }
 
 function colorDistributionRoutes_() {
-  // Fördelning: Grades + Wildcard, respektera ombyggnadsfilter + sök men inte färgfilter
+  // Fördelning: Grades + Wildcard (inkl. W1/W2), respektera ombyggnadsfilter + sök men inte färgfilter
   const tokens = getSearchTokens_();
   return db.routes.filter((r) => {
-    if (!isListableGrade_(r.Gradering)) return false;
+    if (!isListableRoute_(r)) return false;
     if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
     return routeMatches_(r, tokens);
   });
@@ -1022,8 +1044,14 @@ function renderColors(routes) {
   const byColor = {};
   availableColors_().forEach((c) => { byColor[c] = []; });
   distRoutes.forEach((r) => {
-    if (!byColor[r.Gradering]) byColor[r.Gradering] = [];
-    byColor[r.Gradering].push(r);
+    let key = r.Gradering;
+    // W1/W2 utan Wildcard-gradering räknas under Wildcard
+    if (isWildcardNr_(r.Nr) && !isWildcardGrade_(r.Gradering)) {
+      const wcLabel = availableColors_().find((c) => WILDCARD_NAMES.includes(String(c).toLowerCase())) || "Wildcard";
+      key = wcLabel;
+    }
+    if (!byColor[key]) byColor[key] = [];
+    byColor[key].push(r);
   });
   const colors = availableColors_();
   const slices = colors
