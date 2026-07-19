@@ -389,19 +389,55 @@
     }
     .topo-img { width: 100%; border-radius: 14px; margin-top: 10px; border: 1px solid var(--line); }
     .img-editor { margin-bottom: 14px; }
-    .img-editor-canvas-wrap {
-      position: relative; width: 100%; border-radius: 14px; overflow: hidden;
-      border: 1px solid var(--line); background: #0a0c10; touch-action: none;
-    }
-    .img-editor-canvas-wrap canvas { display: block; width: 100%; height: auto; vertical-align: middle; cursor: crosshair; }
     .img-editor-empty {
-      padding: 28px 16px; text-align: center; color: var(--muted); font-size: 0.9rem;
+      padding: 22px 16px; text-align: center; color: var(--muted); font-size: 0.9rem;
       border: 1px dashed var(--line); border-radius: 14px; margin-bottom: 10px;
+    }
+    .img-editor-preview-wrap {
+      border-radius: 14px; overflow: hidden; border: 1px solid var(--line);
+      background: #0a0c10; margin-bottom: 10px; max-height: 160px;
+    }
+    .img-editor-preview-wrap img {
+      display: block; width: 100%; height: 160px; object-fit: cover; object-position: center;
     }
     .img-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .img-editor-actions .btn { flex: 1 1 auto; min-width: 120px; }
     .img-editor-hint { color: var(--muted); font-size: 0.78rem; margin-top: 8px; }
     .img-editor-status { color: var(--accent); font-size: 0.82rem; margin-top: 6px; min-height: 1.2em; }
+
+    /* Fullskärm: markera led på foto */
+    .img-mark-overlay {
+      position: fixed; inset: 0; z-index: 120;
+      background: #0a0c10; color: var(--text);
+      display: none; flex-direction: column;
+      padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+    }
+    .img-mark-overlay.open { display: flex; }
+    .img-mark-prompt {
+      flex: 0 0 auto; padding: 14px 16px 10px; text-align: center;
+      border-bottom: 1px solid var(--line);
+    }
+    .img-mark-prompt strong {
+      display: block; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em;
+    }
+    .img-mark-prompt span {
+      display: block; margin-top: 4px; color: var(--muted); font-size: 0.85rem; line-height: 1.35;
+    }
+    .img-mark-stage {
+      flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center;
+      padding: 8px; touch-action: none; overflow: hidden; background: #050608;
+    }
+    .img-mark-stage canvas {
+      display: block; max-width: 100%; max-height: 100%;
+      width: auto; height: auto; cursor: crosshair;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    }
+    .img-mark-bar {
+      flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px;
+      padding: 12px 14px 14px; border-top: 1px solid var(--line); background: #10141a;
+    }
+    .img-mark-bar .btn { width: 100%; min-height: 46px; font-weight: 600; }
+    body.img-mark-open { overflow: hidden; }
   </style>
 </head>
 <body>
@@ -456,6 +492,21 @@
       <button class="icon-btn" type="button" onclick="closePanel()" aria-label="Stäng">✕</button>
     </div>
     <div id="panel-body"></div>
+  </div>
+
+  <div id="img-mark-overlay" class="img-mark-overlay" aria-hidden="true">
+    <div class="img-mark-prompt">
+      <strong>Markera leden</strong>
+      <span>Rita ledlinjen på bilden med fingret</span>
+    </div>
+    <div id="img-mark-stage" class="img-mark-stage">
+      <canvas id="img-mark-canvas" width="800" height="600"></canvas>
+    </div>
+    <div class="img-mark-bar">
+      <button class="btn btn-ghost" type="button" onclick="cancelRouteImageMark_()">Avbryt</button>
+      <button class="btn btn-ghost" type="button" onclick="clearRouteImageStrokes_()">Rensa</button>
+      <button class="btn btn-accent" type="button" onclick="confirmRouteImageMark_()">Klar</button>
+    </div>
   </div>
 
   <div id="login-panel">
@@ -1304,7 +1355,10 @@ function openRoute(key) {
   `;
   document.getElementById("panel").classList.add("open");
 }
-function closePanel() { document.getElementById("panel").classList.remove("open"); }
+function closePanel() {
+  if (routeImgEditor_ && routeImgEditor_.open) cancelRouteImageMark_();
+  document.getElementById("panel").classList.remove("open");
+}
 
 /* ---------- Auth / Settings ---------- */
 function openSettings() {
@@ -1516,18 +1570,18 @@ function renderRouteForm(nr) {
       <div class="img-editor" id="img-editor">
         <label class="form-label">Bild</label>
         <div id="img-editor-empty" class="img-editor-empty" style="${route.Bild ? "display:none" : ""}">Ingen bild ännu — ta foto eller välj från enheten.</div>
-        <div id="img-editor-wrap" class="img-editor-canvas-wrap" style="${route.Bild ? "" : "display:none"}">
-          <canvas id="img-editor-canvas" width="800" height="600"></canvas>
+        <div id="img-editor-preview-wrap" class="img-editor-preview-wrap" style="${route.Bild ? "" : "display:none"}">
+          <img id="img-editor-preview" alt="Förhandsvisning av led" src="${route.Bild ? escapeHtml_(routeImageSrc_(route.Bild)) : ""}">
         </div>
         <input type="hidden" id="f-img" value="${escapeHtml_(route.Bild)}">
         <input type="hidden" id="f-img-prev" value="${escapeHtml_(route.Bild)}">
         <input type="file" id="f-img-file" accept="image/*" capture="environment" style="display:none">
         <div class="img-editor-actions">
           <button class="btn btn-accent btn-sm" type="button" onclick="document.getElementById('f-img-file').click()">Ta foto / Välj bild</button>
-          <button class="btn btn-ghost btn-sm" type="button" id="img-clear-strokes" onclick="clearRouteImageStrokes_()">Rensa streck</button>
-          <button class="btn btn-ghost btn-sm" type="button" id="img-remove" onclick="clearRouteImage_()">Ta bort bild</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="img-mark-btn" style="${route.Bild ? "" : "display:none"}" onclick="reopenRouteImageMark_()">Markera led</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="img-remove" style="${route.Bild ? "" : "display:none"}" onclick="clearRouteImage_()">Ta bort bild</button>
         </div>
-        <div class="img-editor-hint">En bild per led. Rita ledlinjen — vid sparning ersätts eventuell gammal fil i mappen Bilder.</div>
+        <div class="img-editor-hint">En bild per led. Efter foto öppnas markering i helskärm — sedan kan du spara formuläret.</div>
         <div class="img-editor-status" id="img-editor-status"></div>
       </div>
       ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Ej uppsatt</button>` : ""}
@@ -1578,37 +1632,75 @@ function routeImageSrc_(bild) {
   return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(b) + "=s800";
 }
 
-/* ---------- Bildredigerare: foto + rita ledlinje + uppladdning ---------- */
+/* ---------- Bildredigerare: foto → helskärmsmarkering → förhandsvisning ---------- */
 let routeImgEditor_ = null;
+let imgMarkBound_ = false;
 
 function setImgEditorStatus_(msg) {
   const el = document.getElementById("img-editor-status");
   if (el) el.textContent = msg || "";
 }
 
+function updateRouteImagePreviewUI_(src) {
+  const empty = document.getElementById("img-editor-empty");
+  const wrap = document.getElementById("img-editor-preview-wrap");
+  const preview = document.getElementById("img-editor-preview");
+  const markBtn = document.getElementById("img-mark-btn");
+  const removeBtn = document.getElementById("img-remove");
+  const has = !!src;
+  if (empty) empty.style.display = has ? "none" : "";
+  if (wrap) wrap.style.display = has ? "" : "none";
+  if (preview) preview.src = has ? src : "";
+  if (markBtn) markBtn.style.display = has ? "" : "none";
+  if (removeBtn) removeBtn.style.display = has ? "" : "none";
+}
+
 function bindRouteImageEditor_(existingBild) {
+  const existing = String(existingBild || "").trim();
   routeImgEditor_ = {
     img: null,
     strokes: [],
     drawing: false,
     dirty: false,
-    existingId: String(existingBild || "").trim()
+    existingId: existing,
+    committedDataUrl: "",
+    draftImg: null,
+    draftStrokes: [],
+    open: false,
+    snapshot: null
   };
-  const fileInput = document.getElementById("f-img-file");
-  const canvas = document.getElementById("img-editor-canvas");
-  if (!fileInput || !canvas) return;
+  ensureImgMarkCanvasBound_();
 
-  fileInput.onchange = () => {
-    const file = fileInput.files && fileInput.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => loadRouteImageFromSrc_(String(reader.result || ""));
-    reader.readAsDataURL(file);
-    fileInput.value = "";
-  };
+  const fileInput = document.getElementById("f-img-file");
+  if (fileInput) {
+    fileInput.onchange = () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => openRouteImageMark_(String(reader.result || ""), { replacePhoto: true });
+      reader.readAsDataURL(file);
+      fileInput.value = "";
+    };
+  }
+
+  if (existing) {
+    updateRouteImagePreviewUI_(routeImageSrc_(existing));
+    setImgEditorStatus_("Tryck Markera led för att rita, eller ta nytt foto.");
+  } else {
+    updateRouteImagePreviewUI_("");
+    setImgEditorStatus_("");
+  }
+}
+
+function ensureImgMarkCanvasBound_() {
+  if (imgMarkBound_) return;
+  const canvas = document.getElementById("img-mark-canvas");
+  if (!canvas) return;
+  imgMarkBound_ = true;
 
   const getPos_ = (e) => {
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 0, y: 0 };
     const src = e.touches && e.touches[0] ? e.touches[0] : e;
     const x = ((src.clientX - rect.left) / rect.width) * canvas.width;
     const y = ((src.clientY - rect.top) / rect.height) * canvas.height;
@@ -1616,17 +1708,16 @@ function bindRouteImageEditor_(existingBild) {
   };
 
   const onStart = (e) => {
-    if (!routeImgEditor_ || !routeImgEditor_.img) return;
+    if (!routeImgEditor_ || !routeImgEditor_.open || !routeImgEditor_.draftImg) return;
     e.preventDefault();
     routeImgEditor_.drawing = true;
-    routeImgEditor_.strokes.push([getPos_(e)]);
-    routeImgEditor_.dirty = true;
+    routeImgEditor_.draftStrokes.push([getPos_(e)]);
     redrawRouteImageCanvas_();
   };
   const onMove = (e) => {
     if (!routeImgEditor_ || !routeImgEditor_.drawing) return;
     e.preventDefault();
-    const stroke = routeImgEditor_.strokes[routeImgEditor_.strokes.length - 1];
+    const stroke = routeImgEditor_.draftStrokes[routeImgEditor_.draftStrokes.length - 1];
     if (!stroke) return;
     stroke.push(getPos_(e));
     redrawRouteImageCanvas_();
@@ -1645,64 +1736,144 @@ function bindRouteImageEditor_(existingBild) {
   canvas.addEventListener("touchmove", onMove, { passive: false });
   canvas.addEventListener("touchend", onEnd, { passive: false });
 
-  if (existingBild) {
-    setImgEditorStatus_("Laddar befintlig bild…");
-    loadRouteImageFromSrc_(routeImageSrc_(existingBild), true);
-  } else {
-    setImgEditorStatus_("");
-  }
+  window.addEventListener("resize", () => {
+    if (routeImgEditor_ && routeImgEditor_.open) fitRouteImageCanvas_();
+  });
 }
 
-function loadRouteImageFromSrc_(src, fromExisting) {
+function snapshotRouteImageEditor_() {
+  const ed = routeImgEditor_;
+  if (!ed) return null;
+  const hid = document.getElementById("f-img");
+  return {
+    img: ed.img,
+    strokes: ed.strokes,
+    dirty: ed.dirty,
+    existingId: ed.existingId,
+    committedDataUrl: ed.committedDataUrl,
+    hidValue: hid ? hid.value : ""
+  };
+}
+
+function restoreRouteImageSnapshot_(snap) {
+  if (!routeImgEditor_ || !snap) return;
+  routeImgEditor_.img = snap.img;
+  routeImgEditor_.strokes = snap.strokes || [];
+  routeImgEditor_.dirty = !!snap.dirty;
+  routeImgEditor_.existingId = snap.existingId || "";
+  routeImgEditor_.committedDataUrl = snap.committedDataUrl || "";
+  const hid = document.getElementById("f-img");
+  if (hid) hid.value = snap.hidValue || "";
+  const previewSrc = snap.committedDataUrl || (snap.existingId ? routeImageSrc_(snap.existingId) : "") || (hid && hid.value ? routeImageSrc_(hid.value) : "");
+  updateRouteImagePreviewUI_(previewSrc);
+}
+
+function openRouteImageMark_(src, opts) {
+  opts = opts || {};
   if (!src || !routeImgEditor_) return;
+  ensureImgMarkCanvasBound_();
+  routeImgEditor_.snapshot = snapshotRouteImageEditor_();
+  routeImgEditor_.draftStrokes = [];
+  routeImgEditor_.drawing = false;
+
   const image = new Image();
-  image.crossOrigin = "anonymous";
+  if (!String(src).startsWith("data:")) image.crossOrigin = "anonymous";
   image.onload = () => {
-    routeImgEditor_.img = image;
-    if (!fromExisting) {
-      routeImgEditor_.strokes = [];
-      routeImgEditor_.dirty = true;
-      routeImgEditor_.existingId = "";
+    routeImgEditor_.draftImg = image;
+    if (opts.replacePhoto) {
+      // Nytt foto ersätter tidigare bild när användaren trycker Klar
       const hid = document.getElementById("f-img");
       if (hid) hid.value = "";
     }
-    const empty = document.getElementById("img-editor-empty");
-    const wrap = document.getElementById("img-editor-wrap");
-    if (empty) empty.style.display = "none";
-    if (wrap) wrap.style.display = "";
+    showRouteImageMarkOverlay_();
     fitRouteImageCanvas_();
     redrawRouteImageCanvas_();
-    setImgEditorStatus_(fromExisting ? "Rita gärna om ledlinjen vid behov." : "Rita hur leden går, spara sedan.");
+    setImgEditorStatus_("Markera leden, tryck sedan Klar.");
   };
   image.onerror = () => {
+    routeImgEditor_.snapshot = null;
     setImgEditorStatus_("Kunde inte läsa bilden.");
     showToast("Kunde inte öppna bilden");
   };
   image.src = src;
 }
 
+function reopenRouteImageMark_() {
+  if (!routeImgEditor_) return;
+  const src = routeImgEditor_.committedDataUrl
+    || (routeImgEditor_.existingId ? routeImageSrc_(routeImgEditor_.existingId) : "")
+    || (document.getElementById("f-img") && document.getElementById("f-img").value
+      ? routeImageSrc_(document.getElementById("f-img").value)
+      : "");
+  if (!src) {
+    showToast("Ingen bild att markera — ta foto först");
+    return;
+  }
+  openRouteImageMark_(src, { replacePhoto: false });
+}
+
+function showRouteImageMarkOverlay_() {
+  const overlay = document.getElementById("img-mark-overlay");
+  if (!overlay || !routeImgEditor_) return;
+  routeImgEditor_.open = true;
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("img-mark-open");
+  // Fit after layout
+  requestAnimationFrame(() => {
+    fitRouteImageCanvas_();
+    redrawRouteImageCanvas_();
+  });
+}
+
+function hideRouteImageMarkOverlay_() {
+  const overlay = document.getElementById("img-mark-overlay");
+  if (routeImgEditor_) {
+    routeImgEditor_.open = false;
+    routeImgEditor_.drawing = false;
+    routeImgEditor_.draftImg = null;
+    routeImgEditor_.draftStrokes = [];
+    routeImgEditor_.snapshot = null;
+  }
+  if (overlay) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("img-mark-open");
+}
+
 function fitRouteImageCanvas_() {
-  const canvas = document.getElementById("img-editor-canvas");
-  const img = routeImgEditor_ && routeImgEditor_.img;
+  const canvas = document.getElementById("img-mark-canvas");
+  const stage = document.getElementById("img-mark-stage");
+  const img = routeImgEditor_ && routeImgEditor_.draftImg;
   if (!canvas || !img) return;
-  const maxW = 1200;
-  const scale = Math.min(1, maxW / img.naturalWidth);
-  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+
+  const maxPx = 1400;
+  const iscale = Math.min(1, maxPx / Math.max(1, img.naturalWidth));
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * iscale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * iscale));
+
+  if (stage) {
+    const maxW = Math.max(1, stage.clientWidth - 4);
+    const maxH = Math.max(1, stage.clientHeight - 4);
+    const dscale = Math.min(maxW / canvas.width, maxH / canvas.height);
+    canvas.style.width = Math.max(1, Math.floor(canvas.width * dscale)) + "px";
+    canvas.style.height = Math.max(1, Math.floor(canvas.height * dscale)) + "px";
+  }
 }
 
 function redrawRouteImageCanvas_() {
-  const canvas = document.getElementById("img-editor-canvas");
+  const canvas = document.getElementById("img-mark-canvas");
   const ed = routeImgEditor_;
-  if (!canvas || !ed || !ed.img) return;
+  if (!canvas || !ed || !ed.draftImg) return;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(ed.img, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(ed.draftImg, 0, 0, canvas.width, canvas.height);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.strokeStyle = "#ff4d4d";
   ctx.lineWidth = Math.max(4, canvas.width * 0.008);
-  ed.strokes.forEach((stroke) => {
+  (ed.draftStrokes || []).forEach((stroke) => {
     if (!stroke || stroke.length < 2) return;
     ctx.beginPath();
     ctx.moveTo(stroke[0].x, stroke[0].y);
@@ -1712,45 +1883,72 @@ function redrawRouteImageCanvas_() {
 }
 
 function clearRouteImageStrokes_() {
-  if (!routeImgEditor_) return;
-  routeImgEditor_.strokes = [];
-  routeImgEditor_.dirty = !!routeImgEditor_.img;
+  if (!routeImgEditor_ || !routeImgEditor_.open) return;
+  routeImgEditor_.draftStrokes = [];
   redrawRouteImageCanvas_();
-  setImgEditorStatus_("Streck rensade.");
+}
+
+function confirmRouteImageMark_() {
+  if (!routeImgEditor_ || !routeImgEditor_.open || !routeImgEditor_.draftImg) return;
+  const canvas = document.getElementById("img-mark-canvas");
+  if (!canvas) return;
+  let dataUrl = "";
+  try {
+    dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+  } catch (e) {
+    showToast("Kunde inte spara markeringen. Ta om fotot och markera igen.");
+    return;
+  }
+  if (!dataUrl) {
+    showToast("Kunde inte spara markeringen");
+    return;
+  }
+  routeImgEditor_.committedDataUrl = dataUrl;
+  routeImgEditor_.img = routeImgEditor_.draftImg;
+  routeImgEditor_.strokes = [];
+  routeImgEditor_.dirty = true;
+  routeImgEditor_.existingId = "";
+  const hid = document.getElementById("f-img");
+  if (hid) hid.value = "";
+  updateRouteImagePreviewUI_(dataUrl);
+  hideRouteImageMarkOverlay_();
+  setImgEditorStatus_("Markering klar — spara leden för att ladda upp.");
+}
+
+function cancelRouteImageMark_() {
+  if (!routeImgEditor_) return;
+  const snap = routeImgEditor_.snapshot;
+  hideRouteImageMarkOverlay_();
+  if (snap) restoreRouteImageSnapshot_(snap);
+  setImgEditorStatus_(snap && (snap.committedDataUrl || snap.existingId || snap.hidValue)
+    ? "Markering avbruten."
+    : "");
 }
 
 function clearRouteImage_() {
+  if (routeImgEditor_ && routeImgEditor_.open) hideRouteImageMarkOverlay_();
   routeImgEditor_ = {
     img: null,
     strokes: [],
     drawing: false,
     dirty: true,
-    existingId: ""
+    existingId: "",
+    committedDataUrl: "",
+    draftImg: null,
+    draftStrokes: [],
+    open: false,
+    snapshot: null
   };
   const hid = document.getElementById("f-img");
   if (hid) hid.value = "";
-  const empty = document.getElementById("img-editor-empty");
-  const wrap = document.getElementById("img-editor-wrap");
-  if (empty) empty.style.display = "";
-  if (wrap) wrap.style.display = "none";
-  const canvas = document.getElementById("img-editor-canvas");
-  if (canvas) {
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
+  updateRouteImagePreviewUI_("");
   setImgEditorStatus_("Bild borttagen — spara för att uppdatera leden.");
 }
 
 function exportRouteImageDataUrl_() {
-  const canvas = document.getElementById("img-editor-canvas");
-  if (!canvas || !routeImgEditor_ || !routeImgEditor_.img) return "";
-  try {
-    // Begränsa JPEG-storlek för GAS
-    return canvas.toDataURL("image/jpeg", 0.82);
-  } catch (e) {
-    // Befintliga Drive-bilder kan sakna CORS → canvas "tainted"
-    return "";
-  }
+  if (!routeImgEditor_) return "";
+  if (routeImgEditor_.committedDataUrl) return routeImgEditor_.committedDataUrl;
+  return "";
 }
 
 function isDriveFileId_(id) {
@@ -1780,19 +1978,18 @@ function uploadRouteImageIfNeeded_(nr) {
     const current = hid ? hid.value.trim() : "";
     const previousId = prevEl ? prevEl.value.trim() : (ed && ed.existingId) || "";
 
+    if (!ed || !ed.dirty) {
+      resolve(current);
+      return;
+    }
+
     // Bild borttagen — rensa Drive och returnera tomt
-    if (ed && !ed.img && ed.dirty) {
+    if (!ed.committedDataUrl && !ed.img) {
       deleteRouteImageOnServer_(nr, previousId).then(() => {
         if (hid) hid.value = "";
         if (prevEl) prevEl.value = "";
         resolve("");
       });
-      return;
-    }
-
-    // Ingen ny lokal bild — behåll befintligt ID/URL
-    if (!ed || !ed.img || (!ed.dirty && current)) {
-      resolve(current);
       return;
     }
 
@@ -1818,7 +2015,9 @@ function uploadRouteImageIfNeeded_(nr) {
         if (routeImgEditor_) {
           routeImgEditor_.dirty = false;
           routeImgEditor_.existingId = id;
+          routeImgEditor_.committedDataUrl = "";
         }
+        updateRouteImagePreviewUI_(routeImageSrc_(id) || dataUrl);
         setImgEditorStatus_("Bild uppladdad (ersatte eventuell gammal).");
         resolve(id);
       })
@@ -1871,7 +2070,7 @@ function saveRoute(existingNr) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Sparar…"; }
 
   const ed = routeImgEditor_;
-  const needsImageWork = !!(ed && ed.dirty && (ed.img || !route.Bild));
+  const needsImageWork = !!(ed && ed.dirty && (ed.committedDataUrl || ed.img || !route.Bild));
   // Ny led utan Nr: spara först så filen kan heta led-{nr}.jpg (en bild per led)
   const ensureNr = (!route.Nr && needsImageWork)
     ? persistRouteOnServer_(Object.assign({}, route, { Bild: "" })).then((res) => {
