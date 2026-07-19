@@ -1551,6 +1551,23 @@ function routeRowHtml_(r) {
     </div>`;
 }
 
+let panelHistory_ = false;
+
+function isPanelOpen_() {
+  const panel = document.getElementById("panel");
+  return !!(panel && panel.classList.contains("open"));
+}
+
+function ensurePanelHistory_() {
+  if (panelHistory_) return;
+  try {
+    history.pushState({ wallflowPanel: true }, "");
+    panelHistory_ = true;
+  } catch (e) {
+    panelHistory_ = false;
+  }
+}
+
 function openRoute(key) {
   const r = db.routes.find((x) => routeKey_(x) === key);
   if (!r) return;
@@ -1577,12 +1594,26 @@ function openRoute(key) {
       ${canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera led</button>` : ""}
     ` : ""}
   `;
+  const wasOpen = isPanelOpen_();
   document.getElementById("panel").classList.add("open");
+  if (!wasOpen) ensurePanelHistory_();
 }
-function closePanel() {
-  closeRouteImageLightbox_();
+function closePanel(fromPopstate) {
   if (routeImgEditor_ && routeImgEditor_.open) cancelRouteImageMark_();
-  document.getElementById("panel").classList.remove("open");
+  // Stäng lightbox först; manuell stängning poppar dess history-post via history.back()
+  if (isRouteImageLightboxOpen_()) closeRouteImageLightbox_(!!fromPopstate);
+  const panel = document.getElementById("panel");
+  if (!panel || !panel.classList.contains("open")) {
+    panelHistory_ = false;
+    return;
+  }
+  panel.classList.remove("open");
+  if (!fromPopstate && panelHistory_) {
+    panelHistory_ = false;
+    try { history.back(); } catch (e) { /* ignore */ }
+  } else {
+    panelHistory_ = false;
+  }
 }
 
 /* ---------- Auth / Settings ---------- */
@@ -1883,7 +1914,9 @@ function renderRouteForm(nr) {
       <button class="btn btn-accent w-100" type="button" id="save-route-btn" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
       ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
   `;
+  const wasOpen = isPanelOpen_();
   document.getElementById("panel").classList.add("open");
+  if (!wasOpen) ensurePanelHistory_();
   bindRouteImageEditor_(route.Bild || "");
   // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad persons namn (inte användarnamn)
   if (nr) {
@@ -1978,12 +2011,27 @@ function closeRouteImageLightbox_(fromPopstate) {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeRouteImageLightbox_();
+  if (e.key === "Escape") {
+    if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
+    if (routeImgEditor_ && routeImgEditor_.open) return cancelRouteImageMark_();
+    if (isPanelOpen_()) return closePanel();
+  }
 });
 
 window.addEventListener("popstate", () => {
+  // Stäng översta lagret: lightbox → bildmarkering → panel (redigera/detalj)
   if (isRouteImageLightboxOpen_()) {
     closeRouteImageLightbox_(true);
+    return;
+  }
+  if (routeImgEditor_ && routeImgEditor_.open) {
+    cancelRouteImageMark_();
+    // Markeringen hade ingen egen history-post — lägg tillbaka panel-fällan
+    if (isPanelOpen_()) ensurePanelHistory_();
+    return;
+  }
+  if (isPanelOpen_()) {
+    closePanel(true);
   }
 });
 
