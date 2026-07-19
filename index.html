@@ -298,12 +298,6 @@
       display: block; color: var(--muted); font-size: 0.78rem; margin-top: 2px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .badge-rebuild {
-      display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 0.68rem;
-      font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: #12151a;
-    }
-    .badge-rebuild.Ja { background: var(--rebuild); }
-    .badge-rebuild.Nej { background: var(--ok); }
     .route-status-icon {
       display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px;
       flex: 0 0 auto;
@@ -1386,17 +1380,7 @@ function renderColors(routes) {
   `;
 }
 
-/** Ombyggnadsbadge (detaljvy) — utelämnas för Ej uppsatt / "-". */
-function rebuildBadgeHtml_(r) {
-  if (isEjUppsattGrade_(r && r.Gradering)) return "";
-  const status = String(r && r.DagsAttByggaOm || "").trim();
-  if (!status || status === "-") return "";
-  if (status === "Ja") return `<span class="badge-rebuild Ja">Bygg om</span>`;
-  if (status === "Nej") return `<span class="badge-rebuild Nej">Aktuell</span>`;
-  return "";
-}
-
-/** Lista: timglas för ombyggnad, bock för aktuell. */
+/** Lista: varning för ombyggnad, bock för aktuell. */
 function rebuildListMarkerHtml_(r) {
   if (isEjUppsattGrade_(r && r.Gradering)) return "";
   const status = String(r && r.DagsAttByggaOm || "").trim();
@@ -1446,15 +1430,13 @@ function openRoute(key) {
   document.getElementById("panel-title").textContent = title;
   const thumb = routeImageSrc_(r.Bild, 400);
   const full = routeImageSrc_(r.Bild, 1600);
-  const badge = rebuildBadgeHtml_(r);
   document.getElementById("panel-body").innerHTML = `
-    ${badge ? `<div class="mb-2">${badge}</div>` : ""}
     <div class="detail-grid">
       <div class="detail-cell"><label>Nr</label><strong>${escapeHtml_(r.Nr || "—")}</strong></div>
       <div class="detail-cell"><label>Gradering</label><strong><span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>${escapeHtml_(r.Gradering || "—")}</strong></div>
       <div class="detail-cell"><label>Ledbyggare</label><strong>${escapeHtml_(r.Ledbyggare || "—")}</strong></div>
       <div class="detail-cell"><label>Byggdatum</label><strong>${escapeHtml_(r.Byggdatum || "—")}</strong></div>
-      <div class="detail-cell"><label>Ombyggnad</label><strong>${escapeHtml_(r.DagsAttByggaOm || "—")}</strong></div>
+      <div class="detail-cell"><label>Dags att bygga om</label><strong>${escapeHtml_(r.DagsAttByggaOm || "—")}</strong></div>
     </div>
     <div class="detail-cell">
       <label>Anteckningar</label>
