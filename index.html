@@ -1034,12 +1034,12 @@ function visibleRoutes_() {
   }));
 }
 function counts_() {
-  // Samma urval som listan (färg + sök), så siffrorna stämmer med filtrering
+  // Respektera färg + sök (inte statusfilter) så boxarna speglar synligt urval
   const tokens = getSearchTokens_();
   let ja = 0, nej = 0, ej = 0, total = 0;
   db.routes.forEach((r) => {
     if (!isListableRoute_(r)) return;
-    if (rebuildFilter !== "EJ" && !routeMatchesColorFilter_(r)) return;
+    if (colorFilter !== "ALL" && gradeBucketKey_(r) !== gradeBucketKey_({ Gradering: colorFilter, Nr: "" })) return;
     if (!routeMatches_(r, tokens)) return;
     total++;
     if (isEjUppsattRoute_(r)) ej++;
