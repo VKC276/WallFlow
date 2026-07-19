@@ -12,12 +12,20 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 |--------|-----------|
 | Nr | Lednummer |
 | Gradering | Färg (Blå, Grön, Röd, Vit, Svart, Wildcard…) |
-| Dags att bygga om | `Ja` / `Nej` |
+| Dags att bygga om | Formel → `Ja` / `Nej` / `-` (vid Ej uppsatt) |
 | Ledbyggare | Vem som satt leden |
 | Byggdatum | När den sattes |
 | Slutdatum | Planerat slut / ombyggnadsdatum |
 | Anteckningar | Fri text |
 | Bild | Drive-fil-ID eller URL |
+
+**Formel i kolumn C** (rad 9 som exempel — dra ner i sheetet):
+
+```
+=OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
+```
+
+Efter GAS-deploy kan du även köra `refreshRebuildStatusFormulas` i Apps Script för att uppdatera alla led-rader.
 
 ### Flik `Grades`
 

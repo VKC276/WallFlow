@@ -208,6 +208,8 @@ function normalizeJaNej_(v) {
   var s = String(v == null ? "" : v).trim().toLowerCase();
   if (s === "ja" || s === "yes" || s === "true" || s === "1") return "Ja";
   if (s === "nej" || s === "no" || s === "false" || s === "0") return "Nej";
+  // Ej uppsatt (formel i C) → "-"
+  if (s === "-" || s === "–" || s === "—") return "-";
   // Behåll övrigt (t.ex. summeringsrader) men UI filtrerar dem bort
   return String(v == null ? "" : v).trim();
 }
@@ -227,7 +229,7 @@ function isRouteRow_(obj) {
   // Wildcard-nummer t.ex. W1, W2
   if (isWildcardNr_(nr)) return true;
   // Wildcard-rader utan Nr men med gradering
-  if (!nr && grad && (rebuild === "ja" || rebuild === "nej")) return true;
+  if (!nr && grad && (rebuild === "ja" || rebuild === "nej" || rebuild === "-")) return true;
   return false;
 }
 
@@ -642,18 +644,47 @@ function findFormulaTemplateRow_(sh, preferRow) {
 }
 
 /**
- * Kopiera formler för C och F från mallrad till ny rad (relativt radnummer justeras).
+ * Formel för C (Dags att bygga om).
+ * Svenska i sheetet: =OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
+ * Apps Script använder engelsk IF-syntax; Sheets visar lokaliserat.
+ */
+function rebuildStatusFormula_(row) {
+  return '=IF(E' + row + '=0,"",IF(UPPER(B' + row + ')="EJ UPPSATT","-",IF(F' + row + '-TODAY()<0,"Ja","Nej")))';
+}
+
+function setRebuildStatusFormula_(sh, row) {
+  if (row < 2) return;
+  sh.getRange(row, 3).setFormula(rebuildStatusFormula_(row));
+}
+
+/**
+ * Kopiera formel för F (Slutdatum) från mallrad; sätt alltid aktuell C-formel.
  */
 function copyComputedFormulas_(sh, templateRow, destRow) {
-  if (templateRow < 2 || destRow < 2 || templateRow === destRow) return;
-  // C = 3, F = 6
-  var cols = [3, 6];
-  for (var i = 0; i < cols.length; i++) {
-    var col = cols[i];
-    var src = sh.getRange(templateRow, col);
-    if (!src.getFormula()) continue;
-    src.copyTo(sh.getRange(destRow, col), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+  if (destRow < 2) return;
+  setRebuildStatusFormula_(sh, destRow);
+  if (templateRow >= 2 && templateRow !== destRow) {
+    var srcF = sh.getRange(templateRow, 6);
+    if (srcF.getFormula()) {
+      srcF.copyTo(sh.getRange(destRow, 6), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+    }
   }
+}
+
+/**
+ * Engångsjobb: uppdatera C-formeln på alla led-rader.
+ * Kör manuellt i Apps Script-editorn efter deploy.
+ */
+function refreshRebuildStatusFormulas() {
+  var sh = sheet_(WALLFLOW_SHEET_ROUTES);
+  var table = readTable_(WALLFLOW_SHEET_ROUTES);
+  var n = 0;
+  for (var i = 0; i < table.rows.length; i++) {
+    if (!isRouteRow_(table.rows[i])) continue;
+    setRebuildStatusFormula_(sh, table.rows[i].__row);
+    n++;
+  }
+  return { ok: true, updated: n };
 }
 
 /**

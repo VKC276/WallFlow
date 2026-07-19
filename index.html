@@ -813,7 +813,14 @@ function normalizeRoute_(r) {
   return {
     Nr: r.Nr == null ? "" : String(r.Nr),
     Gradering: String(r.Gradering || ""),
-    DagsAttByggaOm: String(r.DagsAttByggaOm || r["Dags att bygga om"] || "").trim() === "Nej" ? "Nej" : (String(r.DagsAttByggaOm || r["Dags att bygga om"] || "").trim() === "Ja" ? "Ja" : String(r.DagsAttByggaOm || r["Dags att bygga om"] || "")),
+    DagsAttByggaOm: (function () {
+      const raw = String(r.DagsAttByggaOm || r["Dags att bygga om"] || "").trim();
+      const low = raw.toLowerCase();
+      if (low === "ja") return "Ja";
+      if (low === "nej") return "Nej";
+      if (raw === "-" || raw === "–" || raw === "—") return "-";
+      return raw;
+    })(),
     Ledbyggare: String(r.Ledbyggare || ""),
     Byggdatum: String(r.Byggdatum || "").slice(0, 10),
     Slutdatum: String(r.Slutdatum || "").slice(0, 10),
@@ -1115,11 +1122,14 @@ function renderColors(routes) {
   `;
 }
 
-/** Ombyggnadsbadge — utelämnas för leder med gradering Ej uppsatt. */
+/** Ombyggnadsbadge — utelämnas för Ej uppsatt / "-". */
 function rebuildBadgeHtml_(r) {
   if (isEjUppsattGrade_(r && r.Gradering)) return "";
-  const label = r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell";
-  return `<span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${label}</span>`;
+  const status = String(r && r.DagsAttByggaOm || "").trim();
+  if (!status || status === "-") return "";
+  if (status === "Ja") return `<span class="badge-rebuild Ja">Bygg om</span>`;
+  if (status === "Nej") return `<span class="badge-rebuild Nej">Aktuell</span>`;
+  return "";
 }
 
 function routeRowHtml_(r) {
