@@ -360,8 +360,12 @@
       padding: 0 4px 0 10px; height: 40px; border-radius: 12px;
       background: rgba(255,255,255,0.05); border: 1px solid var(--line);
       color: var(--muted); font-size: 0.78rem; font-weight: 600;
+      cursor: pointer; font-family: inherit; appearance: none; -webkit-appearance: none;
     }
+    .account-chip:hover { background: rgba(255,255,255,0.08); }
+    .account-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .account-chip strong { color: var(--text); font-weight: 700; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .account-chip .icon-btn { pointer-events: none; }
     .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .login-card { width: min(360px, 100%); transition: opacity .25s ease; }
     .login-card.is-busy .form-control,
@@ -553,10 +557,10 @@
         <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="filterData()" autocomplete="off">
         <button class="icon-btn" type="button" onclick="document.getElementById('mainSearch').value=''; filterData();" aria-label="Rensa sök">✕</button>
       </div>
-      <div class="account-chip" id="account-chip">
+      <button class="account-chip" id="account-chip" type="button" onclick="openSettings()" aria-label="Inställningar" title="Inställningar">
         <strong id="account-name">—</strong>
-        <button class="icon-btn" type="button" onclick="openSettings()" aria-label="Inställningar" title="Inställningar">⚙</button>
-      </div>
+        <span class="icon-btn" aria-hidden="true">⚙</span>
+      </button>
       <div class="filters-block">
         <div class="filter-row" id="rebuild-filters" aria-label="Ombyggnadsfilter"></div>
       </div>
