@@ -700,7 +700,12 @@ function isWildcardGrade_(name) {
   return WILDCARD_NAMES.includes(String(name || "").trim().toLowerCase());
 }
 function isEjUppsattGrade_(name) {
-  return String(name || "").trim().toLowerCase() === EJ_UPPSATT_GRADE.toLowerCase();
+  return String(name || "").trim().toLowerCase().replace(/\s+/g, " ") === "ej uppsatt";
+}
+/** Byggstatus "-" (inkl. en-dash/em-dash/minus från Sheets). */
+function isDashStatus_(v) {
+  const s = String(v == null ? "" : v).trim();
+  return /^[-–—−‐‒―]$/.test(s);
 }
 function isWildcardNr_(nr) {
   return /^w\d+$/i.test(String(nr == null ? "" : nr).trim());
@@ -857,13 +862,13 @@ function routeByNr_(nr) {
 function normalizeRoute_(r) {
   return {
     Nr: r.Nr == null ? "" : String(r.Nr),
-    Gradering: String(r.Gradering || ""),
+    Gradering: String(r.Gradering || "").trim(),
     DagsAttByggaOm: (function () {
       const raw = String(r.DagsAttByggaOm || r["Dags att bygga om"] || "").trim();
       const low = raw.toLowerCase();
       if (low === "ja") return "Ja";
       if (low === "nej") return "Nej";
-      if (raw === "-" || raw === "–" || raw === "—") return "-";
+      if (isDashStatus_(raw)) return "-";
       return raw;
     })(),
     Ledbyggare: String(r.Ledbyggare || ""),
@@ -977,7 +982,13 @@ function renderFilters() {
     `<button type="button" class="chip${colorFilter === it.key ? " active" : ""}" data-key="${escapeHtml_(it.key)}" onclick="setColorFilter('${escapeHtml_(it.key)}')">${escapeHtml_(it.label)}</button>`
   ).join("");
 }
-function setRebuildFilter(key) { rebuildFilter = key; renderFilters(); filterData(); }
+function setRebuildFilter(key) {
+  rebuildFilter = key;
+  // Ej uppsatt är ingen färg — rensa färgfilter så listan inte blir tom
+  if (key === "EJ") colorFilter = "ALL";
+  renderFilters();
+  filterData();
+}
 function setColorFilter(key) { colorFilter = key; renderFilters(); filterData(); }
 
 function switchView(view) {
@@ -999,10 +1010,12 @@ function routeMatches_(r, tokens) {
 }
 function routeMatchesColorFilter_(r) {
   if (colorFilter === "ALL") return true;
+  // Vid Ej uppsatt-statusfilter: ignorera färgchip (graderingen är "Ej uppsatt")
+  if (rebuildFilter === "EJ") return true;
   return gradeBucketKey_(r) === gradeBucketKey_({ Gradering: colorFilter, Nr: "" });
 }
 function isEjUppsattRoute_(r) {
-  return isEjUppsattGrade_(r && r.Gradering) || String(r && r.DagsAttByggaOm || "").trim() === "-";
+  return isEjUppsattGrade_(r && r.Gradering) || isDashStatus_(r && r.DagsAttByggaOm);
 }
 function routeMatchesRebuildFilter_(r) {
   if (rebuildFilter === "ALL") return true;
@@ -1021,9 +1034,13 @@ function visibleRoutes_() {
   }));
 }
 function counts_() {
+  // Samma urval som listan (färg + sök), så siffrorna stämmer med filtrering
+  const tokens = getSearchTokens_();
   let ja = 0, nej = 0, ej = 0, total = 0;
   db.routes.forEach((r) => {
     if (!isListableRoute_(r)) return;
+    if (rebuildFilter !== "EJ" && !routeMatchesColorFilter_(r)) return;
+    if (!routeMatches_(r, tokens)) return;
     total++;
     if (isEjUppsattRoute_(r)) ej++;
     else if (r.DagsAttByggaOm === "Ja") ja++;
