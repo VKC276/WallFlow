@@ -813,7 +813,7 @@ function demoApi_(action, args) {
       }
       if (action === "setRouteLifetimeDays") {
         if (String(currentUser.role || "").toLowerCase() !== "superadmin") {
-          return fail("Bara superadmin kan ändra ledtid");
+          return fail("Bara superadmin kan ändra livslängd");
         }
         const parsed = Math.round(Number(args[0]));
         if (!Number.isFinite(parsed) || parsed < 1 || parsed > 3650) {
@@ -1685,12 +1685,12 @@ function renderLifetimeSettings() {
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
-      <h3>Dagar till ombyggnad</h3>
+      <h3>Livslängd</h3>
       <p class="small mb-3" style="color:var(--muted);">
         Antal dagar från byggdatum till slutdatum. Värdet sparas i kolumn <strong>I</strong> på varje led-rad
         (formeln <code>=OM(E2=0;"";E2+I2)</code>) och uppdateras för alla leder vid sparning.
       </p>
-      <label class="form-label" for="lifetime-days">Antal dagar</label>
+      <label class="form-label" for="lifetime-days">Dagar</label>
       <input id="lifetime-days" type="number" min="1" max="3650" step="1" class="form-control mb-3" value="${days}">
       <button class="btn btn-accent w-100" type="button" id="lifetime-save-btn" onclick="saveLifetimeDays()">Spara</button>
     </div>`;
@@ -1710,7 +1710,7 @@ function saveLifetimeDays() {
       if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
       db.routeLifetimeDays = Number(res.routeLifetimeDays) || days;
-      showToast("Ledtid sparad: " + db.routeLifetimeDays + " dagar");
+      showToast("Livslängd sparad: " + db.routeLifetimeDays + " dagar");
       renderSettingsHome();
       // Ladda om leder så slutdatum/status speglar kolumn I
       google.script.run
