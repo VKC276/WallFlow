@@ -98,8 +98,10 @@ WallFlow kräver inloggning direkt. Med **Kom ihåg mig** sparas sessionen på e
 
 ## Roller
 
-- **superadmin** — redigera leder + lägga till/ta bort led-rader + användarhantering  
-- **admin** — redigera befintliga leder (ser inte lägg till / ta bort)  
-- **scout** (sättare) — redigera befintliga leder (ser inte lägg till / ta bort)  
+- **Ledbyggare** (`scout`) — redigera befintliga leder (färg, byggare, datum, anteckningar, bild)
+- **Admin** — samma behörighet som Ledbyggare: redigera befintliga leder
+- **Superadmin** — allt ovan, plus lägga till/ta bort leder, användarhantering och livslängd
+
+Skillnaden mellan **Admin** och **Superadmin**: Admin får bara ändra innehåll på befintliga leder. Superadmin styr även ledstrukturen (ny/radera), användarkonton och livslängdsinställningar.
 
 Nya eller borttagna leder i det fasta antalet görs av superadmin (eller manuellt i sheetet).

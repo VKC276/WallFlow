@@ -974,11 +974,21 @@ function canEditContentRole() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || r === "scout";
 }
-function adminRoleLabelSv() {
-  const r = userRole_();
+function adminRoleLabelSv(role) {
+  const r = String(role || userRole_() || "").toLowerCase().trim();
   if (r === "superadmin") return "Superadmin";
-  if (r === "scout") return "Sättare";
+  if (r === "scout" || r === "developer") return "Ledbyggare";
   return "Admin";
+}
+
+/** Kort behörighetsbeskrivning per roll (visas i användarhantering). */
+function adminRoleHelpSv_() {
+  return `
+    <ul class="small mb-0 ps-3" style="color:var(--muted); line-height:1.45;">
+      <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild).</li>
+      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare: redigera befintliga leder.</li>
+      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, hantera användare och livslängd.</li>
+    </ul>`;
 }
 function showToast(msg) {
   const el = document.getElementById("toast");
@@ -2548,7 +2558,11 @@ function renderUserManagement() {
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>Användare</h3>
-      <p class="small mb-3" style="color:var(--muted);">Skapa nya konton. Vid första inloggning uppmanas användaren att byta lösenord.</p>
+      <p class="small mb-2" style="color:var(--muted);">Skapa nya konton. Vid första inloggning uppmanas användaren att byta lösenord.</p>
+      <div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.02);">
+        <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">Roller</div>
+        ${adminRoleHelpSv_()}
+      </div>
       <div class="row g-2 mb-3">
         <div class="col-6">
           <label class="form-label" for="nu-user">Användarnamn</label>
@@ -2561,8 +2575,8 @@ function renderUserManagement() {
         <div class="col-6">
           <label class="form-label" for="nu-role">Roll</label>
           <select id="nu-role" class="form-select form-select-sm">
+            <option value="scout">Ledbyggare</option>
             <option value="admin">Admin</option>
-            <option value="scout">Sättare</option>
             <option value="superadmin">Superadmin</option>
           </select>
         </div>
@@ -2582,11 +2596,11 @@ function renderUserManagement() {
         <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:var(--line)!important; gap:8px;">
           <div>
             <strong>${escapeHtml_(u.username)}</strong>
-            <div class="small" style="color:var(--muted);">${escapeHtml_(u.name || "")}</div>
+            <div class="small" style="color:var(--muted);">${escapeHtml_(u.name || "")} · ${escapeHtml_(adminRoleLabelSv(u.role))}</div>
           </div>
           <div class="d-flex gap-2 align-items-center">
             <select class="form-select form-select-sm" style="width:auto;" onchange="updateRole('${escapeHtml_(u.username)}', this.value)">
-              <option value="scout" ${u.role === "scout" ? "selected" : ""}>Sättare</option>
+              <option value="scout" ${u.role === "scout" ? "selected" : ""}>Ledbyggare</option>
               <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
               <option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>
             </select>
