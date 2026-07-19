@@ -1372,7 +1372,7 @@ function openRoute(key) {
       <label>Anteckningar</label>
       <div style="white-space:pre-wrap; margin-top:4px;">${escapeHtml_(r.Anteckningar || "Inga anteckningar.")}</div>
     </div>
-    ${thumb ? `<img class="topo-img" src="${escapeHtml_(thumb)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy" role="button" tabindex="0" title="Visa i full storlek" onclick="event.stopPropagation(); toggleRouteImageLightbox_('${escapeHtml_(full)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); toggleRouteImageLightbox_('${escapeHtml_(full)}');}">` : ""}
+    ${thumb ? `<img class="topo-img" src="${escapeHtml_(thumb)}" data-full="${escapeHtml_(full)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy" role="button" tabindex="0" title="Visa i full storlek" onclick="event.stopPropagation(); toggleRouteImageLightbox_(this.getAttribute('data-full'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); toggleRouteImageLightbox_(this.getAttribute('data-full'));}">` : ""}
     ${currentUser.authorized && canEditContentRole() && r.Nr ? `
       <button class="btn btn-accent w-100 mt-3" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera led</button>
       ${canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera led</button>` : ""}
@@ -1684,6 +1684,10 @@ function closeRouteImageLightbox_() {
   document.body.classList.remove("route-img-lightbox-open");
   if (img) img.removeAttribute("src");
 }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeRouteImageLightbox_();
+});
 
 /* ---------- Bildredigerare: foto → helskärmsmarkering → förhandsvisning ---------- */
 let routeImgEditor_ = null;
