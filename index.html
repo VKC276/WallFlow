@@ -388,6 +388,20 @@
       margin-right: 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
     }
     .topo-img { width: 100%; border-radius: 14px; margin-top: 10px; border: 1px solid var(--line); }
+    .img-editor { margin-bottom: 14px; }
+    .img-editor-canvas-wrap {
+      position: relative; width: 100%; border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--line); background: #0a0c10; touch-action: none;
+    }
+    .img-editor-canvas-wrap canvas { display: block; width: 100%; height: auto; vertical-align: middle; cursor: crosshair; }
+    .img-editor-empty {
+      padding: 28px 16px; text-align: center; color: var(--muted); font-size: 0.9rem;
+      border: 1px dashed var(--line); border-radius: 14px; margin-bottom: 10px;
+    }
+    .img-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .img-editor-actions .btn { flex: 1 1 auto; min-width: 120px; }
+    .img-editor-hint { color: var(--muted); font-size: 0.78rem; margin-top: 8px; }
+    .img-editor-status { color: var(--accent); font-size: 0.82rem; margin-top: 6px; min-height: 1.2em; }
   </style>
 </head>
 <body>
@@ -609,6 +623,14 @@ function demoApi_(action, args) {
       }
       if (__sessionToken !== "demo-token-admin" && action !== "getAppData") return fail("Ej inloggad");
 
+      if (action === "uploadRouteImage") {
+        const payload = args[0] || {};
+        const raw = String(payload.dataBase64 || "");
+        if (!raw) return fail("Ingen bilddata");
+        // Demoläge: behåll data-URL lokalt (ingen Drive)
+        const dataUrl = raw.indexOf("data:") === 0 ? raw : ("data:" + (payload.mimeType || "image/jpeg") + ";base64," + raw.replace(/^data:[^;]+;base64,/, ""));
+        return ok({ ok: true, fileId: dataUrl, url: dataUrl, name: payload.fileName || "demo.jpg" });
+      }
       if (action === "saveRoute") {
         const [route] = args;
         const role = String(currentUser.role || "").toLowerCase();
@@ -1255,11 +1277,7 @@ function openRoute(key) {
   if (!r) return;
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
   document.getElementById("panel-title").textContent = title;
-  const img = r.Bild
-    ? (String(r.Bild).startsWith("http")
-        ? r.Bild
-        : "https://lh3.googleusercontent.com/d/" + encodeURIComponent(r.Bild) + "=s800")
-    : "";
+  const img = routeImageSrc_(r.Bild);
   const badge = rebuildBadgeHtml_(r);
   document.getElementById("panel-body").innerHTML = `
     ${badge ? `<div class="mb-2">${badge}</div>` : ""}
@@ -1492,12 +1510,28 @@ function renderRouteForm(nr) {
       <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(displayName)}"></div>
       <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
       <div class="mb-3"><label class="form-label">Anteckningar</label><textarea id="f-notes" class="form-control" rows="3">${escapeHtml_(route.Anteckningar)}</textarea></div>
-      <div class="mb-3"><label class="form-label">Bild (Drive-ID eller URL)</label><input id="f-img" class="form-control" value="${escapeHtml_(route.Bild)}"></div>
+      <div class="img-editor" id="img-editor">
+        <label class="form-label">Bild</label>
+        <div id="img-editor-empty" class="img-editor-empty" style="${route.Bild ? "display:none" : ""}">Ingen bild ännu — ta foto eller välj från enheten.</div>
+        <div id="img-editor-wrap" class="img-editor-canvas-wrap" style="${route.Bild ? "" : "display:none"}">
+          <canvas id="img-editor-canvas" width="800" height="600"></canvas>
+        </div>
+        <input type="hidden" id="f-img" value="${escapeHtml_(route.Bild)}">
+        <input type="file" id="f-img-file" accept="image/*" capture="environment" style="display:none">
+        <div class="img-editor-actions">
+          <button class="btn btn-accent btn-sm" type="button" onclick="document.getElementById('f-img-file').click()">Ta foto / Välj bild</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="img-clear-strokes" onclick="clearRouteImageStrokes_()">Rensa streck</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="img-remove" onclick="clearRouteImage_()">Ta bort bild</button>
+        </div>
+        <div class="img-editor-hint">Rita med fingret/musen hur leden går. Bilden laddas upp till Drive-mappen Bilder när du sparar.</div>
+        <div class="img-editor-status" id="img-editor-status"></div>
+      </div>
       ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Ej uppsatt</button>` : ""}
-      <button class="btn btn-accent w-100" type="button" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
+      <button class="btn btn-accent w-100" type="button" id="save-route-btn" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
       ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
   `;
   document.getElementById("panel").classList.add("open");
+  bindRouteImageEditor_(route.Bild || "");
   // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad persons namn (inte användarnamn)
   if (nr) {
     const setterEl = document.getElementById("f-setter");
@@ -1516,7 +1550,6 @@ function plockaNerLed() {
   const setter = document.getElementById("f-setter");
   const build = document.getElementById("f-build");
   const notes = document.getElementById("f-notes");
-  const img = document.getElementById("f-img");
   if (!grad || !build) return;
   // Säkerställ att Ej uppsatt finns som alternativ
   const hasOpt = Array.from(grad.options).some((o) => String(o.value).toLowerCase() === EJ_UPPSATT_GRADE.toLowerCase());
@@ -1529,15 +1562,251 @@ function plockaNerLed() {
   grad.value = EJ_UPPSATT_GRADE;
   if (setter) setter.value = "";
   if (notes) notes.value = "";
-  if (img) img.value = "";
+  clearRouteImage_();
   build.value = new Date().toISOString().slice(0, 10);
   showToast("Markerad som Ej uppsatt — tryck Spara led för att spara");
 }
 
+function routeImageSrc_(bild) {
+  const b = String(bild || "").trim();
+  if (!b) return "";
+  if (b.startsWith("http") || b.startsWith("data:")) return b;
+  return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(b) + "=s800";
+}
+
+/* ---------- Bildredigerare: foto + rita ledlinje + uppladdning ---------- */
+let routeImgEditor_ = null;
+
+function setImgEditorStatus_(msg) {
+  const el = document.getElementById("img-editor-status");
+  if (el) el.textContent = msg || "";
+}
+
+function bindRouteImageEditor_(existingBild) {
+  routeImgEditor_ = {
+    img: null,
+    strokes: [],
+    drawing: false,
+    dirty: false,
+    existingId: String(existingBild || "").trim()
+  };
+  const fileInput = document.getElementById("f-img-file");
+  const canvas = document.getElementById("img-editor-canvas");
+  if (!fileInput || !canvas) return;
+
+  fileInput.onchange = () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => loadRouteImageFromSrc_(String(reader.result || ""));
+    reader.readAsDataURL(file);
+    fileInput.value = "";
+  };
+
+  const getPos_ = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const src = e.touches && e.touches[0] ? e.touches[0] : e;
+    const x = ((src.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((src.clientY - rect.top) / rect.height) * canvas.height;
+    return { x, y };
+  };
+
+  const onStart = (e) => {
+    if (!routeImgEditor_ || !routeImgEditor_.img) return;
+    e.preventDefault();
+    routeImgEditor_.drawing = true;
+    routeImgEditor_.strokes.push([getPos_(e)]);
+    routeImgEditor_.dirty = true;
+    redrawRouteImageCanvas_();
+  };
+  const onMove = (e) => {
+    if (!routeImgEditor_ || !routeImgEditor_.drawing) return;
+    e.preventDefault();
+    const stroke = routeImgEditor_.strokes[routeImgEditor_.strokes.length - 1];
+    if (!stroke) return;
+    stroke.push(getPos_(e));
+    redrawRouteImageCanvas_();
+  };
+  const onEnd = (e) => {
+    if (!routeImgEditor_) return;
+    if (e) e.preventDefault();
+    routeImgEditor_.drawing = false;
+  };
+
+  canvas.addEventListener("mousedown", onStart);
+  canvas.addEventListener("mousemove", onMove);
+  canvas.addEventListener("mouseup", onEnd);
+  canvas.addEventListener("mouseleave", onEnd);
+  canvas.addEventListener("touchstart", onStart, { passive: false });
+  canvas.addEventListener("touchmove", onMove, { passive: false });
+  canvas.addEventListener("touchend", onEnd, { passive: false });
+
+  if (existingBild) {
+    setImgEditorStatus_("Laddar befintlig bild…");
+    loadRouteImageFromSrc_(routeImageSrc_(existingBild), true);
+  } else {
+    setImgEditorStatus_("");
+  }
+}
+
+function loadRouteImageFromSrc_(src, fromExisting) {
+  if (!src || !routeImgEditor_) return;
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    routeImgEditor_.img = image;
+    if (!fromExisting) {
+      routeImgEditor_.strokes = [];
+      routeImgEditor_.dirty = true;
+      routeImgEditor_.existingId = "";
+      const hid = document.getElementById("f-img");
+      if (hid) hid.value = "";
+    }
+    const empty = document.getElementById("img-editor-empty");
+    const wrap = document.getElementById("img-editor-wrap");
+    if (empty) empty.style.display = "none";
+    if (wrap) wrap.style.display = "";
+    fitRouteImageCanvas_();
+    redrawRouteImageCanvas_();
+    setImgEditorStatus_(fromExisting ? "Rita gärna om ledlinjen vid behov." : "Rita hur leden går, spara sedan.");
+  };
+  image.onerror = () => {
+    setImgEditorStatus_("Kunde inte läsa bilden.");
+    showToast("Kunde inte öppna bilden");
+  };
+  image.src = src;
+}
+
+function fitRouteImageCanvas_() {
+  const canvas = document.getElementById("img-editor-canvas");
+  const img = routeImgEditor_ && routeImgEditor_.img;
+  if (!canvas || !img) return;
+  const maxW = 1200;
+  const scale = Math.min(1, maxW / img.naturalWidth);
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+}
+
+function redrawRouteImageCanvas_() {
+  const canvas = document.getElementById("img-editor-canvas");
+  const ed = routeImgEditor_;
+  if (!canvas || !ed || !ed.img) return;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(ed.img, 0, 0, canvas.width, canvas.height);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#ff4d4d";
+  ctx.lineWidth = Math.max(4, canvas.width * 0.008);
+  ed.strokes.forEach((stroke) => {
+    if (!stroke || stroke.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(stroke[0].x, stroke[0].y);
+    for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
+    ctx.stroke();
+  });
+}
+
+function clearRouteImageStrokes_() {
+  if (!routeImgEditor_) return;
+  routeImgEditor_.strokes = [];
+  routeImgEditor_.dirty = !!routeImgEditor_.img;
+  redrawRouteImageCanvas_();
+  setImgEditorStatus_("Streck rensade.");
+}
+
+function clearRouteImage_() {
+  routeImgEditor_ = {
+    img: null,
+    strokes: [],
+    drawing: false,
+    dirty: true,
+    existingId: ""
+  };
+  const hid = document.getElementById("f-img");
+  if (hid) hid.value = "";
+  const empty = document.getElementById("img-editor-empty");
+  const wrap = document.getElementById("img-editor-wrap");
+  if (empty) empty.style.display = "";
+  if (wrap) wrap.style.display = "none";
+  const canvas = document.getElementById("img-editor-canvas");
+  if (canvas) {
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  setImgEditorStatus_("Bild borttagen — spara för att uppdatera leden.");
+}
+
+function exportRouteImageDataUrl_() {
+  const canvas = document.getElementById("img-editor-canvas");
+  if (!canvas || !routeImgEditor_ || !routeImgEditor_.img) return "";
+  try {
+    // Begränsa JPEG-storlek för GAS
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch (e) {
+    // Befintliga Drive-bilder kan sakna CORS → canvas "tainted"
+    return "";
+  }
+}
+
+function uploadRouteImageIfNeeded_(nr) {
+  return new Promise((resolve, reject) => {
+    const ed = routeImgEditor_;
+    const hid = document.getElementById("f-img");
+    const current = hid ? hid.value.trim() : "";
+    // Ingen ny lokal bild — behåll befintligt ID/URL (eller tomt)
+    if (!ed || !ed.img || (!ed.dirty && current)) {
+      resolve(current);
+      return;
+    }
+    if (!ed.img) {
+      resolve("");
+      return;
+    }
+    const dataUrl = exportRouteImageDataUrl_();
+    if (!dataUrl) {
+      reject(new Error("Kunde inte exportera bilden. Ta om fotot om du vill rita på en befintlig Drive-bild."));
+      return;
+    }
+    setImgEditorStatus_("Laddar upp bild till Drive…");
+    const saveBtn = document.getElementById("save-route-btn");
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Laddar upp bild…"; }
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Spara led"; }
+        if (!res || res.ok === false) {
+          setImgEditorStatus_((res && res.error) || "Uppladdning misslyckades");
+          reject(new Error((res && res.error) || "Uppladdning misslyckades"));
+          return;
+        }
+        const id = String(res.fileId || "").trim();
+        if (hid) hid.value = id;
+        if (routeImgEditor_) {
+          routeImgEditor_.dirty = false;
+          routeImgEditor_.existingId = id;
+        }
+        setImgEditorStatus_("Bild uppladdad.");
+        resolve(id);
+      })
+      .withFailureHandler((err) => {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Spara led"; }
+        setImgEditorStatus_("Kunde inte ladda upp bilden.");
+        reject(err || new Error("Uppladdning misslyckades"));
+      })
+      .uploadRouteImage({
+        dataBase64: dataUrl,
+        mimeType: "image/jpeg",
+        fileName: "led-" + (nr || "ny") + "-" + Date.now() + ".jpg",
+        nr: nr || ""
+      });
+  });
+}
+
 function saveRoute(existingNr) {
   if (!canEditContentRole()) return showToast("Saknar behörighet");
+  const nrVal = document.getElementById("f-nr").value.trim() || existingNr || "";
   const route = {
-    Nr: document.getElementById("f-nr").value.trim() || existingNr || "",
+    Nr: nrVal,
     Gradering: document.getElementById("f-grad").value,
     Ledbyggare: document.getElementById("f-setter").value.trim(),
     Byggdatum: document.getElementById("f-build").value,
@@ -1551,9 +1820,24 @@ function saveRoute(existingNr) {
   if ((!route.Nr || !exists) && !canManageRouteStructureRole()) {
     return showToast("Bara superadmin kan lägga till leder");
   }
-  google.script.run
-    .withSuccessHandler((res) => {
-      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+
+  const saveBtn = document.getElementById("save-route-btn");
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Sparar…"; }
+
+  uploadRouteImageIfNeeded_(route.Nr)
+    .then((bildId) => {
+      route.Bild = bildId || "";
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || res.ok === false) reject(new Error((res && res.error) || "Kunde inte spara"));
+            else resolve(res);
+          })
+          .withFailureHandler(() => reject(new Error("Kunde inte spara")))
+          .saveRoute(route);
+      });
+    })
+    .then((res) => {
       const saved = normalizeRoute_((res && res.route) || route);
       const i = db.routes.findIndex((x) => String(x.Nr) === String(saved.Nr));
       if (i >= 0) db.routes[i] = saved;
@@ -1562,8 +1846,10 @@ function saveRoute(existingNr) {
       closePanel();
       filterData();
     })
-    .withFailureHandler(() => showToast("Kunde inte spara"))
-    .saveRoute(route);
+    .catch((err) => {
+      showToast((err && err.message) || "Kunde inte spara");
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Spara led"; }
+    });
 }
 
 function deleteRoute(nr) {

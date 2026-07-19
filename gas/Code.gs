@@ -125,6 +125,9 @@ function dispatch_(action, token, args) {
     case "saveRoute":
       return saveRoute_(args[0], session);
 
+    case "uploadRouteImage":
+      return uploadRouteImage_(args[0], session);
+
     case "deleteRoute":
       return deleteRoute_(args[0], session);
 
@@ -813,6 +816,56 @@ function deleteRoute_(nr, session) {
   if (rowNum < 0) return { ok: false, error: "Leden hittades inte" };
   sheet_(WALLFLOW_SHEET_ROUTES).deleteRow(rowNum);
   return { ok: true };
+}
+
+/* ---------- Bilder (Drive-mapp bredvid sheetet) ---------- */
+
+/**
+ * Hitta eller skapa mappen "Bilder" i samma Drive-mapp som kalkylarket.
+ */
+function getBilderFolder_() {
+  var ssFile = DriveApp.getFileById(WALLFLOW_SPREADSHEET_ID);
+  var parents = ssFile.getParents();
+  var parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+  var it = parent.getFoldersByName("Bilder");
+  if (it.hasNext()) return it.next();
+  return parent.createFolder("Bilder");
+}
+
+/**
+ * Ladda upp led-bild (JPEG/PNG som base64) till Bilder-mappen.
+ * payload: { dataBase64, mimeType, fileName, nr }
+ * Returnerar { ok, fileId, url } — spara fileId i kolumn Bild.
+ */
+function uploadRouteImage_(payload, session) {
+  if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
+  payload = payload || {};
+  var raw = String(payload.dataBase64 || "").replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "");
+  if (!raw) return { ok: false, error: "Ingen bilddata" };
+  // Begränsa storlek (~4.5 MB base64 ≈ 3.3 MB binärt) — håll under GAS-gränser
+  if (raw.length > 6000000) return { ok: false, error: "Bilden är för stor — prova lägre upplösning" };
+
+  var mime = String(payload.mimeType || "image/jpeg").trim() || "image/jpeg";
+  if (mime.indexOf("image/") !== 0) mime = "image/jpeg";
+  var nr = String(payload.nr || "").trim() || "x";
+  var safeNr = nr.replace(/[^\w\-]+/g, "_");
+  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Europe/Stockholm", "yyyyMMdd-HHmmss");
+  var ext = mime.indexOf("png") >= 0 ? "png" : "jpg";
+  var name = String(payload.fileName || ("led-" + safeNr + "-" + stamp + "." + ext)).trim();
+
+  var bytes = Utilities.base64Decode(raw);
+  var blob = Utilities.newBlob(bytes, mime, name);
+  var folder = getBilderFolder_();
+  var file = folder.createFile(blob);
+  // Så lh3.googleusercontent.com/d/ID fungerar i appen
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  return {
+    ok: true,
+    fileId: file.getId(),
+    url: "https://drive.google.com/uc?export=view&id=" + file.getId(),
+    name: file.getName()
+  };
 }
 
 /**

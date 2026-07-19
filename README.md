@@ -17,7 +17,9 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 | Byggdatum | När den sattes |
 | Slutdatum | Planerat slut / ombyggnadsdatum |
 | Anteckningar | Fri text |
-| Bild | Drive-fil-ID eller URL |
+| Bild | Drive-fil-ID (uppladdad) eller URL |
+
+**Bilder:** Appen kan ta foto / välja bild, rita ledlinje och ladda upp till Drive-mappen **`Bilder`** (skapas bredvid kalkylarket). Kräver att WallFlow-GAS har behörighet till Drive (godkänn vid första uppladdning / kör om behörighet).
 
 **Formel i kolumn C**
 
