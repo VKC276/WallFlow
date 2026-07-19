@@ -309,11 +309,13 @@
       flex: 0 0 auto;
     }
     .route-status-icon svg { display: block; }
-    .route-status-icon.is-rebuild {
-      color: var(--rebuild); background: color-mix(in srgb, var(--rebuild) 16%, transparent);
-    }
     .route-status-icon.is-ok {
       color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent);
+    }
+    .route-status-label {
+      display: block; max-width: 5.6rem; text-align: right;
+      font-size: 0.68rem; font-weight: 700; line-height: 1.2;
+      color: var(--rebuild); flex: 0 0 auto;
     }
     .empty { text-align: center; color: var(--muted); padding: 40px 16px; border: 1px dashed var(--line); border-radius: var(--radius); }
     .modern-nav {
