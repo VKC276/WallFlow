@@ -1244,16 +1244,36 @@ function closeSettings() {
   document.getElementById("app-admin").classList.remove("show");
 }
 
+let loginInFlight_ = false;
+
+function setLoginFormBusy_(busy) {
+  const btn = document.getElementById("login-btn");
+  const userEl = document.getElementById("admin-user");
+  const pwEl = document.getElementById("admin-pw");
+  const rememberEl = document.getElementById("admin-remember-me");
+  if (btn) {
+    btn.disabled = !!busy;
+    btn.textContent = busy ? "Loggar in…" : "Logga in";
+  }
+  if (userEl) userEl.disabled = !!busy;
+  if (pwEl) pwEl.disabled = !!busy;
+  if (rememberEl) rememberEl.disabled = !!busy;
+}
+
 function checkLogin() {
+  if (loginInFlight_) return;
   const user = document.getElementById("admin-user").value.trim();
   const pw = document.getElementById("admin-pw").value;
-  const btn = document.getElementById("login-btn");
+  if (!user || !pw) return;
   const remember = !!document.getElementById("admin-remember-me").checked;
-  btn.disabled = true; btn.textContent = "Loggar in…";
+  document.getElementById("login-error").style.display = "none";
+  loginInFlight_ = true;
+  setLoginFormBusy_(true);
   google.script.run
     .withSuccessHandler((res) => {
-      btn.disabled = false; btn.textContent = "Logga in";
       if (!res || !res.authorized) {
+        loginInFlight_ = false;
+        setLoginFormBusy_(false);
         document.getElementById("login-error").style.display = "block";
         return;
       }
@@ -1268,11 +1288,14 @@ function checkLogin() {
       else setRememberedAdminUsername("");
       saveSession_(remember);
       document.getElementById("admin-pw").value = "";
+      loginInFlight_ = false;
+      setLoginFormBusy_(false);
       showToast("Inloggad");
       bootAppData_();
     })
     .withFailureHandler(() => {
-      btn.disabled = false; btn.textContent = "Logga in";
+      loginInFlight_ = false;
+      setLoginFormBusy_(false);
       document.getElementById("login-error").style.display = "block";
     })
     .verifyAdminPassword(user, pw);
