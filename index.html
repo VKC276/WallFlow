@@ -1422,8 +1422,7 @@ function renderSettingsHome() {
     <div class="admin-card">
       <h3>Konto</h3>
       <p class="mb-3" style="color:var(--muted); font-size:.9rem;">
-        ${escapeHtml_(currentUser.name || currentUser.username || "")} · ${escapeHtml_(adminRoleLabelSv())}<br>
-        Öppna en led och tryck <strong>Redigera led</strong>. ${USE_DEMO ? "Demoläge aktivt." : "Live mot Google Sheet."}
+        ${escapeHtml_(currentUser.name || currentUser.username || "")} · ${escapeHtml_(adminRoleLabelSv())}
       </p>
       <div class="d-flex flex-wrap gap-2">
         ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
