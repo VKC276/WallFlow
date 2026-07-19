@@ -1115,8 +1115,16 @@ function renderColors(routes) {
   `;
 }
 
+/** Ombyggnadsbadge — utelämnas för leder med gradering Ej uppsatt. */
+function rebuildBadgeHtml_(r) {
+  if (isEjUppsattGrade_(r && r.Gradering)) return "";
+  const label = r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell";
+  return `<span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${label}</span>`;
+}
+
 function routeRowHtml_(r) {
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
+  const badge = rebuildBadgeHtml_(r);
   return `
     <div class="route-row" onclick="openRoute('${escapeHtml_(routeKey_(r))}')">
       <span class="route-dot" style="background:${colorHex_(r.Gradering)}"></span>
@@ -1124,7 +1132,7 @@ function routeRowHtml_(r) {
         <strong>${escapeHtml_(title)}${r.Anteckningar ? " · " + escapeHtml_(r.Anteckningar) : ""}</strong>
         <span>${escapeHtml_(r.Gradering || "—")}${r.Ledbyggare ? " · " + escapeHtml_(r.Ledbyggare) : ""} · ${escapeHtml_(r.Byggdatum || "—")}</span>
       </div>
-      <div><span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell"}</span></div>
+      <div>${badge}</div>
     </div>`;
 }
 
@@ -1138,8 +1146,9 @@ function openRoute(key) {
         ? r.Bild
         : "https://lh3.googleusercontent.com/d/" + encodeURIComponent(r.Bild) + "=s800")
     : "";
+  const badge = rebuildBadgeHtml_(r);
   document.getElementById("panel-body").innerHTML = `
-    <div class="mb-2"><span class="badge-rebuild ${escapeHtml_(r.DagsAttByggaOm)}">${r.DagsAttByggaOm === "Ja" ? "Bygg om" : "Aktuell"}</span></div>
+    ${badge ? `<div class="mb-2">${badge}</div>` : ""}
     <div class="detail-grid">
       <div class="detail-cell"><label>Nr</label><strong>${escapeHtml_(r.Nr || "—")}</strong></div>
       <div class="detail-cell"><label>Gradering</label><strong><span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>${escapeHtml_(r.Gradering || "—")}</strong></div>
