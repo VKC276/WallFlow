@@ -2239,7 +2239,7 @@ function confirmRouteImageMark_() {
   if (hid) hid.value = "";
   updateRouteImagePreviewUI_(dataUrl);
   hideRouteImageMarkOverlay_();
-  setImgEditorStatus_("Markering klar — spara leden för att ladda upp.");
+  setImgEditorStatus_("Markering klar — spara leden, bilden laddas upp i bakgrunden.");
 }
 
 function cancelRouteImageMark_() {
@@ -2297,68 +2297,58 @@ function deleteRouteImageOnServer_(nr, fileId) {
   });
 }
 
-function uploadRouteImageIfNeeded_(nr) {
-  return new Promise((resolve, reject) => {
-    const ed = routeImgEditor_;
-    const hid = document.getElementById("f-img");
-    const prevEl = document.getElementById("f-img-prev");
-    const current = hid ? hid.value.trim() : "";
-    const previousId = prevEl ? prevEl.value.trim() : (ed && ed.existingId) || "";
+/** Ladda upp bild i bakgrunden och koppla till leden — toast vid klart/fel. */
+function uploadRouteImageInBackground_(nr, dataUrl, previousId) {
+  const led = String(nr || "").trim();
+  if (!led || !dataUrl) return;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        showToast((res && res.error) || ("Kunde inte ladda upp bild för led " + led));
+        return;
+      }
+      const id = String(res.fileId || "").trim();
+      if (!id) {
+        showToast("Kunde inte ladda upp bild för led " + led);
+        return;
+      }
+      const existing = db.routes.find((r) => String(r.Nr) === led);
+      const patch = existing ? Object.assign({}, existing, { Bild: id }) : { Nr: led, Bild: id };
+      // Undvik att bakgrundssparning kräver superadmin p.g.a. Livslangd
+      if (!canManageUsersRole()) delete patch.Livslangd;
+      google.script.run
+        .withSuccessHandler((saveRes) => {
+          if (!saveRes || saveRes.ok === false) {
+            showToast("Bilden laddades upp men kunde inte kopplas till led " + led);
+            return;
+          }
+          const saved = normalizeRoute_((saveRes && saveRes.route) || patch);
+          const i = db.routes.findIndex((x) => String(x.Nr) === led);
+          if (i >= 0) db.routes[i] = Object.assign({}, db.routes[i], saved, { Bild: id });
+          else db.routes.push(saved);
+          filterData();
+          showToast("Bild uppladdad för led " + led);
+        })
+        .withFailureHandler(() => {
+          showToast("Bilden laddades upp men kunde inte kopplas till led " + led);
+        })
+        .saveRoute(patch);
+    })
+    .withFailureHandler(() => {
+      showToast("Kunde inte ladda upp bild för led " + led);
+    })
+    .uploadRouteImage({
+      dataBase64: dataUrl,
+      mimeType: "image/jpeg",
+      nr: led,
+      previousFileId: previousId || ""
+    });
+}
 
-    if (!ed || !ed.dirty) {
-      resolve(current);
-      return;
-    }
-
-    // Bild borttagen — rensa Drive och returnera tomt
-    if (!ed.committedDataUrl && !ed.img) {
-      deleteRouteImageOnServer_(nr, previousId).then(() => {
-        if (hid) hid.value = "";
-        if (prevEl) prevEl.value = "";
-        resolve("");
-      });
-      return;
-    }
-
-    const dataUrl = exportRouteImageDataUrl_();
-    if (!dataUrl) {
-      reject(new Error("Kunde inte exportera bilden. Ta om fotot om du vill rita på en befintlig Drive-bild."));
-      return;
-    }
-    setImgEditorStatus_("Laddar upp bild till Drive…");
-    const saveBtn = document.getElementById("save-route-btn");
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Laddar upp bild…"; }
-    google.script.run
-      .withSuccessHandler((res) => {
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Spara led"; }
-        if (!res || res.ok === false) {
-          setImgEditorStatus_((res && res.error) || "Uppladdning misslyckades");
-          reject(new Error((res && res.error) || "Uppladdning misslyckades"));
-          return;
-        }
-        const id = String(res.fileId || "").trim();
-        if (hid) hid.value = id;
-        if (prevEl) prevEl.value = id;
-        if (routeImgEditor_) {
-          routeImgEditor_.dirty = false;
-          routeImgEditor_.existingId = id;
-          routeImgEditor_.committedDataUrl = "";
-        }
-        updateRouteImagePreviewUI_(routeImageSrc_(id) || dataUrl);
-        setImgEditorStatus_("Bild uppladdad (ersatte eventuell gammal).");
-        resolve(id);
-      })
-      .withFailureHandler((err) => {
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Spara led"; }
-        setImgEditorStatus_("Kunde inte ladda upp bilden.");
-        reject(err || new Error("Uppladdning misslyckades"));
-      })
-      .uploadRouteImage({
-        dataBase64: dataUrl,
-        mimeType: "image/jpeg",
-        nr: nr || "",
-        previousFileId: previousId
-      });
+function deleteRouteImageInBackground_(nr, fileId) {
+  const led = String(nr || "").trim();
+  deleteRouteImageOnServer_(led, fileId).then(() => {
+    /* tyst — bilden är redan borttagen från leden vid sparning */
   });
 }
 
@@ -2407,29 +2397,22 @@ function saveRoute(existingNr) {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Sparar…"; }
 
   const ed = routeImgEditor_;
-  const needsImageWork = !!(ed && ed.dirty && (ed.committedDataUrl || ed.img || !route.Bild));
-  // Ny led utan Nr: spara först så filen kan heta led-{nr}.jpg (en bild per led)
-  const ensureNr = (!route.Nr && needsImageWork)
-    ? persistRouteOnServer_(Object.assign({}, route, { Bild: "" })).then((res) => {
-        const nr = String((res.route && res.route.Nr) || "").trim();
-        if (!nr) throw new Error("Kunde inte tilldela lednummer");
-        route.Nr = nr;
-        const nrEl = document.getElementById("f-nr");
-        if (nrEl) nrEl.value = nr;
-        const shell = normalizeRoute_((res && res.route) || route);
-        const i = db.routes.findIndex((x) => String(x.Nr) === nr);
-        if (i >= 0) db.routes[i] = shell;
-        else db.routes.push(shell);
-        return nr;
-      })
-    : Promise.resolve(route.Nr);
+  const prevEl = document.getElementById("f-img-prev");
+  const previousId = (prevEl && prevEl.value.trim()) || (ed && ed.existingId) || "";
+  const pendingUpload = !!(ed && ed.dirty && ed.committedDataUrl);
+  const pendingDelete = !!(ed && ed.dirty && !ed.committedDataUrl && !ed.img);
+  const pendingDataUrl = pendingUpload ? exportRouteImageDataUrl_() : "";
 
-  ensureNr
-    .then((nr) => uploadRouteImageIfNeeded_(nr || route.Nr))
-    .then((bildId) => {
-      route.Bild = bildId || "";
-      return persistRouteOnServer_(route);
-    })
+  if (pendingUpload && !pendingDataUrl) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Spara led"; }
+    return showToast("Kunde inte exportera bilden. Ta om fotot och markera igen.");
+  }
+
+  // Spara leden direkt — behåll gammal Bild tills ny uppladdning lyckas
+  if (pendingUpload) route.Bild = previousId || "";
+  else if (pendingDelete) route.Bild = "";
+
+  persistRouteOnServer_(route)
     .then((res) => {
       const saved = normalizeRoute_((res && res.route) || route);
       const i = db.routes.findIndex((x) => String(x.Nr) === String(saved.Nr));
@@ -2438,6 +2421,11 @@ function saveRoute(existingNr) {
       showToast("Led sparad");
       closePanel();
       filterData();
+      if (pendingUpload) {
+        uploadRouteImageInBackground_(saved.Nr, pendingDataUrl, previousId);
+      } else if (pendingDelete && previousId) {
+        deleteRouteImageInBackground_(saved.Nr, previousId);
+      }
     })
     .catch((err) => {
       showToast((err && err.message) || "Kunde inte spara");
