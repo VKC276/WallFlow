@@ -1199,7 +1199,7 @@ function renderColors(routes) {
   document.getElementById("view-colors").innerHTML = `
     <div class="hero-line">
       <h1>Färgfördelning</h1>
-      <p>Cirkeldiagram per gradering — tryck på en färg för att filtrera.</p>
+      <p>Cirkeldiagram per gradering — tryck på en färg för att se alla leder i den färgen.</p>
     </div>
     <div class="color-dist">
       <div class="color-dist-pie-wrap">
@@ -1207,18 +1207,22 @@ function renderColors(routes) {
         <div class="color-dist-grid">${cardsHtml}</div>
       </div>
     </div>
-    ${listColors.length ? listColors.map((c, idx) => `
+    ${listColors.length ? listColors.map((c, idx) => {
+      const list = sortRoutes_(byColor[c] || []);
+      const rebuildN = list.filter((r) => r.DagsAttByggaOm === "Ja").length;
+      const activeHead = colorFilter === c || (isEjUppsattGrade_(colorFilter) && isEjUppsattGrade_(c));
+      return `
       <div class="color-block" style="animation-delay:${idx * 0.04}s">
-        <div class="color-head" onclick="setColorFilter('${escapeHtml_(c)}'); switchView('flow');">
+        <div class="color-head" onclick="setColorFilter('${escapeHtml_(activeHead && colorFilter !== "ALL" ? "ALL" : c)}')" role="button" tabindex="0">
           <div>
             <h3><span class="color-swatch" style="background:${colorHex_(c)}"></span>${escapeHtml_(c)}</h3>
-            <small>${(byColor[c] || []).length} leder · ${(byColor[c] || []).filter((r) => r.DagsAttByggaOm === "Ja").length} att bygga om</small>
+            <small>${list.length} leder · ${rebuildN} att bygga om</small>
           </div>
-          <span style="color:var(--muted)">›</span>
+          <span style="color:var(--muted)">${activeHead && colorFilter !== "ALL" ? "Visa alla färger" : "Filtrera"}</span>
         </div>
-        <div class="route-list">${(byColor[c] || []).slice(0, 5).map(routeRowHtml_).join("")}</div>
-      </div>
-    `).join("") : `<div class="empty">Inga leder matchar.</div>`}
+        <div class="route-list">${list.map(routeRowHtml_).join("")}</div>
+      </div>`;
+    }).join("") : `<div class="empty">Inga leder matchar.</div>`}
   `;
 }
 
