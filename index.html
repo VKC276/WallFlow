@@ -1381,7 +1381,7 @@ function renderColors(routes) {
   `;
 }
 
-/** Ombyggnadsbadge — utelämnas för Ej uppsatt / "-". */
+/** Ombyggnadsbadge (detaljvy) — utelämnas för Ej uppsatt / "-". */
 function rebuildBadgeHtml_(r) {
   if (isEjUppsattGrade_(r && r.Gradering)) return "";
   const status = String(r && r.DagsAttByggaOm || "").trim();
@@ -1391,19 +1391,33 @@ function rebuildBadgeHtml_(r) {
   return "";
 }
 
+/** Lista: ikon i stället för "Bygg om"-etikett. Aktuell visas inte (mindre plotter). */
+function rebuildListMarkerHtml_(r) {
+  if (isEjUppsattGrade_(r && r.Gradering)) return "";
+  const status = String(r && r.DagsAttByggaOm || "").trim();
+  if (status !== "Ja") return "";
+  return `
+    <span class="route-rebuild-icon" title="Bygg om" aria-label="Bygg om">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4L15 12l-3-3 2.7-2.7z"/>
+      </svg>
+    </span>`;
+}
+
 function routeRowHtml_(r) {
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
-  const badge = rebuildBadgeHtml_(r);
+  const marker = rebuildListMarkerHtml_(r);
   const notes = String(r.Anteckningar || "").trim();
   const meta = [r.Ledbyggare, r.Byggdatum].filter(Boolean).map((x) => escapeHtml_(x)).join(" · ") || "—";
+  const needsRebuild = marker ? ", Bygg om" : "";
   return `
-    <div class="route-row" style="--route-color:${colorHex_(r.Gradering)}" onclick="openRoute('${escapeHtml_(routeKey_(r))}')" aria-label="${escapeHtml_(title)}, ${escapeHtml_(r.Gradering || "")}">
+    <div class="route-row" style="--route-color:${colorHex_(r.Gradering)}" onclick="openRoute('${escapeHtml_(routeKey_(r))}')" aria-label="${escapeHtml_(title)}, ${escapeHtml_(r.Gradering || "")}${needsRebuild}">
       <div class="route-main">
         <strong>${escapeHtml_(title)}</strong>
         ${notes ? `<span class="route-notes">${escapeHtml_(notes)}</span>` : ""}
         <span class="route-meta">${meta}</span>
       </div>
-      <div>${badge}</div>
+      <div>${marker}</div>
     </div>`;
 }
 
