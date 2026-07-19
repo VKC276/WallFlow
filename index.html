@@ -876,14 +876,26 @@ function demoApi_(action, args) {
       if (action === "getAllAdmins") {
         const role = String(currentUser.role || "").toLowerCase();
         if (role !== "superadmin" && role !== "admin") return ok([]);
-        return ok((store.users || []).map((u) => ({ username: u.username, name: u.name, role: u.role })));
+        let list = (store.users || []).map((u) => ({ username: u.username, name: u.name, role: u.role }));
+        if (role === "admin") {
+          list = list.filter((u) => {
+            const r = String(u.role || "").toLowerCase();
+            return r === "scout" || r === "developer";
+          });
+        }
+        return ok(list);
       }
       if (action === "createNewAdmin") {
-        const role = String(currentUser.role || "").toLowerCase();
-        if (role !== "superadmin" && role !== "admin") return fail("Saknar behörighet");
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin" && meRole !== "admin") return fail("Saknar behörighet");
         const payload = args[0] || {};
+        let newRole = String(payload.role || "admin").toLowerCase();
+        if (meRole === "admin") {
+          if (newRole !== "scout" && newRole !== "developer") return fail("Admin kan bara lägga till ledbyggare");
+          newRole = "scout";
+        }
         if ((store.users || []).some((u) => u.username === payload.username)) return fail("Användaren finns redan");
-        store.users.push({ username: payload.username, name: payload.name || "", role: payload.role || "admin", password: payload.password || "changeme", FirstLogin: true });
+        store.users.push({ username: payload.username, name: payload.name || "", role: newRole, password: payload.password || "changeme", FirstLogin: true });
         saveDemoDb_(store);
         return ok({ ok: true });
       }
@@ -893,8 +905,14 @@ function demoApi_(action, args) {
         const [username, role] = args;
         const u = (store.users || []).find((x) => x.username === username);
         if (!u) return fail("Hittades inte");
-        const newRole = String(role || "admin").toLowerCase();
+        let newRole = String(role || "admin").toLowerCase();
         const oldRole = String(u.role || "").toLowerCase();
+        if (meRole === "admin") {
+          const oldOk = oldRole === "scout" || oldRole === "developer";
+          const newOk = newRole === "scout" || newRole === "developer";
+          if (!oldOk || !newOk) return fail("Admin kan bara hantera ledbyggare");
+          newRole = "scout";
+        }
         const supers = (store.users || []).filter((x) => String(x.role || "").toLowerCase() === "superadmin").length;
         if (oldRole === "superadmin" && newRole !== "superadmin" && supers <= 1) {
           return fail("Kan inte ta bort sista superadmin");
@@ -912,8 +930,12 @@ function demoApi_(action, args) {
         }
         const target = (store.users || []).find((u) => u.username === targetName);
         if (!target) return fail("Hittades inte");
+        const targetRole = String(target.role || "").toLowerCase();
+        if (meRole === "admin" && targetRole !== "scout" && targetRole !== "developer") {
+          return fail("Admin kan bara hantera ledbyggare");
+        }
         const supers = (store.users || []).filter((x) => String(x.role || "").toLowerCase() === "superadmin").length;
-        if (String(target.role || "").toLowerCase() === "superadmin" && supers <= 1) {
+        if (targetRole === "superadmin" && supers <= 1) {
           return fail("Kan inte radera sista superadmin");
         }
         store.users = (store.users || []).filter((u) => u.username !== targetName);
@@ -1015,6 +1037,11 @@ function isSuperadminRole_(role) {
   return String(role || "").toLowerCase().trim() === "superadmin";
 }
 
+function isLedbyggareRole_(role) {
+  const r = String(role || "").toLowerCase().trim();
+  return r === "scout" || r === "developer";
+}
+
 function countSuperadmins_(users) {
   return (users || []).filter((u) => isSuperadminRole_(u.role)).length;
 }
@@ -1024,8 +1051,8 @@ function adminRoleHelpSv_() {
   return `
     <ul class="small mb-0 ps-3" style="color:var(--muted); line-height:1.45;">
       <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild).</li>
-      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus hantera användarlistan.</li>
-      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder och styra livslängd. Minst en superadmin måste alltid finnas.</li>
+      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus lägga till/hantera ledbyggare (inte admin eller superadmin).</li>
+      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, styra livslängd och hantera alla roller. Minst en superadmin måste alltid finnas.</li>
     </ul>`;
 }
 function showToast(msg) {
@@ -1826,9 +1853,9 @@ function renderSettingsHome() {
   const role = userRole_();
   let roleHint = "Ledbyggare kan redigera befintliga leder. Admin kan även hantera användare. Superadmin styr ledstruktur och livslängd.";
   if (role === "admin") {
-    roleHint = "Admin kan redigera leder och hantera användarlistan. Superadmin styr även nya/raderade leder och livslängd.";
+    roleHint = "Admin kan redigera leder och lägga till/hantera ledbyggare. Superadmin styr admins, ledstruktur och livslängd.";
   } else if (role === "superadmin") {
-    roleHint = "Superadmin kan redigera leder, lägga till/ta bort leder, hantera användare och livslängd.";
+    roleHint = "Superadmin kan redigera leder, lägga till/ta bort leder, hantera alla användare och livslängd.";
   }
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
@@ -2599,16 +2626,34 @@ function changePassword() {
 
 function renderUserManagement() {
   if (!canManageUsersRole()) return;
+  const isSuper = userRole_() === "superadmin";
+  const createBlurb = isSuper
+    ? "Skapa nya konton. Vid första inloggning uppmanas användaren att byta lösenord."
+    : "Skapa och hantera ledbyggare. Admin och superadmin sköts av superadmin.";
+  const roleSelectHtml = isSuper
+    ? `<div class="col-6">
+          <label class="form-label" for="nu-role">Roll</label>
+          <select id="nu-role" class="form-select form-select-sm">
+            <option value="scout">Ledbyggare</option>
+            <option value="admin">Admin</option>
+            <option value="superadmin">Superadmin</option>
+          </select>
+        </div>`
+    : `<div class="col-6">
+          <label class="form-label" for="nu-role">Roll</label>
+          <input id="nu-role" type="hidden" value="scout">
+          <input class="form-control form-control-sm" value="Ledbyggare" readonly>
+        </div>`;
   document.getElementById("app-admin").classList.add("show");
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
-      <h3>Användare</h3>
-      <p class="small mb-2" style="color:var(--muted);">Skapa nya konton. Vid första inloggning uppmanas användaren att byta lösenord.</p>
-      <div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.02);">
+      <h3>${isSuper ? "Användare" : "Ledbyggare"}</h3>
+      <p class="small mb-2" style="color:var(--muted);">${escapeHtml_(createBlurb)}</p>
+      ${isSuper ? `<div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.02);">
         <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">Roller</div>
         ${adminRoleHelpSv_()}
-      </div>
+      </div>` : ""}
       <div class="row g-2 mb-3">
         <div class="col-6">
           <label class="form-label" for="nu-user">Användarnamn</label>
@@ -2618,20 +2663,13 @@ function renderUserManagement() {
           <label class="form-label" for="nu-name">Namn</label>
           <input id="nu-name" class="form-control form-control-sm" placeholder="För- och efternamn" autocomplete="off">
         </div>
-        <div class="col-6">
-          <label class="form-label" for="nu-role">Roll</label>
-          <select id="nu-role" class="form-select form-select-sm">
-            <option value="scout">Ledbyggare</option>
-            <option value="admin">Admin</option>
-            <option value="superadmin">Superadmin</option>
-          </select>
-        </div>
+        ${roleSelectHtml}
         <div class="col-6">
           <label class="form-label" for="nu-pw">Tillfälligt lösenord</label>
           <input id="nu-pw" class="form-control form-control-sm" placeholder="Temp-lösenord" value="changeme" autocomplete="new-password">
         </div>
       </div>
-      <button class="btn btn-accent btn-sm mb-3" type="button" onclick="createUser()">Skapa användare</button>
+      <button class="btn btn-accent btn-sm mb-3" type="button" onclick="createUser()">${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</button>
       <div id="admin-user-list">Laddar…</div>
     </div>`;
   google.script.run
@@ -2643,6 +2681,15 @@ function renderUserManagement() {
       host.innerHTML = list.map((u) => {
         const isLastSuper = lastSuper && isSuperadminRole_(u.role);
         const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
+        const canEditRole = isSuper && !isLastSuper;
+        const canDelete = !isSelf && (isSuper ? !isLastSuper : isLedbyggareRole_(u.role));
+        const roleControls = isSuper
+          ? `<select class="form-select form-select-sm" style="width:auto;" ${canEditRole ? "" : "disabled title=\"Kan inte ta bort sista superadmin\""} onchange="updateRole('${escapeHtml_(u.username)}', this.value)">
+              <option value="scout" ${u.role === "scout" ? "selected" : ""}>Ledbyggare</option>
+              <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
+              <option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>
+            </select>`
+          : `<span class="small" style="color:var(--muted);">Ledbyggare</span>`;
         return `
         <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:var(--line)!important; gap:8px;">
           <div>
@@ -2650,32 +2697,32 @@ function renderUserManagement() {
             <div class="small" style="color:var(--muted);">${escapeHtml_(u.name || "")} · ${escapeHtml_(adminRoleLabelSv(u.role))}${isLastSuper ? " · sista superadmin" : ""}</div>
           </div>
           <div class="d-flex gap-2 align-items-center">
-            <select class="form-select form-select-sm" style="width:auto;" ${isLastSuper ? "disabled title=\"Kan inte ta bort sista superadmin\"" : ""} onchange="updateRole('${escapeHtml_(u.username)}', this.value)">
-              <option value="scout" ${u.role === "scout" ? "selected" : ""}>Ledbyggare</option>
-              <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
-              <option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>
-            </select>
-            <button class="btn btn-sm btn-outline-danger" type="button" ${isLastSuper || isSelf ? "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Kan inte radera sista superadmin") + "\"" : ""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+            ${roleControls}
+            <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
           </div>
         </div>`;
-      }).join("") || `<div class="empty">Inga användare.</div>`;
+      }).join("") || `<div class="empty">${isSuper ? "Inga användare." : "Inga ledbyggare."}</div>`;
     })
     .getAllAdmins();
 }
 
 function createUser() {
   if (!canManageUsersRole()) return showToast("Saknar behörighet");
+  const roleEl = document.getElementById("nu-role");
   const payload = {
     username: document.getElementById("nu-user").value.trim(),
     name: document.getElementById("nu-name").value.trim(),
-    role: document.getElementById("nu-role").value,
+    role: userRole_() === "admin" ? "scout" : (roleEl && roleEl.value) || "scout",
     password: document.getElementById("nu-pw").value
   };
   if (!payload.username) return showToast("Användarnamn saknas");
+  if (userRole_() === "admin" && !isLedbyggareRole_(payload.role)) {
+    return showToast("Admin kan bara lägga till ledbyggare");
+  }
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte skapa");
-      showToast("Användare skapad");
+      showToast(userRole_() === "admin" ? "Ledbyggare skapad" : "Användare skapad");
       renderUserManagement();
     })
     .createNewAdmin(payload);

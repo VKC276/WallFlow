@@ -508,6 +508,15 @@ function isSuperadminRole_(role) {
   return String(role || "").trim().toLowerCase() === "superadmin";
 }
 
+function isLedbyggareRole_(role) {
+  var r = String(role || "").trim().toLowerCase();
+  return r === "scout" || r === "developer";
+}
+
+function isAdminActor_(session) {
+  return roleOf_(session) === "admin";
+}
+
 function countSuperadmins_(users) {
   var n = 0;
   var list = users || [];
@@ -591,9 +600,14 @@ function changeOwnPassword_(oldPw, newPw, session) {
 
 function getAllAdmins_(session) {
   if (!canManageUsers_(session)) return [];
-  return readUsers_().map(function (u) {
+  var users = readUsers_().map(function (u) {
     return { username: u.username, name: u.name, role: u.role };
   });
+  // Admin ser/hanterar bara ledbyggare
+  if (isAdminActor_(session)) {
+    return users.filter(function (u) { return isLedbyggareRole_(u.role); });
+  }
+  return users;
 }
 
 function createNewAdmin_(payload, session) {
@@ -612,6 +626,14 @@ function createNewAdmin_(payload, session) {
   var password = String(obj.password || "");
 
   if (!username || !password) return { ok: false, error: "Användarnamn och lösenord krävs" };
+
+  // Admin får bara skapa ledbyggare
+  if (isAdminActor_(session)) {
+    if (!isLedbyggareRole_(role)) {
+      return { ok: false, error: "Admin kan bara lägga till ledbyggare" };
+    }
+    role = "scout";
+  }
 
   var users = readUsers_();
   for (var i = 0; i < users.length; i++) {
@@ -641,6 +663,15 @@ function updateUserRole_(username, role, session) {
   for (var i = 0; i < users.length; i++) {
     if (users[i].username === String(username)) {
       var oldRole = String(users[i].role || "").trim().toLowerCase();
+
+      // Admin får bara hantera ledbyggare (ingen rollhöjning)
+      if (isAdminActor_(session)) {
+        if (!isLedbyggareRole_(oldRole) || !isLedbyggareRole_(newRole)) {
+          return { ok: false, error: "Admin kan bara hantera ledbyggare" };
+        }
+        newRole = "scout";
+      }
+
       if (isSuperadminRole_(oldRole) && !isSuperadminRole_(newRole) && countSuperadmins_(users) <= 1) {
         return { ok: false, error: "Kan inte ta bort sista superadmin" };
       }
@@ -668,6 +699,12 @@ function deleteUserAction_(username, session) {
     }
   }
   if (!target) return { ok: false, error: "Hittades inte" };
+
+  // Admin får bara radera ledbyggare
+  if (isAdminActor_(session) && !isLedbyggareRole_(target.role)) {
+    return { ok: false, error: "Admin kan bara hantera ledbyggare" };
+  }
+
   if (isSuperadminRole_(target.role) && countSuperadmins_(users) <= 1) {
     return { ok: false, error: "Kan inte radera sista superadmin" };
   }

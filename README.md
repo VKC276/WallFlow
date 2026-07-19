@@ -99,8 +99,8 @@ WallFlow kräver inloggning direkt. Med **Kom ihåg mig** sparas sessionen på e
 ## Roller
 
 - **Ledbyggare** (`scout`) — redigera befintliga leder (färg, byggare, datum, anteckningar, bild)
-- **Admin** — samma som Ledbyggare, plus hantera användarlistan (skapa/ändra roll/radera)
-- **Superadmin** — allt ovan, plus lägga till/ta bort leder och styra livslängd
+- **Admin** — samma som Ledbyggare, plus lägga till/hantera **ledbyggare** (inte admin eller superadmin)
+- **Superadmin** — allt ovan, plus lägga till/ta bort leder, styra livslängd och hantera alla roller
 
 **Failsafe:** sista superadmin kan inte raderas eller nedgraderas — minst en superadmin måste alltid finnas.
 
