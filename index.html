@@ -629,7 +629,10 @@ function demoApi_(action, args) {
         if (!raw) return fail("Ingen bilddata");
         // Demoläge: behåll data-URL lokalt (ingen Drive)
         const dataUrl = raw.indexOf("data:") === 0 ? raw : ("data:" + (payload.mimeType || "image/jpeg") + ";base64," + raw.replace(/^data:[^;]+;base64,/, ""));
-        return ok({ ok: true, fileId: dataUrl, url: dataUrl, name: payload.fileName || "demo.jpg" });
+        return ok({ ok: true, fileId: dataUrl, url: dataUrl, name: "led-" + (payload.nr || "x") + ".jpg" });
+      }
+      if (action === "deleteRouteImage") {
+        return ok({ ok: true });
       }
       if (action === "saveRoute") {
         const [route] = args;
@@ -1517,13 +1520,14 @@ function renderRouteForm(nr) {
           <canvas id="img-editor-canvas" width="800" height="600"></canvas>
         </div>
         <input type="hidden" id="f-img" value="${escapeHtml_(route.Bild)}">
+        <input type="hidden" id="f-img-prev" value="${escapeHtml_(route.Bild)}">
         <input type="file" id="f-img-file" accept="image/*" capture="environment" style="display:none">
         <div class="img-editor-actions">
           <button class="btn btn-accent btn-sm" type="button" onclick="document.getElementById('f-img-file').click()">Ta foto / Välj bild</button>
           <button class="btn btn-ghost btn-sm" type="button" id="img-clear-strokes" onclick="clearRouteImageStrokes_()">Rensa streck</button>
           <button class="btn btn-ghost btn-sm" type="button" id="img-remove" onclick="clearRouteImage_()">Ta bort bild</button>
         </div>
-        <div class="img-editor-hint">Rita med fingret/musen hur leden går. Bilden laddas upp till Drive-mappen Bilder när du sparar.</div>
+        <div class="img-editor-hint">En bild per led. Rita ledlinjen — vid sparning ersätts eventuell gammal fil i mappen Bilder.</div>
         <div class="img-editor-status" id="img-editor-status"></div>
       </div>
       ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Ej uppsatt</button>` : ""}
@@ -1749,20 +1753,49 @@ function exportRouteImageDataUrl_() {
   }
 }
 
+function isDriveFileId_(id) {
+  const s = String(id || "").trim();
+  if (!s || /^https?:/i.test(s) || /^data:/i.test(s)) return false;
+  return /^[a-zA-Z0-9_-]{20,}$/.test(s);
+}
+
+function deleteRouteImageOnServer_(nr, fileId) {
+  return new Promise((resolve) => {
+    if (!nr && !isDriveFileId_(fileId)) {
+      resolve();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(() => resolve())
+      .withFailureHandler(() => resolve()) // rensning får inte blockera sparning
+      .deleteRouteImage({ nr: nr || "", fileId: fileId || "" });
+  });
+}
+
 function uploadRouteImageIfNeeded_(nr) {
   return new Promise((resolve, reject) => {
     const ed = routeImgEditor_;
     const hid = document.getElementById("f-img");
+    const prevEl = document.getElementById("f-img-prev");
     const current = hid ? hid.value.trim() : "";
-    // Ingen ny lokal bild — behåll befintligt ID/URL (eller tomt)
+    const previousId = prevEl ? prevEl.value.trim() : (ed && ed.existingId) || "";
+
+    // Bild borttagen — rensa Drive och returnera tomt
+    if (ed && !ed.img && ed.dirty) {
+      deleteRouteImageOnServer_(nr, previousId).then(() => {
+        if (hid) hid.value = "";
+        if (prevEl) prevEl.value = "";
+        resolve("");
+      });
+      return;
+    }
+
+    // Ingen ny lokal bild — behåll befintligt ID/URL
     if (!ed || !ed.img || (!ed.dirty && current)) {
       resolve(current);
       return;
     }
-    if (!ed.img) {
-      resolve("");
-      return;
-    }
+
     const dataUrl = exportRouteImageDataUrl_();
     if (!dataUrl) {
       reject(new Error("Kunde inte exportera bilden. Ta om fotot om du vill rita på en befintlig Drive-bild."));
@@ -1781,11 +1814,12 @@ function uploadRouteImageIfNeeded_(nr) {
         }
         const id = String(res.fileId || "").trim();
         if (hid) hid.value = id;
+        if (prevEl) prevEl.value = id;
         if (routeImgEditor_) {
           routeImgEditor_.dirty = false;
           routeImgEditor_.existingId = id;
         }
-        setImgEditorStatus_("Bild uppladdad.");
+        setImgEditorStatus_("Bild uppladdad (ersatte eventuell gammal).");
         resolve(id);
       })
       .withFailureHandler((err) => {
@@ -1796,9 +1830,21 @@ function uploadRouteImageIfNeeded_(nr) {
       .uploadRouteImage({
         dataBase64: dataUrl,
         mimeType: "image/jpeg",
-        fileName: "led-" + (nr || "ny") + "-" + Date.now() + ".jpg",
-        nr: nr || ""
+        nr: nr || "",
+        previousFileId: previousId
       });
+  });
+}
+
+function persistRouteOnServer_(route) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res || res.ok === false) reject(new Error((res && res.error) || "Kunde inte spara"));
+        else resolve(res);
+      })
+      .withFailureHandler(() => reject(new Error("Kunde inte spara")))
+      .saveRoute(route);
   });
 }
 
@@ -1824,18 +1870,29 @@ function saveRoute(existingNr) {
   const saveBtn = document.getElementById("save-route-btn");
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Sparar…"; }
 
-  uploadRouteImageIfNeeded_(route.Nr)
+  const ed = routeImgEditor_;
+  const needsImageWork = !!(ed && ed.dirty && (ed.img || !route.Bild));
+  // Ny led utan Nr: spara först så filen kan heta led-{nr}.jpg (en bild per led)
+  const ensureNr = (!route.Nr && needsImageWork)
+    ? persistRouteOnServer_(Object.assign({}, route, { Bild: "" })).then((res) => {
+        const nr = String((res.route && res.route.Nr) || "").trim();
+        if (!nr) throw new Error("Kunde inte tilldela lednummer");
+        route.Nr = nr;
+        const nrEl = document.getElementById("f-nr");
+        if (nrEl) nrEl.value = nr;
+        const shell = normalizeRoute_((res && res.route) || route);
+        const i = db.routes.findIndex((x) => String(x.Nr) === nr);
+        if (i >= 0) db.routes[i] = shell;
+        else db.routes.push(shell);
+        return nr;
+      })
+    : Promise.resolve(route.Nr);
+
+  ensureNr
+    .then((nr) => uploadRouteImageIfNeeded_(nr || route.Nr))
     .then((bildId) => {
       route.Bild = bildId || "";
-      return new Promise((resolve, reject) => {
-        google.script.run
-          .withSuccessHandler((res) => {
-            if (!res || res.ok === false) reject(new Error((res && res.error) || "Kunde inte spara"));
-            else resolve(res);
-          })
-          .withFailureHandler(() => reject(new Error("Kunde inte spara")))
-          .saveRoute(route);
-      });
+      return persistRouteOnServer_(route);
     })
     .then((res) => {
       const saved = normalizeRoute_((res && res.route) || route);

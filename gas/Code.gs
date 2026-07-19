@@ -128,6 +128,9 @@ function dispatch_(action, token, args) {
     case "uploadRouteImage":
       return uploadRouteImage_(args[0], session);
 
+    case "deleteRouteImage":
+      return deleteRouteImage_(args[0], session);
+
     case "deleteRoute":
       return deleteRoute_(args[0], session);
 
@@ -759,7 +762,11 @@ function saveRoute_(route, session) {
   var setterVal = route.Ledbyggare || "";
   var buildVal = route.Byggdatum || "";
   var noteVal = route.Anteckningar || "";
-  var imgVal = route.Bild || "";
+  var imgVal = String(route.Bild || "").trim();
+  var prevImg = "";
+  if (!creating && rowNum > 0) {
+    prevImg = String(sh.getRange(rowNum, 8).getDisplayValue() || sh.getRange(rowNum, 8).getValue() || "").trim();
+  }
 
   if (!creating && rowNum > 0) {
     // Uppdatera bara manuella fält — lämna formler i C och F orörda
@@ -792,6 +799,16 @@ function saveRoute_(route, session) {
     rowNum = newRow;
   }
 
+  // Håll Bilder-mappen ren: ta bort gammal fil om Bild töms eller byts
+  try {
+    if (prevImg && prevImg !== imgVal) {
+      trashBilderFile_(prevImg);
+    }
+    if (!imgVal) {
+      trashBilderByRouteNr_(nr);
+    }
+  } catch (eImg) { /* rensning får inte faila sparning */ }
+
   SpreadsheetApp.flush();
   var rowValues = sh.getRange(rowNum, 1, 1, ROUTE_HEADERS.length).getValues()[0];
   var saved = mapRoute_({
@@ -814,6 +831,12 @@ function deleteRoute_(nr, session) {
   }
   var rowNum = findRouteRowNumber_(nr);
   if (rowNum < 0) return { ok: false, error: "Leden hittades inte" };
+  // Rensa tillhörande bild i Bilder-mappen (en bild per led)
+  try {
+    var bildId = String(sheet_(WALLFLOW_SHEET_ROUTES).getRange(rowNum, 8).getValue() || "").trim();
+    trashBilderFile_(bildId);
+    trashBilderByRouteNr_(nr);
+  } catch (e1) { /* ignorera */ }
   sheet_(WALLFLOW_SHEET_ROUTES).deleteRow(rowNum);
   return { ok: true };
 }
@@ -832,10 +855,78 @@ function getBilderFolder_() {
   return parent.createFolder("Bilder");
 }
 
+function isWallflowDriveId_(id) {
+  id = String(id == null ? "" : id).trim();
+  if (!id) return false;
+  if (/^https?:/i.test(id) || /^data:/i.test(id)) return false;
+  return /^[a-zA-Z0-9_-]{20,}$/.test(id);
+}
+
+function safeRouteNrForFile_(nr) {
+  var s = String(nr == null ? "" : nr).trim().replace(/[^\w\-]+/g, "_");
+  return s || "x";
+}
+
+/** Flytta fil till papperskorgen om den ligger i Bilder-mappen. */
+function trashBilderFile_(fileId) {
+  if (!isWallflowDriveId_(fileId)) return false;
+  try {
+    var file = DriveApp.getFileById(fileId);
+    var folder = getBilderFolder_();
+    var parents = file.getParents();
+    var inBilder = false;
+    while (parents.hasNext()) {
+      if (parents.next().getId() === folder.getId()) {
+        inBilder = true;
+        break;
+      }
+    }
+    if (inBilder) {
+      file.setTrashed(true);
+      return true;
+    }
+  } catch (e) { /* fil saknas */ }
+  return false;
+}
+
+/** Rensa alla led-{nr}* i Bilder — håller max en bild per led. */
+function trashBilderByRouteNr_(nr) {
+  var safeNr = safeRouteNrForFile_(nr);
+  if (!safeNr || safeNr === "x") return 0;
+  var folder = getBilderFolder_();
+  var prefix = "led-" + safeNr;
+  var n = 0;
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    var f = files.next();
+    var name = String(f.getName() || "");
+    if (name === prefix + ".jpg" || name === prefix + ".png" ||
+        name.indexOf(prefix + "-") === 0 || name.indexOf(prefix + ".") === 0) {
+      try {
+        f.setTrashed(true);
+        n++;
+      } catch (e2) { /* ignore */ }
+    }
+  }
+  return n;
+}
+
 /**
- * Ladda upp led-bild (JPEG/PNG som base64) till Bilder-mappen.
- * payload: { dataBase64, mimeType, fileName, nr }
- * Returnerar { ok, fileId, url } — spara fileId i kolumn Bild.
+ * Ta bort ledens bild(er) i Bilder utan att ladda upp ny.
+ * payload: { fileId, nr }
+ */
+function deleteRouteImage_(payload, session) {
+  if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
+  payload = payload || {};
+  trashBilderFile_(payload.fileId);
+  trashBilderByRouteNr_(payload.nr);
+  return { ok: true };
+}
+
+/**
+ * Ladda upp led-bild till Bilder-mappen.
+ * En bild per led: gamla led-{nr}* + previousFileId rensas först.
+ * payload: { dataBase64, mimeType, nr, previousFileId }
  */
 function uploadRouteImage_(payload, session) {
   if (!canEdit_(session)) return { ok: false, error: "Saknar behörighet" };
@@ -847,11 +938,18 @@ function uploadRouteImage_(payload, session) {
 
   var mime = String(payload.mimeType || "image/jpeg").trim() || "image/jpeg";
   if (mime.indexOf("image/") !== 0) mime = "image/jpeg";
-  var nr = String(payload.nr || "").trim() || "x";
-  var safeNr = nr.replace(/[^\w\-]+/g, "_");
-  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Europe/Stockholm", "yyyyMMdd-HHmmss");
+  var nr = String(payload.nr || "").trim();
+  var safeNr = safeRouteNrForFile_(nr);
+  if (!nr || safeNr === "x") {
+    return { ok: false, error: "Lednummer krävs för bilduppladdning" };
+  }
   var ext = mime.indexOf("png") >= 0 ? "png" : "jpg";
-  var name = String(payload.fileName || ("led-" + safeNr + "-" + stamp + "." + ext)).trim();
+  // Stabilt filnamn → en fil per lednummer
+  var name = "led-" + safeNr + "." + ext;
+
+  // Håll mappen ren: ta bort tidigare bild för samma led
+  trashBilderFile_(payload.previousFileId);
+  trashBilderByRouteNr_(nr);
 
   var bytes = Utilities.base64Decode(raw);
   var blob = Utilities.newBlob(bytes, mime, name);

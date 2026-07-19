@@ -19,7 +19,7 @@ Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
 | Anteckningar | Fri text |
 | Bild | Drive-fil-ID (uppladdad) eller URL |
 
-**Bilder:** Appen kan ta foto / välja bild, rita ledlinje och ladda upp till Drive-mappen **`Bilder`** (skapas bredvid kalkylarket). Kräver att WallFlow-GAS har behörighet till Drive (godkänn vid första uppladdning / kör om behörighet).
+**Bilder:** Appen kan ta foto / välja bild, rita ledlinje och ladda upp till Drive-mappen **`Bilder`** (skapas bredvid kalkylarket). **En bild per led** (`led-{nr}.jpg`) — vid ny uppladdning, borttagning eller radering av led rensas gamla filer så mappen hålls ren. Kräver Drive-behörighet för WallFlow-GAS.
 
 **Formel i kolumn C**
 
