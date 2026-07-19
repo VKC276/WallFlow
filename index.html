@@ -269,12 +269,25 @@
     .color-head small { color: var(--muted); }
     .route-list { padding: 0 10px 10px; display: grid; gap: 8px; }
     .route-row {
-      display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center;
-      padding: 12px; border-radius: 14px; background: rgba(0,0,0,0.22); border: 1px solid transparent;
-      cursor: pointer; transition: border-color .2s, transform .2s, background .2s; animation: fadeSlide .35s ease both;
+      --route-color: var(--line);
+      display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+      padding: 12px 12px 12px 14px; border-radius: 14px;
+      border: 1px solid transparent;
+      border-left: 5px solid var(--route-color);
+      background:
+        linear-gradient(90deg, color-mix(in srgb, var(--route-color) 22%, transparent) 0%, transparent 46%),
+        rgba(0,0,0,0.22);
+      cursor: pointer; transition: border-color .2s, transform .2s, background .2s, filter .2s;
+      animation: fadeSlide .35s ease both;
     }
-    .route-row:hover { border-color: rgba(232,165,75,0.35); transform: translateX(2px); background: rgba(0,0,0,0.32); }
-    .route-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }
+    .route-row:hover {
+      border-color: rgba(232,165,75,0.28);
+      border-left-color: var(--route-color);
+      transform: translateX(2px);
+      background:
+        linear-gradient(90deg, color-mix(in srgb, var(--route-color) 30%, transparent) 0%, transparent 50%),
+        rgba(0,0,0,0.32);
+    }
     .route-main { min-width: 0; }
     .route-main strong { display: block; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .route-main span { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1368,12 +1381,12 @@ function rebuildBadgeHtml_(r) {
 function routeRowHtml_(r) {
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
   const badge = rebuildBadgeHtml_(r);
+  const meta = [r.Ledbyggare, r.Byggdatum].filter(Boolean).map((x) => escapeHtml_(x)).join(" · ") || "—";
   return `
-    <div class="route-row" onclick="openRoute('${escapeHtml_(routeKey_(r))}')">
-      <span class="route-dot" style="background:${colorHex_(r.Gradering)}"></span>
+    <div class="route-row" style="--route-color:${colorHex_(r.Gradering)}" onclick="openRoute('${escapeHtml_(routeKey_(r))}')" aria-label="${escapeHtml_(title)}, ${escapeHtml_(r.Gradering || "")}">
       <div class="route-main">
         <strong>${escapeHtml_(title)}${r.Anteckningar ? " · " + escapeHtml_(r.Anteckningar) : ""}</strong>
-        <span>${escapeHtml_(r.Gradering || "—")}${r.Ledbyggare ? " · " + escapeHtml_(r.Ledbyggare) : ""} · ${escapeHtml_(r.Byggdatum || "—")}</span>
+        <span>${meta}</span>
       </div>
       <div>${badge}</div>
     </div>`;
