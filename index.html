@@ -348,6 +348,11 @@
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: #10141a; display: none; flex-direction: column; }
+    #login-panel {
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(232, 165, 75, 0.14), transparent 55%),
+        #0e1116;
+    }
     #login-panel.show, #app-admin.show { display: flex; }
     .account-chip {
       grid-area: account;
@@ -361,7 +366,42 @@
     .login-card { width: min(360px, 100%); transition: opacity .25s ease; }
     .login-card.is-busy .form-control,
     .login-card.is-busy .form-select { opacity: 0.55; }
-    .login-card h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 6px; }
+    .login-card h2 {
+      font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em;
+      margin: 0 0 8px; color: var(--text);
+    }
+    .login-lead {
+      margin: 0 0 1.25rem; color: #d5dae3; font-size: 0.95rem; line-height: 1.45;
+    }
+    .login-remember {
+      color: #d5dae3; font-size: 0.9rem;
+    }
+    .login-remember input[type="checkbox"] {
+      width: 1.05rem; height: 1.05rem; accent-color: var(--accent);
+      flex: 0 0 auto;
+    }
+    .login-card .form-control {
+      background: rgba(255,255,255,0.08) !important;
+      border: 1px solid rgba(255,255,255,0.18) !important;
+      color: var(--text) !important;
+    }
+    .login-card .form-control::placeholder {
+      color: #b8c0cd; opacity: 1;
+    }
+    .login-card .form-control:focus {
+      border-color: rgba(232,165,75,0.65) !important;
+      box-shadow: 0 0 0 3px rgba(232,165,75,0.18) !important;
+      background: rgba(255,255,255,0.1) !important;
+    }
+    .login-card .form-control:-webkit-autofill,
+    .login-card .form-control:-webkit-autofill:hover,
+    .login-card .form-control:-webkit-autofill:focus {
+      -webkit-text-fill-color: var(--text);
+      caret-color: var(--text);
+      transition: background-color 9999s ease-in-out 0s;
+      box-shadow: 0 0 0 1000px #1c222c inset;
+      border-color: rgba(255,255,255,0.18) !important;
+    }
     #login-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 10px;
       min-height: 48px;
@@ -375,7 +415,7 @@
     #login-btn.is-loading { cursor: wait; }
     #login-status {
       display: none; margin-top: 14px; text-align: center;
-      color: var(--muted); font-size: 0.88rem;
+      color: #d5dae3; font-size: 0.9rem;
     }
     #login-status.show {
       display: flex; align-items: center; justify-content: center; gap: 8px;
