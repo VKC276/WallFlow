@@ -566,8 +566,10 @@ function demoApi_(action, args) {
         const role = String(currentUser.role || "").toLowerCase();
         const isSuper = role === "superadmin";
         const grades = store.grades || DEFAULT_GRADES;
-        if (!grades.some((g) => String(g).toLowerCase() === String(route.Gradering || "").toLowerCase())) {
-          return fail("Ogiltig gradering. Tillåtna: " + grades.join(", "));
+        const g = String(route.Gradering || "").trim().toLowerCase();
+        const okGrade = WILDCARD_NAMES.includes(g) || grades.some((x) => String(x).toLowerCase() === g);
+        if (!okGrade) {
+          return fail("Ogiltig gradering. Tillåtna: " + grades.join(", ") + ", Wildcard");
         }
         if (route.Nr) {
           const i = store.routes.findIndex((r) => String(r.Nr) === String(route.Nr));
