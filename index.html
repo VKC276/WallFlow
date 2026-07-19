@@ -1388,12 +1388,14 @@ function rebuildBadgeHtml_(r) {
 function routeRowHtml_(r) {
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
   const badge = rebuildBadgeHtml_(r);
+  const notes = String(r.Anteckningar || "").trim();
   const meta = [r.Ledbyggare, r.Byggdatum].filter(Boolean).map((x) => escapeHtml_(x)).join(" · ") || "—";
   return `
     <div class="route-row" style="--route-color:${colorHex_(r.Gradering)}" onclick="openRoute('${escapeHtml_(routeKey_(r))}')" aria-label="${escapeHtml_(title)}, ${escapeHtml_(r.Gradering || "")}">
       <div class="route-main">
-        <strong>${escapeHtml_(title)}${r.Anteckningar ? " · " + escapeHtml_(r.Anteckningar) : ""}</strong>
-        <span>${meta}</span>
+        <strong>${escapeHtml_(title)}</strong>
+        ${notes ? `<span class="route-notes">${escapeHtml_(notes)}</span>` : ""}
+        <span class="route-meta">${meta}</span>
       </div>
       <div>${badge}</div>
     </div>`;
