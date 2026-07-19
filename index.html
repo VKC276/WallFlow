@@ -509,7 +509,7 @@
       </div>
       <div id="nav-colors" class="nav-item" onclick="switchView('colors')" role="button" tabindex="0">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
-        <span>Färger</span>
+        <span>Fördelning</span>
       </div>
     </nav>
   </div>
@@ -1263,7 +1263,7 @@ function buildColorPieSvg_(slices, total) {
   }).join("");
 
   return `
-    <svg class="color-dist-pie" viewBox="0 0 200 200" role="img" aria-label="Färgfördelning">
+    <svg class="color-dist-pie" viewBox="0 0 200 200" role="img" aria-label="Fördelning">
       ${paths}
       <circle cx="${cx}" cy="${cy}" r="${inner}" fill="#171b22"></circle>
       <text class="color-dist-center-label" x="${cx}" y="${cy - 2}">${total}</text>
@@ -1307,7 +1307,7 @@ function renderColors(routes) {
 
   document.getElementById("view-colors").innerHTML = `
     <div class="hero-line">
-      <h1>Färgfördelning</h1>
+      <h1>Fördelning</h1>
       <p>Cirkeldiagram per gradering — tryck på en färg för att se alla leder i den färgen.</p>
     </div>
     <div class="color-dist">
