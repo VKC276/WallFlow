@@ -229,7 +229,11 @@
       padding: 14px 12px; border-radius: 16px;
       background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
       border: 1px solid var(--line);
+      width: 100%; text-align: left; color: inherit; cursor: pointer;
+      transition: border-color .2s, transform .2s, background .2s;
     }
+    .stat:hover { border-color: rgba(232,165,75,0.4); transform: translateY(-1px); }
+    .stat.active { border-color: rgba(232,165,75,0.7); background: rgba(232,165,75,0.1); }
     .stat strong { display: block; font-family: var(--font-display); font-size: 1.45rem; line-height: 1; margin-bottom: 4px; }
     .stat span { color: var(--muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
     .section-label {
@@ -1005,11 +1009,19 @@ function renderFlow(routes) {
     <div class="hero-line">
       <p>Använd knapparna ovan för att filtrera lederna eller sök i sökfältet.</p>
     </div>
-    <div class="stats">
-      <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Bygg om</span></div>
-      <div class="stat"><strong style="color:var(--ok)">${c.nej}</strong><span>Aktuella</span></div>
-      <div class="stat"><strong style="color:var(--unset)">${c.ej}</strong><span>Ej uppsatt</span></div>
-      <div class="stat"><strong>${c.total}</strong><span>Totalt</span></div>
+    <div class="stats" role="group" aria-label="Filtrera på status">
+      <button type="button" class="stat${rebuildFilter === "Ja" ? " active" : ""}" onclick="setRebuildFilter('Ja')">
+        <strong style="color:var(--rebuild)">${c.ja}</strong><span>Bygg om</span>
+      </button>
+      <button type="button" class="stat${rebuildFilter === "Nej" ? " active" : ""}" onclick="setRebuildFilter('Nej')">
+        <strong style="color:var(--ok)">${c.nej}</strong><span>Aktuella</span>
+      </button>
+      <button type="button" class="stat${rebuildFilter === "EJ" ? " active" : ""}" onclick="setRebuildFilter('EJ')">
+        <strong style="color:var(--unset)">${c.ej}</strong><span>Ej uppsatt</span>
+      </button>
+      <button type="button" class="stat${rebuildFilter === "ALL" ? " active" : ""}" onclick="setRebuildFilter('ALL')">
+        <strong>${c.total}</strong><span>Totalt</span>
+      </button>
     </div>
     <div class="section-label">
       <h2>${
