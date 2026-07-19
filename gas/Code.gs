@@ -302,6 +302,11 @@ function readRoutes_() {
     out.push(mapRoute_(table.rows[i]));
   }
   out.sort(function (a, b) {
+    // Numeriska lednummer först, wildcards (W1/W2 …) sist
+    var aw = isWildcardNr_(a.Nr) || isWildcardGrade_(a.Gradering);
+    var bw = isWildcardNr_(b.Nr) || isWildcardGrade_(b.Gradering);
+    if (aw !== bw) return aw ? 1 : -1;
+
     var na = Number(a.Nr);
     var nb = Number(b.Nr);
     var aNum = !isNaN(na) && String(a.Nr) !== "";
@@ -309,15 +314,10 @@ function readRoutes_() {
     if (aNum && bNum) return na - nb;
     if (aNum) return -1;
     if (bNum) return 1;
-    // W1, W2 … efter numeriska
-    var aw = isWildcardNr_(a.Nr);
-    var bw = isWildcardNr_(b.Nr);
-    if (aw && bw) {
+    if (isWildcardNr_(a.Nr) && isWildcardNr_(b.Nr)) {
       return (Number(String(a.Nr).replace(/^w/i, "")) || 0) - (Number(String(b.Nr).replace(/^w/i, "")) || 0);
     }
-    if (aw) return -1;
-    if (bw) return 1;
-    return String(a.Nr || a.Gradering).localeCompare(String(b.Nr || b.Gradering), "sv");
+    return String(a.Nr || "").localeCompare(String(b.Nr || ""), "sv");
   });
   return out;
 }

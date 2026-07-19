@@ -775,22 +775,27 @@ function showAppShell_() {
 function renderEditToolbar_() {
   /* Redigera sker via ledkortet; + Ny led ligger under Inställningar för superadmin. */
 }
+function isWildcardRoute_(r) {
+  return isWildcardNr_(r && r.Nr) || isWildcardGrade_(r && r.Gradering);
+}
+/** Förstavyn: lednummer stigande, alla wildcards (W1/W2 …) sist. */
 function sortRoutes_(routes) {
   return routes.slice().sort((a, b) => {
-    if (a.DagsAttByggaOm !== b.DagsAttByggaOm) return a.DagsAttByggaOm === "Ja" ? -1 : 1;
+    const aw = isWildcardRoute_(a);
+    const bw = isWildcardRoute_(b);
+    if (aw !== bw) return aw ? 1 : -1;
+
     const na = Number(a.Nr), nb = Number(b.Nr);
     const aNum = !isNaN(na) && String(a.Nr) !== "";
     const bNum = !isNaN(nb) && String(b.Nr) !== "";
     if (aNum && bNum) return na - nb;
     if (aNum) return -1;
     if (bNum) return 1;
-    const aw = isWildcardNr_(a.Nr), bw = isWildcardNr_(b.Nr);
-    if (aw && bw) {
+
+    if (isWildcardNr_(a.Nr) && isWildcardNr_(b.Nr)) {
       return (Number(String(a.Nr).replace(/^w/i, "")) || 0) - (Number(String(b.Nr).replace(/^w/i, "")) || 0);
     }
-    if (aw) return -1;
-    if (bw) return 1;
-    return String(a.Nr || a.Gradering || "").localeCompare(String(b.Nr || b.Gradering || ""), "sv");
+    return String(a.Nr || "").localeCompare(String(b.Nr || ""), "sv", { numeric: true, sensitivity: "base" });
   });
 }
 function routeKey_(r) {
