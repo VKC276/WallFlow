@@ -936,7 +936,10 @@ function renderFilters() {
   ).join("");
 
   const colorHost = document.getElementById("color-filters");
-  const colors = [{ key: "ALL", label: "Alla färger" }].concat(availableColors_().map((c) => ({ key: c, label: c })));
+  // Färgraden: hoppa över Ej uppsatt (filtreras via statuschip/statistikbox)
+  const colorChips = availableColors_().filter((c) => !isEjUppsattGrade_(c));
+  const colors = [{ key: "ALL", label: "Alla färger" }].concat(colorChips.map((c) => ({ key: c, label: c })));
+  if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
   colorHost.innerHTML = colors.map((it) =>
     `<button type="button" class="chip${colorFilter === it.key ? " active" : ""}" data-key="${escapeHtml_(it.key)}" onclick="setColorFilter('${escapeHtml_(it.key)}')">${escapeHtml_(it.label)}</button>`
   ).join("");
