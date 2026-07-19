@@ -270,9 +270,16 @@ function readGrades_() {
   return out.map(function (g) { return g.Namn; });
 }
 
-function isAllowedGrade_(name) {
-  var grades = readGrades_();
+function isWildcardGrade_(name) {
   var target = String(name || "").trim().toLowerCase();
+  return target === "wildcard" || target === "wildcards";
+}
+
+function isAllowedGrade_(name) {
+  var target = String(name || "").trim().toLowerCase();
+  // Wildcard redovisas i appen även om den inte finns i Grades-fliken
+  if (isWildcardGrade_(target)) return true;
+  var grades = readGrades_();
   for (var i = 0; i < grades.length; i++) {
     if (String(grades[i]).toLowerCase() === target) return true;
   }

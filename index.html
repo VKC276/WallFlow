@@ -444,7 +444,7 @@
  *
  * Sheet: 1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0
  * Flik "Alla leder": Nr | Gradering | Dags att bygga om | Ledbyggare | Byggdatum | Slutdatum | Anteckningar | Bild
- * Flik "Grades": tillåtna färger (Grön, Blå, Röd, Svart, Vit)
+ * Flik "Grades": tillåtna färger (Grön, Blå, Röd, Svart, Vit); Wildcard visas också i listan
  * Flik "Users": Username | passwordHash | salt | role | name | FirstLogin
  *********************************************************************/
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
@@ -458,9 +458,12 @@ const COLOR_HEX = {
   "Blå": "#3498db",
   "Röd": "#e74c3c",
   "Svart": "#2c3e50",
-  "Vit": "#ecf0f1"
+  "Vit": "#ecf0f1",
+  "Wildcard": "#c4a35a",
+  "Wildcards": "#c4a35a"
 };
 const DEFAULT_GRADES = ["Grön", "Blå", "Röd", "Svart", "Vit"];
+const WILDCARD_NAMES = ["wildcard", "wildcards"];
 
 let __sessionToken = null;
 let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
@@ -514,7 +517,8 @@ function seedDemoDb_() {
       { Nr: "15", Gradering: "Röd", DagsAttByggaOm: "Nej", Ledbyggare: "Christoffer", Byggdatum: "2026-06-26", Slutdatum: "2026-07-26", Anteckningar: "Black jack", Bild: "" },
       { Nr: "5", Gradering: "Svart", DagsAttByggaOm: "Ja", Ledbyggare: "August", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" },
       { Nr: "8", Gradering: "Grön", DagsAttByggaOm: "Ja", Ledbyggare: "Patric", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" },
-      { Nr: "4", Gradering: "Vit", DagsAttByggaOm: "Ja", Ledbyggare: "August och Gustav", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" }
+      { Nr: "4", Gradering: "Vit", DagsAttByggaOm: "Ja", Ledbyggare: "August och Gustav", Byggdatum: "2026-05-03", Slutdatum: "2026-06-02", Anteckningar: "", Bild: "" },
+      { Nr: "99", Gradering: "Wildcard", DagsAttByggaOm: "Nej", Ledbyggare: "Patric", Byggdatum: "2026-06-01", Slutdatum: "2026-07-01", Anteckningar: "Mixade grepp", Bild: "" }
     ],
     users: [{ username: "admin", name: "Admin", role: "superadmin", password: "wallflow", FirstLogin: false }]
   };
@@ -642,9 +646,16 @@ function colorHex_(name) {
 function gradeList_() {
   return (db.grades && db.grades.length) ? db.grades.slice() : DEFAULT_GRADES.slice();
 }
+function isWildcardGrade_(name) {
+  return WILDCARD_NAMES.includes(String(name || "").trim().toLowerCase());
+}
 function isAllowedGrade_(name) {
   const t = String(name || "").trim().toLowerCase();
   return gradeList_().some((g) => String(g).toLowerCase() === t);
+}
+/** Grades + Wildcard — visas i lista/filter (Wildcard behöver inte finnas i Grades-fliken). */
+function isListableGrade_(name) {
+  return isAllowedGrade_(name) || isWildcardGrade_(name);
 }
 function userRole_() {
   const r = String(currentUser && currentUser.role || "").toLowerCase().trim();
@@ -836,9 +847,15 @@ function bootAppData_() {
     .getAppData();
 }
 
-/** Endast färger från fliken Grades (i sheet-ordning). */
+/** Grades i sheet-ordning, plus Wildcard om sådana leder finns. */
 function availableColors_() {
-  return gradeList_();
+  const list = gradeList_();
+  const wc = db.routes.find((r) => isWildcardGrade_(r.Gradering));
+  if (wc) {
+    const label = String(wc.Gradering || "Wildcard").trim();
+    if (!list.some((g) => String(g).toLowerCase() === label.toLowerCase())) list.push(label);
+  }
+  return list;
 }
 
 function renderFilters() {
@@ -881,8 +898,8 @@ function routeMatches_(r, tokens) {
 function visibleRoutes_() {
   const tokens = getSearchTokens_();
   return sortRoutes_(db.routes.filter((r) => {
-    // Visa bara leder med gradering från Grades (dölj t.ex. Wildcard)
-    if (!isAllowedGrade_(r.Gradering)) return false;
+    // Grades + Wildcard
+    if (!isListableGrade_(r.Gradering)) return false;
     if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
     if (colorFilter !== "ALL" && r.Gradering !== colorFilter) return false;
     return routeMatches_(r, tokens);
@@ -891,7 +908,7 @@ function visibleRoutes_() {
 function counts_() {
   let ja = 0, nej = 0, total = 0;
   db.routes.forEach((r) => {
-    if (!isAllowedGrade_(r.Gradering)) return;
+    if (!isListableGrade_(r.Gradering)) return;
     total++;
     if (r.DagsAttByggaOm === "Ja") ja++;
     else if (r.DagsAttByggaOm === "Nej") nej++;
@@ -926,10 +943,10 @@ function renderFlow(routes) {
 }
 
 function colorDistributionRoutes_() {
-  // Fördelning: alla Grades-färger, respektera ombyggnadsfilter + sök men inte färgfilter
+  // Fördelning: Grades + Wildcard, respektera ombyggnadsfilter + sök men inte färgfilter
   const tokens = getSearchTokens_();
   return db.routes.filter((r) => {
-    if (!isAllowedGrade_(r.Gradering)) return false;
+    if (!isListableGrade_(r.Gradering)) return false;
     if (rebuildFilter !== "ALL" && r.DagsAttByggaOm !== rebuildFilter) return false;
     return routeMatches_(r, tokens);
   });
@@ -1215,13 +1232,18 @@ function renderRouteForm(nr) {
     showToast("Leden hittades inte");
     return;
   }
-  const grades = gradeList_();
+  const grades = availableColors_();
   const route = r || {
     Nr: "", Gradering: grades[0] || "Grön", Ledbyggare: currentDisplayName_(),
     Byggdatum: new Date().toISOString().slice(0, 10), Anteckningar: "", Bild: ""
   };
-  const selectedGrade = isAllowedGrade_(route.Gradering) ? route.Gradering : grades[0];
-  const colorOpts = grades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
+  // Behåll Wildcard på befintliga leder även om den inte finns i Grades
+  const formGrades = grades.slice();
+  if (isWildcardGrade_(route.Gradering) && !formGrades.some((g) => String(g).toLowerCase() === String(route.Gradering).toLowerCase())) {
+    formGrades.push(route.Gradering);
+  }
+  const selectedGrade = isListableGrade_(route.Gradering) ? route.Gradering : formGrades[0];
+  const colorOpts = formGrades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
   const nrReadonly = !!nr || !canManageRouteStructureRole();
   const displayName = currentDisplayName_();
   document.getElementById("app-admin").classList.remove("show");
@@ -1261,8 +1283,8 @@ function saveRoute(existingNr) {
     Anteckningar: document.getElementById("f-notes").value.trim(),
     Bild: document.getElementById("f-img").value.trim()
   };
-  if (!isAllowedGrade_(route.Gradering)) {
-    return showToast("Välj en gradering från Grades");
+  if (!isListableGrade_(route.Gradering)) {
+    return showToast("Välj en giltig gradering");
   }
   const exists = route.Nr && db.routes.some((r) => String(r.Nr) === String(route.Nr));
   if ((!route.Nr || !exists) && !canManageRouteStructureRole()) {
