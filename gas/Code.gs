@@ -644,12 +644,12 @@ function findFormulaTemplateRow_(sh, preferRow) {
 }
 
 /**
- * Formel för C (Dags att bygga om).
- * Svenska i sheetet: =OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
- * Apps Script använder engelsk IF-syntax; Sheets visar lokaliserat.
+ * Formel för C (Dags att bygga om) — svensk Sheets-locale (OM + semikolon).
+ * Engelsk IF/komma fungerar inte i svenska kalkylark.
+ * Exempel: =OM(E9=0;"";OM(B9="Ej uppsatt";"-";OM(F9-TODAY()<0;"Ja";"Nej")))
  */
 function rebuildStatusFormula_(row) {
-  return '=IF(E' + row + '=0,"",IF(UPPER(B' + row + ')="EJ UPPSATT","-",IF(F' + row + '-TODAY()<0,"Ja","Nej")))';
+  return '=OM(E' + row + '=0;"";OM(B' + row + '="Ej uppsatt";"-";OM(F' + row + '-TODAY()<0;"Ja";"Nej")))';
 }
 
 function setRebuildStatusFormula_(sh, row) {
