@@ -751,6 +751,7 @@ function createNewAdmin_(payload, session) {
   var userCheck = validateUsername_(username);
   if (!userCheck.ok) return userCheck;
   username = userCheck.username;
+  if (!name) return { ok: false, error: "Namn saknas" };
 
   // Admin får bara skapa ledbyggare
   if (isAdminActor_(session)) {
