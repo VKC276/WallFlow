@@ -971,6 +971,41 @@ function demoApi_(action, args) {
         saveDemoDb_(store);
         return ok({ ok: true });
       }
+      if (action === "changeOwnUsername") {
+        const next = String(args[0] || "").trim();
+        if (!next) return fail("Användarnamn saknas");
+        if (next.length < 2 || next.length > 40) return fail("Användarnamn ska vara 2–40 tecken");
+        if (!/^[a-zA-Z0-9._-]+$/.test(next)) return fail("Användarnamn: endast a–z, 0–9, punkt, _ och -");
+        const old = String(currentUser.username || "");
+        if (next.toLowerCase() !== old.toLowerCase()) {
+          if ((store.users || []).some((x) => String(x.username).toLowerCase() === next.toLowerCase())) {
+            return fail("Användarnamnet är upptaget");
+          }
+          const u = (store.users || []).find((x) => x.username === old);
+          if (!u) return fail("Hittades inte");
+          u.username = next;
+          currentUser.username = next;
+          saveDemoDb_(store);
+        }
+        return ok({ ok: true, username: next });
+      }
+      if (action === "updateUserDisplayName") {
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin" && meRole !== "admin") return fail("Saknar behörighet");
+        const targetName = String(args[0] || "").trim();
+        const nextName = String(args[1] || "").trim();
+        if (!targetName) return fail("Användarnamn saknas");
+        if (!nextName) return fail("Namn saknas");
+        const u = (store.users || []).find((x) => x.username === targetName);
+        if (!u) return fail("Hittades inte");
+        const targetRole = String(u.role || "").toLowerCase();
+        if (meRole === "admin" && targetRole !== "scout" && targetRole !== "developer") {
+          return fail("Admin kan bara hantera ledbyggare");
+        }
+        u.name = nextName;
+        saveDemoDb_(store);
+        return ok({ ok: true, username: targetName, name: nextName });
+      }
       return fail("Okänd action: " + action);
     }, 80);
   });
@@ -1894,15 +1929,24 @@ function renderSettingsHome() {
   } else if (role === "superadmin") {
     roleHint = "Superadmin kan redigera leder, lägga till/ta bort leder, hantera alla användare och livslängd.";
   }
+  const displayName = currentDisplayName_() || "—";
+  const loginName = String(currentUser.username || "").trim() || "—";
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <h3>Konto</h3>
       <p class="mb-1" style="color:var(--muted); font-size:.9rem;">
-        ${escapeHtml_(currentUser.name || currentUser.username || "")} · ${escapeHtml_(adminRoleLabelSv())}
+        ${escapeHtml_(displayName)} · ${escapeHtml_(adminRoleLabelSv())}
       </p>
       <p class="small mb-3" style="color:var(--muted);">${escapeHtml_(roleHint)}</p>
+      <div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.02);">
+        <div class="small mb-1" style="color:var(--muted);">Visningsnamn <span style="opacity:.75;">(sätts av admin)</span></div>
+        <div style="font-weight:600; margin-bottom:10px;">${escapeHtml_(displayName)}</div>
+        <div class="small mb-1" style="color:var(--muted);">Användarnamn <span style="opacity:.75;">(inloggning)</span></div>
+        <div style="font-weight:600;">${escapeHtml_(loginName)}</div>
+      </div>
       <div class="d-flex flex-wrap gap-2">
         ${canManageRouteStructureRole() ? `<button class="btn btn-accent btn-sm" type="button" onclick="closeSettings(); renderRouteForm()">+ Ny led</button>` : ""}
+        <button class="btn btn-ghost btn-sm" type="button" onclick="renderUsernameForm()">Byt användarnamn</button>
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</button>` : ""}
         ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
@@ -2660,6 +2704,49 @@ function changePassword() {
     .changeOwnPassword(oldPw, newPw);
 }
 
+function renderUsernameForm() {
+  if (!currentUser.authorized) return showLoginGate_();
+  document.getElementById("app-admin").classList.add("show");
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
+      <h3>Byt användarnamn</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Detta är ditt inloggningsnamn. Visningsnamnet (${escapeHtml_(currentDisplayName_() || "—")}) sätts av admin och kan du inte ändra själv.
+      </p>
+      <label class="form-label" for="username-new">Nytt användarnamn</label>
+      <input id="username-new" class="form-control mb-3" value="${escapeHtml_(currentUser.username || "")}" autocomplete="username">
+      <button class="btn btn-accent w-100" type="button" id="username-save-btn" onclick="changeUsername()">Spara</button>
+    </div>`;
+}
+
+function changeUsername() {
+  if (!currentUser.authorized) return showLoginGate_();
+  const el = document.getElementById("username-new");
+  const next = String(el && el.value || "").trim();
+  if (!next) return showToast("Användarnamn saknas");
+  if (next.length < 2 || next.length > 40) return showToast("Användarnamn ska vara 2–40 tecken");
+  if (!/^[a-zA-Z0-9._-]+$/.test(next)) return showToast("Användarnamn: endast a–z, 0–9, punkt, _ och -");
+  const btn = document.getElementById("username-save-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte byta");
+      currentUser.username = String(res.username || next).trim();
+      saveSession_(!!localStorage.getItem(SESSION_STORAGE_KEY));
+      setRememberedAdminUsername(currentUser.username);
+      showAppShell_();
+      showToast("Användarnamn uppdaterat");
+      renderSettingsHome();
+    })
+    .withFailureHandler(() => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      showToast("Kunde inte byta");
+    })
+    .changeOwnUsername(next);
+}
+
 function renderUserManagement() {
   if (!canManageUsersRole()) return;
   const isSuper = userRole_() === "superadmin";
@@ -2727,14 +2814,23 @@ function renderUserManagement() {
             </select>`
           : `<span class="small" style="color:var(--muted);">Ledbyggare</span>`;
         return `
-        <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:var(--line)!important; gap:8px;">
-          <div>
-            <strong>${escapeHtml_(u.username)}</strong>
-            <div class="small" style="color:var(--muted);">${escapeHtml_(u.name || "")} · ${escapeHtml_(adminRoleLabelSv(u.role))}${isLastSuper ? " · sista superadmin" : ""}</div>
+        <div class="py-2 border-bottom" style="border-color:var(--line)!important;">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <div>
+              <strong>${escapeHtml_(u.username)}</strong>
+              <div class="small" style="color:var(--muted);">${escapeHtml_(adminRoleLabelSv(u.role))}${isLastSuper ? " · sista superadmin" : ""}</div>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              ${roleControls}
+              <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+            </div>
           </div>
-          <div class="d-flex gap-2 align-items-center">
-            ${roleControls}
-            <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+          <div class="d-flex gap-2 align-items-end">
+            <div class="flex-grow-1">
+              <label class="form-label small mb-1" for="dn-${escapeHtml_(u.username)}" style="color:var(--muted);">Visningsnamn</label>
+              <input id="dn-${escapeHtml_(u.username)}" class="form-control form-control-sm" value="${escapeHtml_(u.name || "")}" placeholder="För- och efternamn">
+            </div>
+            <button class="btn btn-sm btn-ghost" type="button" onclick="saveUserDisplayName('${escapeHtml_(u.username)}')">Spara namn</button>
           </div>
         </div>`;
       }).join("") || `<div class="empty">${isSuper ? "Inga användare." : "Inga ledbyggare."}</div>`;
@@ -2752,6 +2848,7 @@ function createUser() {
     password: document.getElementById("nu-pw").value
   };
   if (!payload.username) return showToast("Användarnamn saknas");
+  if (!payload.name) return showToast("Visningsnamn saknas");
   if (userRole_() === "admin" && !isLedbyggareRole_(payload.role)) {
     return showToast("Admin kan bara lägga till ledbyggare");
   }
@@ -2769,6 +2866,25 @@ function createUser() {
       renderUserManagement();
     })
     .createNewAdmin(payload);
+}
+function saveUserDisplayName(username) {
+  if (!canManageUsersRole()) return showToast("Saknar behörighet");
+  const el = document.getElementById("dn-" + username);
+  const name = String(el && el.value || "").trim();
+  if (!name) return showToast("Namn saknas");
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara namn");
+      // Om man ändrar sitt eget visningsnamn: uppdatera shell
+      if (String(username).toLowerCase() === String(currentUser.username || "").toLowerCase()) {
+        currentUser.name = String(res.name || name).trim();
+        saveSession_(!!localStorage.getItem(SESSION_STORAGE_KEY));
+        showAppShell_();
+      }
+      showToast("Namn sparat");
+      renderUserManagement();
+    })
+    .updateUserDisplayName(username, name);
 }
 function updateRole(username, role) {
   if (!canManageUsersRole()) return showToast("Saknar behörighet");

@@ -161,6 +161,17 @@ function dispatch_(action, token, args) {
     case "deleteUserAction":
       return deleteUserAction_(args[0], session);
 
+    case "changeOwnUsername": {
+      var renameRes = changeOwnUsername_(args[0], session);
+      if (renameRes && renameRes.ok && token) {
+        saveSession_(token, renameRes.username, roleOf_(session));
+      }
+      return renameRes;
+    }
+
+    case "updateUserDisplayName":
+      return updateUserDisplayName_(args[0], args[1], session);
+
     case "setRouteLifetimeDays":
       return setRouteLifetimeDays_(args[0], session);
 
@@ -633,6 +644,82 @@ function changeOwnPassword_(oldPw, newPw, session) {
   return { ok: false, error: "Användaren hittades inte" };
 }
 
+/** Validera inloggningsnamn (inte visningsnamn). */
+function validateUsername_(username) {
+  var next = String(username || "").trim();
+  if (!next) return { ok: false, error: "Användarnamn saknas" };
+  if (next.length < 2 || next.length > 40) {
+    return { ok: false, error: "Användarnamn ska vara 2–40 tecken" };
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(next)) {
+    return { ok: false, error: "Användarnamn: endast a–z, 0–9, punkt, _ och -" };
+  }
+  return { ok: true, username: next };
+}
+
+/**
+ * Användare byter sitt eget inloggningsnamn.
+ * Visningsnamn (name) ändras inte här — det sätts av admin/superadmin.
+ */
+function changeOwnUsername_(newUsername, session) {
+  if (!session) return { ok: false, error: "Ej inloggad" };
+  var check = validateUsername_(newUsername);
+  if (!check.ok) return check;
+  var next = check.username;
+  var old = String(session.username || "").trim();
+  if (!old) return { ok: false, error: "Ej inloggad" };
+  if (next.toLowerCase() === old.toLowerCase()) {
+    return { ok: true, username: old };
+  }
+
+  var users = readUsers_();
+  var i;
+  for (i = 0; i < users.length; i++) {
+    if (users[i].username.toLowerCase() === next.toLowerCase()) {
+      return { ok: false, error: "Användarnamnet är upptaget" };
+    }
+  }
+  var found = false;
+  for (i = 0; i < users.length; i++) {
+    if (users[i].username.toLowerCase() === old.toLowerCase()) {
+      users[i].username = next;
+      found = true;
+      break;
+    }
+  }
+  if (!found) return { ok: false, error: "Användaren hittades inte" };
+  writeUsers_(users);
+  return { ok: true, username: next };
+}
+
+/**
+ * Admin/superadmin sätter visningsnamn för en användare.
+ * Admin får bara ändra ledbyggare.
+ */
+function updateUserDisplayName_(username, name, session) {
+  if (!canManageUsers_(session)) return { ok: false, error: "Saknar behörighet" };
+  var target = String(username || "").trim();
+  var nextName = String(name == null ? "" : name).trim();
+  if (!target) return { ok: false, error: "Användarnamn saknas" };
+  if (!nextName) return { ok: false, error: "Namn saknas" };
+
+  var users = readUsers_();
+  var found = false;
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].username.toLowerCase() === target.toLowerCase()) {
+      if (isAdminActor_(session) && !isLedbyggareRole_(users[i].role)) {
+        return { ok: false, error: "Admin kan bara hantera ledbyggare" };
+      }
+      users[i].name = nextName;
+      found = true;
+      break;
+    }
+  }
+  if (!found) return { ok: false, error: "Hittades inte" };
+  writeUsers_(users);
+  return { ok: true, username: target, name: nextName };
+}
+
 function getAllAdmins_(session) {
   if (!canManageUsers_(session)) return [];
   var users = readUsers_().map(function (u) {
@@ -661,6 +748,9 @@ function createNewAdmin_(payload, session) {
   var password = String(obj.password || "");
 
   if (!username || !password) return { ok: false, error: "Användarnamn och lösenord krävs" };
+  var userCheck = validateUsername_(username);
+  if (!userCheck.ok) return userCheck;
+  username = userCheck.username;
 
   // Admin får bara skapa ledbyggare
   if (isAdminActor_(session)) {
