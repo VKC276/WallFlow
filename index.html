@@ -43,8 +43,8 @@
       --surface: rgba(255, 255, 255, 0.03);
       --surface-2: rgba(255, 255, 255, 0.05);
       --surface-3: rgba(255, 255, 255, 0.08);
-      --row-bg: rgba(0, 0, 0, 0.22);
-      --row-bg-hover: rgba(0, 0, 0, 0.32);
+      --row-bg: #1f2530;
+      --row-bg-hover: #262d3a;
       --topbar-bg: linear-gradient(180deg, rgba(18,21,26,.96), rgba(18,21,26,.82) 70%, transparent);
       --nav-bg: rgba(20, 24, 31, 0.88);
       --nav-active: rgba(255, 255, 255, 0.08);
@@ -355,7 +355,7 @@
       --route-color: var(--line);
       display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
       padding: 12px 12px 12px 14px; border-radius: 14px;
-      border: 1px solid transparent;
+      border: 1px solid var(--line);
       border-left: 5px solid var(--route-color);
       background:
         linear-gradient(90deg, color-mix(in srgb, var(--route-color) 35%, transparent) 0%, transparent 3px),
