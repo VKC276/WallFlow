@@ -2,6 +2,8 @@
 
 App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arkitektur som [Crags](https://github.com/VKC276/Crags) (GAS ↔ GitHub Pages + Workbench).
 
+**Live:** [https://wallflow.vastervikclimbing.se](https://wallflow.vastervikclimbing.se)
+
 ## Google Sheet
 
 Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
