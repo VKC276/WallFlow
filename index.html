@@ -778,7 +778,7 @@
         </button>
         <div id="login-status" role="status" aria-live="polite">
           <span class="login-status-dot" aria-hidden="true"></span>
-          <span>Ansluter till servern…</span>
+          <span id="login-status-text">Ansluter till servern…</span>
         </div>
         <div id="login-error" class="alert alert-danger mt-3 py-2 small" style="display:none;">Fel inloggningsuppgifter.</div>
       </div>
@@ -1323,6 +1323,9 @@ function showLoginGate_() {
   document.getElementById("app-public").classList.remove("ready");
   document.getElementById("login-panel").classList.add("show");
   document.getElementById("login-error").style.display = "none";
+  loginInFlight_ = false;
+  clearLoginTimeout_();
+  setLoginFormBusy_(false);
   const remembered = getCookie_(REMEMBER_COOKIE);
   if (remembered) {
     document.getElementById("admin-user").value = remembered;
@@ -1339,6 +1342,9 @@ function currentDisplayName_() {
 }
 
 function showAppShell_() {
+  loginInFlight_ = false;
+  clearLoginTimeout_();
+  setLoginFormBusy_(false);
   document.getElementById("login-panel").classList.remove("show");
   document.getElementById("app-public").classList.add("ready");
   const label = currentDisplayName_() || currentUser.username || "Användare";
@@ -1939,22 +1945,33 @@ let loginInFlight_ = false;
 let loginTimeoutId_ = null;
 const LOGIN_TIMEOUT_MS = 25000;
 
-function setLoginFormBusy_(busy) {
+function setLoginFormBusy_(busy, phase) {
   const btn = document.getElementById("login-btn");
   const label = btn && btn.querySelector(".login-btn-label");
   const card = document.querySelector(".login-card");
   const status = document.getElementById("login-status");
+  const statusText = document.getElementById("login-status-text");
   const userEl = document.getElementById("admin-user");
   const pwEl = document.getElementById("admin-pw");
   const rememberEl = document.getElementById("admin-remember-me");
+  const mode = busy ? (phase === "accepted" ? "accepted" : "connecting") : "idle";
   if (btn) {
     btn.disabled = !!busy;
     btn.classList.toggle("is-loading", !!busy);
     btn.setAttribute("aria-busy", busy ? "true" : "false");
   }
-  if (label) label.textContent = busy ? "Loggar in…" : "Logga in";
+  if (label) {
+    label.textContent = mode === "accepted"
+      ? "Laddar…"
+      : (mode === "connecting" ? "Loggar in…" : "Logga in");
+  }
   if (card) card.classList.toggle("is-busy", !!busy);
   if (status) status.classList.toggle("show", !!busy);
+  if (statusText) {
+    statusText.textContent = mode === "accepted"
+      ? "Inloggning godkänd, laddar gränssnitt…"
+      : "Ansluter till servern…";
+  }
   if (userEl) userEl.disabled = !!busy;
   if (pwEl) pwEl.disabled = !!busy;
   if (rememberEl) rememberEl.disabled = !!busy;
@@ -1991,7 +2008,7 @@ function checkLogin() {
   document.getElementById("login-error").style.display = "none";
   document.getElementById("login-error").textContent = "Fel inloggningsuppgifter.";
   loginInFlight_ = true;
-  setLoginFormBusy_(true);
+  setLoginFormBusy_(true, "connecting");
   clearLoginTimeout_();
   loginTimeoutId_ = setTimeout(() => {
     if (!loginInFlight_) return;
@@ -2020,9 +2037,8 @@ function checkLogin() {
       saveSession_(remember);
       document.getElementById("admin-pw").value = "";
       clearLoginTimeout_();
-      loginInFlight_ = false;
-      setLoginFormBusy_(false);
-      showToast("Inloggad");
+      // Håll kvar login-vyn i godkänd/laddar-läge tills appen visas
+      setLoginFormBusy_(true, "accepted");
       bootAppData_();
     })
     .withFailureHandler(() => {
