@@ -31,7 +31,7 @@
       --font-body: "Figtree", sans-serif;
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
+    html, body { height: 100%; color-scheme: dark; }
     body {
       margin: 0;
       font-family: var(--font-body);
@@ -460,9 +460,16 @@
     .form-control, .form-select {
       background: rgba(255,255,255,0.04) !important; border: 1px solid var(--line) !important;
       color: var(--text) !important; border-radius: 12px !important;
+      color-scheme: dark;
     }
     .form-control:focus, .form-select:focus {
       border-color: rgba(232,165,75,0.55) !important; box-shadow: 0 0 0 3px rgba(232,165,75,0.15) !important;
+    }
+    /* Öppna listan: mörk text på ljus bakgrund (OS-native dropdown är ofta vit) */
+    .form-select option,
+    .form-select optgroup {
+      color: #12151a;
+      background-color: #ffffff;
     }
     .btn-accent { background: var(--accent); border: 0; color: #12151a; font-weight: 700; border-radius: 12px; }
     .btn-accent:hover { filter: brightness(1.05); color: #12151a; }
