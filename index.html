@@ -189,7 +189,14 @@
       grid-area: filters;
       display: flex; flex-direction: column; gap: 6px; min-width: 0;
     }
-    .filter-row { display: flex; gap: 8px; overflow: visible; padding: 0; }
+    .filter-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 8px;
+      overflow: visible;
+      padding: 0;
+    }
     /* Mobil: WallFlow + konto, sedan filter under rubriken, sedan sök */
     @media (max-width: 720px) {
       .topbar {
@@ -234,7 +241,8 @@
       padding: 6px;
       border-radius: 12px;
       border: 1px solid var(--line);
-      background: var(--surface);
+      background: var(--panel-bg);
+      opacity: 1;
       box-shadow: 0 12px 28px rgba(0,0,0,0.22);
       display: none;
       gap: 4px;
@@ -807,15 +815,7 @@
     .qr-scan-actions .btn { flex: 1 1 auto; }
     body.qr-scan-open { overflow: hidden; }
 
-    .quickinfo-launch-wrap {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 6px;
-    }
-    .quickinfo-launch {
-      border-style: dashed;
-      font-weight: 600;
-    }
+    .quickinfo-inline { font-weight: 600; }
 
     .quickinfo-overlay {
       position: fixed;
@@ -978,9 +978,6 @@
       </button>
       <div class="filters-block">
         <div class="filter-row" id="rebuild-filters" aria-label="Ombyggnadsfilter"></div>
-        <div class="quickinfo-launch-wrap">
-          <button class="chip quickinfo-launch" type="button" onclick="openQuickInfo_()">Quickinfo</button>
-        </div>
       </div>
     </div>
 
@@ -1849,6 +1846,7 @@ function renderFilters() {
         ).join("")}
       </div>
     </div>
+    <button type="button" class="chip quickinfo-inline" onclick="closeRebuildFilterMenu_(); openQuickInfo_();">Quickinfo</button>
   `;
   // Ej uppsatt är ingen färg — rensa om det ändå satts via äldre UI
   if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
