@@ -803,10 +803,10 @@
     .quickinfo-body {
       flex: 1 1 auto;
       min-height: 0;
-      overflow-y: auto;
+      overflow: hidden;
       padding: 14px;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
       gap: 10px;
     }
     .quickinfo-stage {
@@ -815,7 +815,8 @@
       border: 1px solid var(--line);
       background: #050608;
       overflow: hidden;
-      min-height: 230px;
+      min-height: 180px;
+      height: min(36vh, 280px);
     }
     .quickinfo-stage::after {
       content: "";
@@ -827,7 +828,8 @@
     }
     #quickinfo-video {
       width: 100%;
-      min-height: 230px;
+      height: 100%;
+      min-height: 0;
       display: block;
       object-fit: cover;
       background: #050608;
@@ -843,7 +845,8 @@
       border-radius: 14px;
       background: var(--surface);
       padding: 12px;
-      min-height: 120px;
+      min-height: 0;
+      overflow-y: auto;
     }
     .quickinfo-result h4 {
       margin: 0 0 8px;
@@ -893,7 +896,6 @@
     .quickinfo-actions {
       display: flex;
       gap: 8px;
-      margin-top: auto;
     }
     .quickinfo-actions .btn { flex: 1 1 auto; }
     body.quickinfo-open { overflow: hidden; }
@@ -2394,6 +2396,43 @@ function closeQuickInfo_(fromPopstate) {
   }
 }
 
+function routeDetailHtml_(r, opts) {
+  opts = opts || {};
+  const thumbSize = Number(opts.thumbSize) || 400;
+  const thumbClass = opts.thumbClass || "topo-img";
+  const interactiveImage = !!opts.interactiveImage;
+  const includeEditButtons = !!opts.includeEditButtons;
+  const thumb = routeImageSrc_(r.Bild, thumbSize);
+  const full = routeImageSrc_(r.Bild, 1600);
+  const imageHtml = thumb
+    ? (interactiveImage
+      ? `<img class="${thumbClass}" src="${escapeHtml_(thumb)}" data-full="${escapeHtml_(full)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy" role="button" tabindex="0" title="Visa i full storlek" onclick="event.stopPropagation(); toggleRouteImageLightbox_(this.getAttribute('data-full'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); toggleRouteImageLightbox_(this.getAttribute('data-full'));}">`
+      : `<img class="${thumbClass}" src="${escapeHtml_(thumb)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy">`)
+    : "";
+  const editButtons = includeEditButtons && currentUser.authorized && canEditContentRole() && r.Nr
+    ? `
+      <button class="btn btn-accent w-100 mt-3" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera led</button>
+      ${canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera led</button>` : ""}
+    `
+    : "";
+  return `
+    <div class="detail-grid">
+      <div class="detail-cell"><label>Nr</label><strong>${escapeHtml_(r.Nr || "—")}</strong></div>
+      <div class="detail-cell"><label>Gradering</label><strong><span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>${escapeHtml_(r.Gradering || "—")}</strong></div>
+      <div class="detail-cell"><label>Ledbyggare</label><strong>${escapeHtml_(r.Ledbyggare || "—")}</strong></div>
+      <div class="detail-cell"><label>Byggdatum</label><strong>${escapeHtml_(r.Byggdatum || "—")}</strong></div>
+      <div class="detail-cell"><label>Livslängd</label><strong>${escapeHtml_(r.Livslangd != null ? (r.Livslangd + " dagar") : "—")}</strong></div>
+      <div class="detail-cell"><label>Dags att bygga om</label><strong>${escapeHtml_(r.DagsAttByggaOm || "—")}</strong></div>
+    </div>
+    <div class="detail-cell">
+      <label>Anteckningar</label>
+      <div style="white-space:pre-wrap; margin-top:4px;">${escapeHtml_(r.Anteckningar || "Inga anteckningar.")}</div>
+    </div>
+    ${imageHtml}
+    ${editButtons}
+  `;
+}
+
 function renderQuickInfoResult_(rawValue) {
   const host = document.getElementById("quickinfo-result");
   if (!host) return;
@@ -2424,20 +2463,12 @@ function renderQuickInfoResult_(rawValue) {
     return;
   }
 
-  const thumb = routeImageSrc_(route.Bild, 520);
   const canEdit = !!(currentUser.authorized && canEditContentRole() && route.Nr);
   quickInfoState_.currentRouteNr = String(route.Nr);
   setQuickInfoEditEnabled_(canEdit);
   host.innerHTML = `
-    <h4>Led ${escapeHtml_(route.Nr || value)} · ${escapeHtml_(route.Gradering || "—")}</h4>
-    <div class="quickinfo-grid">
-      <div class="quickinfo-cell"><label>Status</label><strong>${escapeHtml_(route.DagsAttByggaOm || "—")}</strong></div>
-      <div class="quickinfo-cell"><label>Ledbyggare</label><strong>${escapeHtml_(route.Ledbyggare || "—")}</strong></div>
-      <div class="quickinfo-cell"><label>Byggdatum</label><strong>${escapeHtml_(route.Byggdatum || "—")}</strong></div>
-      <div class="quickinfo-cell"><label>Slutdatum</label><strong>${escapeHtml_(route.Slutdatum || "—")}</strong></div>
-    </div>
-    <div class="quickinfo-notes">${escapeHtml_(route.Anteckningar || "Inga anteckningar.")}</div>
-    ${thumb ? `<img class="quickinfo-thumb" src="${escapeHtml_(thumb)}" alt="Ledbild ${escapeHtml_(route.Nr || "")}" loading="lazy">` : ""}
+    <h4>Led ${escapeHtml_(route.Nr || value)}</h4>
+    ${routeDetailHtml_(route, { thumbClass: "quickinfo-thumb", thumbSize: 520, interactiveImage: false, includeEditButtons: false })}
   `;
 }
 
@@ -2560,27 +2591,12 @@ function openRoute(key) {
   if (!r) return;
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
   document.getElementById("panel-title").textContent = title;
-  const thumb = routeImageSrc_(r.Bild, 400);
-  const full = routeImageSrc_(r.Bild, 1600);
-  document.getElementById("panel-body").innerHTML = `
-    <div class="detail-grid">
-      <div class="detail-cell"><label>Nr</label><strong>${escapeHtml_(r.Nr || "—")}</strong></div>
-      <div class="detail-cell"><label>Gradering</label><strong><span class="color-swatch" style="background:${colorHex_(r.Gradering)}"></span>${escapeHtml_(r.Gradering || "—")}</strong></div>
-      <div class="detail-cell"><label>Ledbyggare</label><strong>${escapeHtml_(r.Ledbyggare || "—")}</strong></div>
-      <div class="detail-cell"><label>Byggdatum</label><strong>${escapeHtml_(r.Byggdatum || "—")}</strong></div>
-      <div class="detail-cell"><label>Livslängd</label><strong>${escapeHtml_(r.Livslangd != null ? (r.Livslangd + " dagar") : "—")}</strong></div>
-      <div class="detail-cell"><label>Dags att bygga om</label><strong>${escapeHtml_(r.DagsAttByggaOm || "—")}</strong></div>
-    </div>
-    <div class="detail-cell">
-      <label>Anteckningar</label>
-      <div style="white-space:pre-wrap; margin-top:4px;">${escapeHtml_(r.Anteckningar || "Inga anteckningar.")}</div>
-    </div>
-    ${thumb ? `<img class="topo-img" src="${escapeHtml_(thumb)}" data-full="${escapeHtml_(full)}" alt="Bild led ${escapeHtml_(r.Nr)}" loading="lazy" role="button" tabindex="0" title="Visa i full storlek" onclick="event.stopPropagation(); toggleRouteImageLightbox_(this.getAttribute('data-full'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); toggleRouteImageLightbox_(this.getAttribute('data-full'));}">` : ""}
-    ${currentUser.authorized && canEditContentRole() && r.Nr ? `
-      <button class="btn btn-accent w-100 mt-3" type="button" onclick="renderRouteForm('${escapeHtml_(r.Nr)}')">Redigera led</button>
-      ${canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(r.Nr)}')">Radera led</button>` : ""}
-    ` : ""}
-  `;
+  document.getElementById("panel-body").innerHTML = routeDetailHtml_(r, {
+    thumbClass: "topo-img",
+    thumbSize: 400,
+    interactiveImage: true,
+    includeEditButtons: true
+  });
   const wasOpen = isPanelOpen_();
   document.getElementById("panel").classList.add("open");
   if (!wasOpen) ensurePanelHistory_();
