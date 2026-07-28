@@ -2128,6 +2128,7 @@ function routeRowHtml_(r) {
 let panelHistory_ = false;
 let qrScanHistory_ = false;
 let quickInfoHistory_ = false;
+let quickInfoEditPendingNr_ = "";
 let qrScanState_ = {
   open: false,
   stream: null,
@@ -2532,7 +2533,14 @@ function editQuickInfoRoute_() {
   if (!canEditContentRole()) {
     return showToast("Saknar behörighet att redigera");
   }
-  closeQuickInfo_();
+  // När Quickinfo stängs via history.back kommer popstate annars att stänga
+  // nyöppnad panel direkt. Lägg redigeringsöppning i popstate-handoff.
+  if (quickInfoHistory_) {
+    quickInfoEditPendingNr_ = nr;
+    closeQuickInfo_();
+    return;
+  }
+  closeQuickInfo_(true);
   renderRouteForm(nr);
 }
 
@@ -3058,6 +3066,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("popstate", () => {
+  if (quickInfoEditPendingNr_) {
+    const pendingNr = quickInfoEditPendingNr_;
+    quickInfoEditPendingNr_ = "";
+    renderRouteForm(pendingNr);
+    return;
+  }
   // Stäng översta lagret: quickinfo → lightbox → bildmarkering → panel (redigera/detalj)
   if (isQuickInfoOpen_()) {
     closeQuickInfo_(true);
