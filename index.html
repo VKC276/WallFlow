@@ -160,24 +160,41 @@
       background: var(--topbar-bg);
       backdrop-filter: blur(10px);
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: 1fr auto;
       grid-template-areas:
-        "brand search account"
-        "filters filters filters";
+        "brand actions"
+        "filters filters";
       gap: 10px 12px;
       align-items: center;
+    }
+    .topbar.search-open {
+      grid-template-areas:
+        "brand actions"
+        "search search"
+        "filters filters";
     }
     .top-brand {
       grid-area: brand;
       font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.03em;
     }
     .top-brand span { color: var(--accent); }
+    .top-actions {
+      grid-area: actions;
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .search-toggle.is-active {
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+    }
     .search-wrap {
       grid-area: search;
-      display: flex; align-items: center; gap: 8px; min-width: 0;
-      height: var(--search-h); padding: 0 12px; border-radius: 14px;
+      display: none;
+      align-items: center; gap: 8px; min-width: 0;
+      height: var(--search-h); padding: 0 8px 0 12px; border-radius: 14px;
       background: var(--surface-2); border: 1px solid var(--line);
+      animation: riseIn .28s ease both;
     }
+    .topbar.search-open .search-wrap { display: flex; }
     .search-wrap input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 0.95rem; }
     .search-wrap input::placeholder { color: var(--placeholder); }
     .icon-btn {
@@ -196,16 +213,6 @@
       gap: 8px;
       overflow: visible;
       padding: 0;
-    }
-    /* Mobil: WallFlow + konto, sedan filter under rubriken, sedan sök */
-    @media (max-width: 720px) {
-      .topbar {
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-          "brand account"
-          "filters filters"
-          "search search";
-      }
     }
     .chip {
       flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface);
@@ -505,7 +512,6 @@
     }
     #login-panel.show, #app-admin.show { display: flex; }
     .account-chip {
-      grid-area: account;
       position: relative;
       z-index: 2;
       display: flex; align-items: center; gap: 6px; flex-shrink: 0;
@@ -958,11 +964,20 @@
   </div>
 
   <div id="app-public">
-    <div class="topbar">
+    <div class="topbar" id="topbar">
       <div class="top-brand">Wall<span>Flow</span></div>
-      <div class="search-wrap">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="filterData()" autocomplete="off">
+      <div class="top-actions">
+        <button class="icon-btn search-toggle" id="search-toggle" type="button" aria-label="Sök" aria-expanded="false" aria-controls="search-wrap" title="Sök" onclick="toggleSearchPanel_()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        </button>
+        <button class="account-chip" id="account-chip" type="button" aria-label="Inställningar" title="Inställningar">
+          <span class="account-name" id="account-name">—</span>
+          <span class="icon-btn" aria-hidden="true">⚙</span>
+        </button>
+      </div>
+      <div class="search-wrap" id="search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="onMainSearchInput_()" autocomplete="off">
         <button class="icon-btn" type="button" onclick="openQrScanner_()" aria-label="Skanna QR-kod" title="Skanna QR-kod">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3z"></path>
@@ -970,12 +985,11 @@
             <path d="M17 17h4v4h-4z"></path>
           </svg>
         </button>
-        <button class="icon-btn" type="button" onclick="document.getElementById('mainSearch').value=''; filterData();" aria-label="Rensa sök">✕</button>
+        <button class="icon-btn" type="button" onclick="clearMainSearch_(true)" aria-label="Rensa sök">✕</button>
+        <button class="icon-btn" type="button" onclick="closeSearchPanel_()" aria-label="Stäng sök" title="Stäng sök">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
       </div>
-      <button class="account-chip" id="account-chip" type="button" aria-label="Inställningar" title="Inställningar">
-        <span class="account-name" id="account-name">—</span>
-        <span class="icon-btn" aria-hidden="true">⚙</span>
-      </button>
       <div class="filters-block">
         <div class="filter-row" id="rebuild-filters" aria-label="Ombyggnadsfilter"></div>
       </div>
@@ -1888,6 +1902,62 @@ function clearAllFilters_() {
   rebuildFilter = "ALL";
   colorFilter = "ALL";
   rebuildFilterMenuOpen_ = false;
+  syncSearchToggleState_();
+}
+
+function isSearchPanelOpen_() {
+  const topbar = document.getElementById("topbar");
+  return !!(topbar && topbar.classList.contains("search-open"));
+}
+
+function syncSearchToggleState_() {
+  const toggle = document.getElementById("search-toggle");
+  const input = document.getElementById("mainSearch");
+  const open = isSearchPanelOpen_();
+  const hasQuery = !!(input && String(input.value || "").trim());
+  if (!toggle) return;
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  toggle.classList.toggle("is-active", hasQuery || open);
+  toggle.setAttribute("aria-label", open ? "Sök (öppen)" : (hasQuery ? "Sök (aktiv)" : "Sök"));
+}
+
+function openSearchPanel_() {
+  const topbar = document.getElementById("topbar");
+  const input = document.getElementById("mainSearch");
+  if (topbar) topbar.classList.add("search-open");
+  syncSearchToggleState_();
+  setTimeout(() => {
+    if (input) {
+      input.focus();
+      try { input.select(); } catch (_) { /* ignore */ }
+    }
+  }, 20);
+}
+
+function closeSearchPanel_() {
+  const topbar = document.getElementById("topbar");
+  const input = document.getElementById("mainSearch");
+  if (topbar) topbar.classList.remove("search-open");
+  if (input) input.blur();
+  syncSearchToggleState_();
+}
+
+function toggleSearchPanel_() {
+  if (isSearchPanelOpen_()) closeSearchPanel_();
+  else openSearchPanel_();
+}
+
+function onMainSearchInput_() {
+  syncSearchToggleState_();
+  filterData();
+}
+
+function clearMainSearch_(refocus) {
+  const input = document.getElementById("mainSearch");
+  if (input) input.value = "";
+  syncSearchToggleState_();
+  filterData();
+  if (refocus && isSearchPanelOpen_() && input) input.focus();
 }
 
 /** Rensa filter och visa allt under Fördelning. */
@@ -3144,6 +3214,7 @@ document.addEventListener("keydown", (e) => {
     if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
     if (routeImgEditor_ && routeImgEditor_.open) return cancelRouteImageMark_();
     if (isPanelOpen_()) return closePanel();
+    if (isSearchPanelOpen_()) return closeSearchPanel_();
   }
 });
 
