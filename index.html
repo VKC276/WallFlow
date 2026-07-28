@@ -687,6 +687,76 @@
       color: #12151a;
     }
     body.img-mark-open { overflow: hidden; }
+
+    .qr-scan-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 95;
+      background: rgba(8, 11, 16, 0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .qr-scan-overlay.open { display: flex; }
+    .qr-scan-card {
+      width: min(460px, 100%);
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .qr-scan-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .qr-scan-head strong {
+      font-family: var(--font-display);
+      letter-spacing: -0.01em;
+      font-size: 1rem;
+    }
+    .qr-scan-stage {
+      position: relative;
+      margin: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #050608;
+      overflow: hidden;
+      min-height: 220px;
+    }
+    .qr-scan-stage::after {
+      content: "";
+      position: absolute;
+      inset: 18% 16%;
+      border: 2px dashed rgba(255, 255, 255, 0.45);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    #qr-scan-video {
+      width: 100%;
+      height: 100%;
+      min-height: 220px;
+      object-fit: cover;
+      display: block;
+    }
+    .qr-scan-status {
+      padding: 0 14px 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      min-height: 1.4em;
+    }
+    .qr-scan-actions {
+      display: flex;
+      gap: 8px;
+      padding: 0 14px 14px;
+    }
+    .qr-scan-actions .btn { flex: 1 1 auto; }
+    body.qr-scan-open { overflow: hidden; }
   </style>
 </head>
 <body>
@@ -702,6 +772,7 @@
       <div class="search-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="filterData()" autocomplete="off">
+        <button class="icon-btn" type="button" onclick="openQrScanner_()" aria-label="Skanna QR-kod" title="Skanna QR-kod">📷</button>
         <button class="icon-btn" type="button" onclick="document.getElementById('mainSearch').value=''; filterData();" aria-label="Rensa sök">✕</button>
       </div>
       <button class="account-chip" id="account-chip" type="button" aria-label="Inställningar" title="Inställningar">
@@ -740,6 +811,23 @@
       <button class="icon-btn" type="button" onclick="closePanel()" aria-label="Stäng">✕</button>
     </div>
     <div id="panel-body"></div>
+  </div>
+
+  <div id="qr-scan-overlay" class="qr-scan-overlay" aria-hidden="true">
+    <div class="qr-scan-card" role="dialog" aria-modal="true" aria-labelledby="qr-scan-title">
+      <div class="qr-scan-head">
+        <strong id="qr-scan-title">Skanna routecard-QR</strong>
+        <button class="icon-btn" type="button" onclick="closeQrScanner_()" aria-label="Stäng QR-skanner">✕</button>
+      </div>
+      <div class="qr-scan-stage">
+        <video id="qr-scan-video" autoplay playsinline muted></video>
+      </div>
+      <div id="qr-scan-status" class="qr-scan-status">Startar kamera…</div>
+      <div class="qr-scan-actions">
+        <button class="btn btn-ghost" type="button" onclick="manualQrInput_()">Mata in kod</button>
+        <button class="btn btn-accent" type="button" onclick="closeQrScanner_()">Avbryt</button>
+      </div>
+    </div>
   </div>
 
   <div id="img-mark-overlay" class="img-mark-overlay" aria-hidden="true">
@@ -1397,6 +1485,15 @@ function routeKey_(r) {
 function routeByNr_(nr) {
   return db.routes.find((r) => String(r.Nr) === String(nr));
 }
+function routeByNumericValue_(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const direct = routeByNr_(raw);
+  if (direct) return direct;
+  const normalized = String(Number(raw));
+  if (!/^\d+$/.test(normalized)) return null;
+  return routeByNr_(normalized);
+}
 function normalizeRoute_(r) {
   const lifeRaw = r.Livslangd != null ? r.Livslangd : r.Livslängd;
   let life = Math.round(Number(lifeRaw));
@@ -1855,6 +1952,15 @@ function routeRowHtml_(r) {
 }
 
 let panelHistory_ = false;
+let qrScanHistory_ = false;
+let qrScanState_ = {
+  open: false,
+  stream: null,
+  detector: null,
+  rafId: 0,
+  detectBusy: false,
+  lastDetectAt: 0
+};
 
 function isPanelOpen_() {
   const panel = document.getElementById("panel");
@@ -1868,6 +1974,168 @@ function ensurePanelHistory_() {
     panelHistory_ = true;
   } catch (e) {
     panelHistory_ = false;
+  }
+}
+
+function isQrScannerOpen_() {
+  return !!(qrScanState_ && qrScanState_.open);
+}
+
+function setQrScanStatus_(msg) {
+  const el = document.getElementById("qr-scan-status");
+  if (el) el.textContent = msg || "";
+}
+
+function ensureQrScanHistory_() {
+  if (qrScanHistory_) return;
+  try {
+    history.pushState({ wallflowQrScan: true }, "");
+    qrScanHistory_ = true;
+  } catch (e) {
+    qrScanHistory_ = false;
+  }
+}
+
+function stopQrScannerLoop_() {
+  if (qrScanState_.rafId) {
+    cancelAnimationFrame(qrScanState_.rafId);
+    qrScanState_.rafId = 0;
+  }
+}
+
+function stopQrScannerStream_() {
+  const stream = qrScanState_.stream;
+  if (stream) {
+    stream.getTracks().forEach((track) => {
+      try { track.stop(); } catch (e) { /* ignore */ }
+    });
+  }
+  qrScanState_.stream = null;
+  const video = document.getElementById("qr-scan-video");
+  if (video) video.srcObject = null;
+}
+
+function closeQrScanner_(fromPopstate) {
+  const overlay = document.getElementById("qr-scan-overlay");
+  stopQrScannerLoop_();
+  stopQrScannerStream_();
+  qrScanState_.detector = null;
+  qrScanState_.open = false;
+  qrScanState_.detectBusy = false;
+  qrScanState_.lastDetectAt = 0;
+  if (overlay) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("qr-scan-open");
+  if (!fromPopstate && qrScanHistory_) {
+    qrScanHistory_ = false;
+    try { history.back(); } catch (e) { /* ignore */ }
+  } else {
+    qrScanHistory_ = false;
+  }
+}
+
+function handleScannedRouteValue_(rawValue) {
+  const value = String(rawValue == null ? "" : rawValue).trim();
+  if (!value) {
+    showToast("QR-koden var tom");
+    return;
+  }
+  if (!/^\d+$/.test(value)) {
+    showToast("QR-värdet är inte numeriskt");
+    return;
+  }
+  const route = routeByNumericValue_(value);
+  if (!route) {
+    showToast("Hittade ingen led " + value);
+    return;
+  }
+  openRoute(routeKey_(route));
+}
+
+function manualQrInput_() {
+  const raw = window.prompt("Ange QR-värdet (lednummer):", "");
+  if (raw == null) return;
+  const value = String(raw).trim();
+  if (!value) return;
+  closeQrScanner_();
+  handleScannedRouteValue_(value);
+}
+
+function qrScanTick_(timestamp) {
+  if (!qrScanState_.open) return;
+  const video = document.getElementById("qr-scan-video");
+  if (!video || !qrScanState_.detector || video.readyState < 2) {
+    qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
+    return;
+  }
+  if (qrScanState_.detectBusy || (timestamp - qrScanState_.lastDetectAt) < 140) {
+    qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
+    return;
+  }
+  qrScanState_.detectBusy = true;
+  qrScanState_.lastDetectAt = timestamp;
+  qrScanState_.detector.detect(video)
+    .then((codes) => {
+      const first = Array.isArray(codes) && codes.length ? codes[0] : null;
+      const value = first && first.rawValue ? String(first.rawValue).trim() : "";
+      if (value) {
+        closeQrScanner_();
+        handleScannedRouteValue_(value);
+      }
+    })
+    .catch(() => {
+      // Ignore detect errors from noisy frames.
+    })
+    .finally(() => {
+      qrScanState_.detectBusy = false;
+      if (qrScanState_.open) qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
+    });
+}
+
+async function openQrScanner_() {
+  if (isQrScannerOpen_()) return;
+  if (!window.BarcodeDetector) {
+    showToast("QR-skanning stöds inte här — mata in kod manuellt");
+    return manualQrInput_();
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast("Kamera stöds inte i den här webbläsaren");
+    return;
+  }
+  const overlay = document.getElementById("qr-scan-overlay");
+  const video = document.getElementById("qr-scan-video");
+  if (!overlay || !video) return;
+
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("qr-scan-open");
+  qrScanState_.open = true;
+  setQrScanStatus_("Startar kamera…");
+  ensureQrScanHistory_();
+
+  try {
+    qrScanState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+  } catch (e) {
+    closeQrScanner_();
+    showToast("QR-format stöds inte — mata in kod manuellt");
+    return manualQrInput_();
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    });
+    qrScanState_.stream = stream;
+    video.srcObject = stream;
+    await video.play();
+    setQrScanStatus_("Rikta kameran mot en QR-kod med lednummer.");
+    qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
+  } catch (err) {
+    closeQrScanner_();
+    showToast("Kunde inte starta kameran");
   }
 }
 
@@ -2349,6 +2617,7 @@ function closeRouteImageLightbox_(fromPopstate) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (isQrScannerOpen_()) return closeQrScanner_();
     if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
     if (routeImgEditor_ && routeImgEditor_.open) return cancelRouteImageMark_();
     if (isPanelOpen_()) return closePanel();
@@ -2357,6 +2626,10 @@ document.addEventListener("keydown", (e) => {
 
 window.addEventListener("popstate", () => {
   // Stäng översta lagret: lightbox → bildmarkering → panel (redigera/detalj)
+  if (isQrScannerOpen_()) {
+    closeQrScanner_(true);
+    return;
+  }
   if (isRouteImageLightboxOpen_()) {
     closeRouteImageLightbox_(true);
     return;
