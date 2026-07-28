@@ -864,6 +864,7 @@
       grid-template-rows: auto auto minmax(0, 1fr) auto;
       gap: 10px;
     }
+    .quickinfo-overlay.manual-mode .quickinfo-stage { display: none; }
     .quickinfo-stage {
       position: relative;
       border-radius: 16px;
@@ -2432,8 +2433,8 @@ async function openQrScanner_() {
     return manualQrInput_();
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast("Kamera stöds inte i den här webbläsaren");
-    return;
+    showToast("Kamera stöds inte i den här webbläsaren — mata in kod manuellt");
+    return manualQrInput_();
   }
   const overlay = document.getElementById("qr-scan-overlay");
   const video = document.getElementById("qr-scan-video");
@@ -2466,7 +2467,8 @@ async function openQrScanner_() {
     qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
   } catch (err) {
     closeQrScanner_();
-    showToast("Kunde inte starta kameran");
+    showToast("Kunde inte starta kameran — mata in kod manuellt");
+    return manualQrInput_();
   }
 }
 
@@ -2517,8 +2519,48 @@ function clearQuickInfoResult_() {
   quickInfoState_.currentRouteNr = "";
   quickInfoState_.lastRawValue = "";
   const host = document.getElementById("quickinfo-result");
-  if (host) host.innerHTML = `<div class="empty">Rikta kameran mot en QR-kod med lednummer.</div>`;
+  const overlayEl = document.getElementById("quickinfo-overlay");
+  const emptyMsg = overlayEl && overlayEl.classList.contains("manual-mode")
+    ? "Mata in ett lednummer för att visa info."
+    : "Rikta kameran mot en QR-kod med lednummer.";
+  if (host) host.innerHTML = `<div class="empty">${emptyMsg}</div>`;
   setQuickInfoEditEnabled_(false);
+}
+
+function setQuickInfoManualMode_(manual) {
+  const overlay = document.getElementById("quickinfo-overlay");
+  const headSpan = overlay && overlay.querySelector(".quickinfo-head span");
+  if (overlay) overlay.classList.toggle("manual-mode", !!manual);
+  if (headSpan) {
+    headSpan.textContent = manual
+      ? "Mata in lednummer manuellt"
+      : "Skannar routecards löpande";
+  }
+}
+
+function openQuickInfoShell_(opts) {
+  opts = opts || {};
+  const overlay = document.getElementById("quickinfo-overlay");
+  const video = document.getElementById("quickinfo-video");
+  if (!overlay || !video) return false;
+
+  stopQuickInfoLoop_();
+  stopQuickInfoStream_();
+  quickInfoState_.detector = null;
+  quickInfoState_.detectBusy = false;
+  quickInfoState_.lastDetectAt = 0;
+
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("quickinfo-open");
+  quickInfoState_.open = true;
+  setQuickInfoManualMode_(!!opts.manual);
+  clearQuickInfoResult_();
+  setQuickInfoStatus_(opts.status || (opts.manual
+    ? "Mata in lednummer manuellt."
+    : "Startar kamera…"));
+  ensureQuickInfoHistory_();
+  return true;
 }
 
 function closeQuickInfo_(fromPopstate) {
@@ -2529,6 +2571,7 @@ function closeQuickInfo_(fromPopstate) {
   quickInfoState_.open = false;
   quickInfoState_.detectBusy = false;
   quickInfoState_.lastDetectAt = 0;
+  setQuickInfoManualMode_(false);
   if (overlay) {
     overlay.classList.remove("open");
     overlay.setAttribute("aria-hidden", "true");
@@ -2626,6 +2669,17 @@ function handleQuickInfoValue_(rawValue) {
 }
 
 function manualQuickInfoInput_() {
+  if (!isQuickInfoOpen_()) {
+    if (!openQuickInfoShell_({
+      manual: true,
+      status: "Mata in lednummer manuellt."
+    })) return;
+  } else {
+    setQuickInfoManualMode_(true);
+    stopQuickInfoLoop_();
+    stopQuickInfoStream_();
+    quickInfoState_.detector = null;
+  }
   const raw = window.prompt("Ange QR-värdet (lednummer):", "");
   if (raw == null) return;
   const value = String(raw).trim();
@@ -2691,51 +2745,56 @@ function editQuickInfoRoute_() {
 
 async function openQuickInfo_() {
   if (isQuickInfoOpen_()) return;
-  if (!window.BarcodeDetector) {
-    showToast("QR-skanning stöds inte här");
-    return manualQuickInfoInput_();
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast("Kamera stöds inte i den här webbläsaren");
-    return;
-  }
   if (isQrScannerOpen_()) closeQrScanner_();
 
-  const overlay = document.getElementById("quickinfo-overlay");
-  const video = document.getElementById("quickinfo-video");
-  if (!overlay || !video) return;
+  const canDetect = !!window.BarcodeDetector;
+  const canCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!canDetect || !canCamera) {
+    openQuickInfoShell_({
+      manual: true,
+      status: canDetect
+        ? "Kamera saknas — mata in lednummer."
+        : "QR-skanning stöds inte här — mata in lednummer."
+    });
+    return manualQuickInfoInput_();
+  }
 
-  overlay.classList.add("open");
-  overlay.setAttribute("aria-hidden", "false");
-  document.body.classList.add("quickinfo-open");
-  quickInfoState_.open = true;
-  quickInfoState_.detectBusy = false;
-  quickInfoState_.lastDetectAt = 0;
-  clearQuickInfoResult_();
-  setQuickInfoStatus_("Startar kamera…");
-  ensureQuickInfoHistory_();
+  if (!openQuickInfoShell_({ manual: false, status: "Startar kamera…" })) return;
 
   try {
     quickInfoState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
   } catch (e) {
-    closeQuickInfo_();
+    setQuickInfoManualMode_(true);
+    setQuickInfoStatus_("QR-format stöds inte — mata in lednummer.");
     showToast("QR-format stöds inte");
     return manualQuickInfoInput_();
   }
 
+  const video = document.getElementById("quickinfo-video");
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
       audio: false
     });
+    if (!isQuickInfoOpen_()) {
+      stream.getTracks().forEach((track) => {
+        try { track.stop(); } catch (e) { /* ignore */ }
+      });
+      return;
+    }
     quickInfoState_.stream = stream;
-    video.srcObject = stream;
-    await video.play();
+    if (video) {
+      video.srcObject = stream;
+      await video.play();
+    }
     setQuickInfoStatus_("Skannar löpande — håll QR-koden i ramen.");
     quickInfoState_.rafId = requestAnimationFrame(quickInfoTick_);
   } catch (err) {
-    closeQuickInfo_();
+    stopQuickInfoStream_();
+    setQuickInfoManualMode_(true);
+    setQuickInfoStatus_("Kunde inte starta kameran — mata in lednummer.");
     showToast("Kunde inte starta kameran");
+    return manualQuickInfoInput_();
   }
 }
 
