@@ -189,8 +189,7 @@
       grid-area: filters;
       display: flex; flex-direction: column; gap: 6px; min-width: 0;
     }
-    .filter-row { display: flex; gap: 8px; overflow-x: auto; padding: 0; scrollbar-width: none; }
-    .filter-row::-webkit-scrollbar { display: none; }
+    .filter-row { display: flex; gap: 8px; overflow: visible; padding: 0; }
     /* Mobil: WallFlow + konto, sedan filter under rubriken, sedan sök */
     @media (max-width: 720px) {
       .topbar {
@@ -212,6 +211,56 @@
     .chip[data-key="Nej"].active { background: var(--ok); }
     .chip[data-key="EJ"].active { background: var(--unset); color: var(--accent-ink); }
     html[data-theme="light"] .chip[data-key="EJ"].active { color: #fff; }
+    .filter-dropdown {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+    }
+    .filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-toggle-caret {
+      font-size: 0.72rem;
+      opacity: 0.8;
+    }
+    .filter-menu {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 6px);
+      z-index: 45;
+      min-width: 170px;
+      padding: 6px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+      display: none;
+      gap: 4px;
+    }
+    .filter-dropdown.open .filter-menu { display: grid; }
+    .filter-menu-item {
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      font-size: 0.84rem;
+      font-weight: 600;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: background .18s ease;
+    }
+    .filter-menu-item:hover { background: var(--surface-2); }
+    .filter-menu-item.active {
+      color: var(--accent-ink);
+      background: var(--accent);
+    }
+    .filter-menu-item[data-key="Ja"].active { background: var(--rebuild); }
+    .filter-menu-item[data-key="Nej"].active { background: var(--ok); }
+    .filter-menu-item[data-key="EJ"].active { background: var(--unset); color: var(--accent-ink); }
+    html[data-theme="light"] .filter-menu-item[data-key="EJ"].active { color: #fff; }
     .scroll-area { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px calc(98px + var(--safe-bottom)); }
     .hero-line { margin: 8px 0 18px; animation: riseIn .5s ease both; }
     .hero-line h1 {
@@ -1096,6 +1145,7 @@ let db = { routes: [], grades: DEFAULT_GRADES.slice(), routeLifetimeDays: 30 };
 let currentView = "colors";
 let rebuildFilter = "ALL"; // default: visa alla leder
 let colorFilter = "ALL";
+let rebuildFilterMenuOpen_ = false;
 
 function apiCall_(action, args) {
   if (USE_DEMO) return demoApi_(action, args || []);
@@ -1786,14 +1836,39 @@ function renderFilters() {
     { key: "Nej", label: "Aktuella" },
     { key: "EJ", label: "Ej uppsatt" }
   ];
-  rebuildHost.innerHTML = rebuildItems.map((it) =>
-    `<button type="button" class="chip${rebuildFilter === it.key ? " active" : ""}" data-key="${it.key}" onclick="setRebuildFilter('${it.key}')">${escapeHtml_(it.label)}</button>`
-  ).join("");
+  const current = rebuildItems.find((it) => it.key === rebuildFilter) || rebuildItems[0];
+  rebuildHost.innerHTML = `
+    <div class="filter-dropdown${rebuildFilterMenuOpen_ ? " open" : ""}">
+      <button type="button" class="chip active filter-toggle" onclick="toggleRebuildFilterMenu_(event)" aria-haspopup="true" aria-expanded="${rebuildFilterMenuOpen_ ? "true" : "false"}" aria-label="Välj ombyggnadsfilter">
+        <span>Filter: ${escapeHtml_(current.label)}</span>
+        <span class="filter-toggle-caret" aria-hidden="true">${rebuildFilterMenuOpen_ ? "▴" : "▾"}</span>
+      </button>
+      <div class="filter-menu" role="menu" aria-label="Ombyggnadsfilter">
+        ${rebuildItems.map((it) =>
+          `<button type="button" role="menuitemradio" aria-checked="${rebuildFilter === it.key ? "true" : "false"}" class="filter-menu-item${rebuildFilter === it.key ? " active" : ""}" data-key="${it.key}" onclick="setRebuildFilter('${it.key}', true)">${escapeHtml_(it.label)}</button>`
+        ).join("")}
+      </div>
+    </div>
+  `;
   // Ej uppsatt är ingen färg — rensa om det ändå satts via äldre UI
   if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
 }
-function setRebuildFilter(key) {
+function toggleRebuildFilterMenu_(evt) {
+  if (evt) {
+    evt.preventDefault();
+    evt.stopPropagation();
+  }
+  rebuildFilterMenuOpen_ = !rebuildFilterMenuOpen_;
+  renderFilters();
+}
+function closeRebuildFilterMenu_() {
+  if (!rebuildFilterMenuOpen_) return;
+  rebuildFilterMenuOpen_ = false;
+  renderFilters();
+}
+function setRebuildFilter(key, closeMenu) {
   rebuildFilter = key;
+  if (closeMenu !== false) rebuildFilterMenuOpen_ = false;
   // Ej uppsatt är ingen färg — rensa färgfilter så listan inte blir tom
   if (key === "EJ") colorFilter = "ALL";
   renderFilters();
@@ -1802,6 +1877,7 @@ function setRebuildFilter(key) {
 function setColorFilter(key) {
   // Färgfilter via pie / färgkort / färgblock — ingen separat chip-rad
   colorFilter = key;
+  rebuildFilterMenuOpen_ = false;
   if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
   renderFilters();
   filterData();
@@ -1813,6 +1889,7 @@ function clearAllFilters_() {
   if (search) search.value = "";
   rebuildFilter = "ALL";
   colorFilter = "ALL";
+  rebuildFilterMenuOpen_ = false;
 }
 
 /** Rensa filter och visa allt under Fördelning. */
@@ -3055,8 +3132,15 @@ function closeRouteImageLightbox_(fromPopstate) {
   }
 }
 
+document.addEventListener("click", (e) => {
+  if (!rebuildFilterMenuOpen_) return;
+  const host = document.getElementById("rebuild-filters");
+  if (!host || !host.contains(e.target)) closeRebuildFilterMenu_();
+});
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    if (rebuildFilterMenuOpen_) return closeRebuildFilterMenu_();
     if (isQuickInfoOpen_()) return closeQuickInfo_();
     if (isQrScannerOpen_()) return closeQrScanner_();
     if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
