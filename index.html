@@ -2664,7 +2664,9 @@ function renderQuickInfoResult_(rawValue) {
 function handleQuickInfoValue_(rawValue) {
   const value = String(rawValue == null ? "" : rawValue).trim();
   if (!value) return;
-  setQuickInfoStatus_("Skannar… senast: " + value);
+  const overlay = document.getElementById("quickinfo-overlay");
+  const manual = !!(overlay && overlay.classList.contains("manual-mode"));
+  setQuickInfoStatus_(manual ? ("Visar led: " + value) : ("Skannar… senast: " + value));
   renderQuickInfoResult_(value);
 }
 
