@@ -1768,33 +1768,93 @@ function routeByNr_(nr) {
   return db.routes.find((r) => String(r.Nr) === String(nr));
 }
 
+const BASEURL_QR_STORAGE_KEY = "wallflow_baseurl_qr_v1";
+
+function loadCachedBaseUrlQr_() {
+  try { return String(localStorage.getItem(BASEURL_QR_STORAGE_KEY) || ""); }
+  catch (_) { return ""; }
+}
+
+function cacheBaseUrlQr_(value) {
+  try {
+    const s = String(value == null ? "" : value).trim();
+    if (s) localStorage.setItem(BASEURL_QR_STORAGE_KEY, s);
+    else localStorage.removeItem(BASEURL_QR_STORAGE_KEY);
+  } catch (_) { /* ignore */ }
+}
+
+function applyBaseUrlQrFromAppData_(data) {
+  if (data && Object.prototype.hasOwnProperty.call(data, "baseUrlQr")) {
+    db.baseUrlQr = String(data.baseUrlQr || "").trim();
+    cacheBaseUrlQr_(db.baseUrlQr);
+    return;
+  }
+  // Äldre GAS-deploy utan baseUrlQr-fält — behåll ev. cachad URL från Inställningar
+  if (!String(db.baseUrlQr || "").trim()) db.baseUrlQr = loadCachedBaseUrlQr_();
+}
+
 /**
  * Ta bort BaseUrlQr-prefix från skannad QR.
  * Om bas-URL saknas returneras hela värdet orört (rena lednummer-QR).
  */
 function stripQrBaseUrl_(rawValue) {
   let value = String(rawValue == null ? "" : rawValue).trim();
-  const base = String(db.baseUrlQr || "").trim();
+  const base = String(db.baseUrlQr || loadCachedBaseUrlQr_() || "").trim();
   if (!value || !base) return value;
 
-  const valueLow = value.toLowerCase();
-  const baseLow = base.toLowerCase();
+  let work = value;
+  let baseWork = base;
+  try { work = decodeURIComponent(value); } catch (_) { /* keep raw */ }
+  try { baseWork = decodeURIComponent(base); } catch (_) { /* keep raw */ }
+
+  const valueLow = work.toLowerCase();
+  const baseLow = baseWork.toLowerCase();
   if (valueLow.startsWith(baseLow)) {
-    value = value.slice(base.length);
+    work = work.slice(baseWork.length);
   } else {
     const idx = valueLow.indexOf(baseLow);
-    if (idx >= 0) value = value.slice(idx + base.length);
+    if (idx >= 0) work = work.slice(idx + baseWork.length);
   }
   // Vanliga rester efter HTML/query-prefix
-  return value.replace(/^[=?&#/]+/, "").trim();
+  return work.replace(/^[=?&#/]+/, "").trim();
 }
 
 /**
- * Tolka skannad QR → led-id (efter strip av BaseUrlQr om satt).
+ * Om värdet fortfarande ser ut som URL/path — ta lednr i slutet
+ * (...?nr=13, .../W1, ...=42).
+ */
+function extractTrailingRouteId_(value) {
+  const v = String(value == null ? "" : value).trim();
+  if (!v) return v;
+  if (!/https?:\/\//i.test(v) && !/[/?&=#]/.test(v)) return v;
+
+  let m = v.match(/[?&][^=#]+=([^&#]*)$/);
+  if (m && m[1] !== "") {
+    try { return decodeURIComponent(m[1]).trim(); } catch (_) { return String(m[1]).trim(); }
+  }
+  m = v.match(/=([^&=?#]+)$/);
+  if (m && m[1] !== "") {
+    try { return decodeURIComponent(m[1]).trim(); } catch (_) { return String(m[1]).trim(); }
+  }
+  m = v.match(/\/([^\/?#]+)\/?$/);
+  if (m && m[1] !== "") {
+    try { return decodeURIComponent(m[1]).trim(); } catch (_) { return String(m[1]).trim(); }
+  }
+  return v;
+}
+
+/**
+ * Tolka skannad QR → led-id.
+ * 1) Strippa BaseUrlQr om satt
+ * 2) Om resultatet fortfarande är URL-likt: ta värdet efter sista = eller /
  */
 function parseQrRouteId_(rawValue) {
   const raw = String(rawValue == null ? "" : rawValue).trim();
-  const stripped = stripQrBaseUrl_(raw);
+  let stripped = stripQrBaseUrl_(raw);
+  if (stripped && (/https?:\/\//i.test(stripped) || /[/?&=#]/.test(stripped))) {
+    const tail = extractTrailingRouteId_(stripped);
+    if (tail) stripped = tail;
+  }
   if (!stripped) return { ok: false, reason: "empty", value: "", raw: raw };
   return { ok: true, value: stripped, raw: raw };
 }
@@ -1859,7 +1919,7 @@ function bootAppData_() {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
       db.routeLifetimeDays = Math.max(1, Math.round(Number(data && data.routeLifetimeDays) || 30));
-      db.baseUrlQr = String((data && data.baseUrlQr) || "");
+      applyBaseUrlQrFromAppData_(data);
       if (colorFilter !== "ALL" && !isListableGrade_(colorFilter)) colorFilter = "ALL";
       // Uppdatera visningsnamn från Users-fliken (aldrig användarnamn som Ledbyggare-default)
       if (data && data.me && currentUser.authorized) {
@@ -1886,7 +1946,7 @@ function bootAppData_() {
       db.routes = seeded.routes.map(normalizeRoute_);
       db.grades = seeded.grades.slice();
       db.routeLifetimeDays = seeded.routeLifetimeDays || 30;
-      db.baseUrlQr = String(seeded.baseUrlQr || "");
+      applyBaseUrlQrFromAppData_(seeded);
       document.getElementById("demo-banner").style.display = "block";
       showAppShell_();
       filterData();
@@ -2722,6 +2782,7 @@ function renderQuickInfoResult_(rawValue) {
     host.innerHTML = `
       <h4>Läste: ${escapeHtml_(value)}</h4>
       <div class="small" style="color:var(--muted);">Ingen led med detta nummer hittades.</div>
+      ${parsed.raw && parsed.raw !== value ? `<div class="small mt-2" style="color:var(--muted); word-break:break-all;">Rå QR: ${escapeHtml_(parsed.raw)}</div>` : ""}
     `;
     return;
   }
@@ -3169,7 +3230,8 @@ function saveBaseUrlQr() {
     .withSuccessHandler((res) => {
       if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
-      db.baseUrlQr = String(res.baseUrlQr != null ? res.baseUrlQr : value);
+      db.baseUrlQr = String(res.baseUrlQr != null ? res.baseUrlQr : value).trim();
+      cacheBaseUrlQr_(db.baseUrlQr);
       showToast(db.baseUrlQr ? "QR-bas-URL sparad" : "QR-bas-URL rensad");
       renderSettingsHome();
     })
@@ -3203,7 +3265,7 @@ function saveLifetimeDays() {
           if (data && data.routeLifetimeDays) {
             db.routeLifetimeDays = Math.max(1, Math.round(Number(data.routeLifetimeDays) || db.routeLifetimeDays));
           }
-          if (data && data.baseUrlQr != null) db.baseUrlQr = String(data.baseUrlQr || "");
+          applyBaseUrlQrFromAppData_(data);
           filterData();
         })
         .getAppData();

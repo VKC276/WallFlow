@@ -967,10 +967,9 @@ function setRouteLifetimeDays_(days, session) {
 
 /** Skapa fliken BaseUrlQr om den saknas (header i A1, värde i A2). */
 function ensureBaseUrlQrSheet_() {
-  var ss = ss_();
-  var sh = ss.getSheetByName(WALLFLOW_SHEET_BASE_URL_QR);
+  var sh = findBaseUrlQrSheet_();
   if (!sh) {
-    sh = ss.insertSheet(WALLFLOW_SHEET_BASE_URL_QR);
+    sh = ss_().insertSheet(WALLFLOW_SHEET_BASE_URL_QR);
     sh.getRange(1, 1).setValue("BaseUrlQr");
     sh.getRange(2, 1).setValue("");
   }
@@ -983,20 +982,37 @@ function ensureBaseUrlQrSheet_() {
  */
 function readBaseUrlQr_() {
   try {
-    var sh = ss_().getSheetByName(WALLFLOW_SHEET_BASE_URL_QR);
+    var sh = findBaseUrlQrSheet_();
     if (!sh) return "";
     var values = sh.getDataRange().getDisplayValues();
     for (var r = 0; r < values.length; r++) {
       var cell = String(values[r][0] || "").trim();
       if (!cell) continue;
       var low = cell.toLowerCase().replace(/\s+/g, "");
-      if (low === "baseurlqr" || low === "url" || low === "basurl") continue;
+      if (low === "baseurlqr" || low === "url" || low === "basurl" || low === "baseurl") continue;
       return cell;
     }
     return "";
   } catch (e) {
     return "";
   }
+}
+
+/** Hitta fliken BaseUrlQr med vanliga namnvarianter. */
+function findBaseUrlQrSheet_() {
+  var ss = ss_();
+  var preferred = [WALLFLOW_SHEET_BASE_URL_QR, "BaseUrlQR", "Base URL QR", "QR BaseUrl"];
+  var i;
+  for (i = 0; i < preferred.length; i++) {
+    var direct = ss.getSheetByName(preferred[i]);
+    if (direct) return direct;
+  }
+  var sheets = ss.getSheets();
+  for (i = 0; i < sheets.length; i++) {
+    var name = String(sheets[i].getName() || "").toLowerCase().replace(/\s+/g, "");
+    if (name.indexOf("baseurl") >= 0 || name === "qrbase" || name === "qrurl") return sheets[i];
+  }
+  return null;
 }
 
 /**
