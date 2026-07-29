@@ -114,7 +114,7 @@ function dispatch_(action, token, args) {
       if (token) {
         var meSession = getSession_(token);
         if (meSession && meSession.username) {
-          var meUsers = readUsers_();
+          var meUsers = readUsers_({ skipEnsureHeaders: true });
           for (var mi = 0; mi < meUsers.length; mi++) {
             if (meUsers[mi].username.toLowerCase() === String(meSession.username).toLowerCase()) {
               appData.me = {
@@ -188,14 +188,21 @@ function dispatch_(action, token, args) {
 
 /* ---------- Spreadsheet helpers ---------- */
 
+/** Cache: openById är dyrt — återanvänd samma Spreadsheet per request. */
+var __ssCache = null;
+var __sheetCache = {};
+
 /** Fristående projekt: öppna alltid sheetet via ID (inte getActiveSpreadsheet). */
 function ss_() {
-  return SpreadsheetApp.openById(WALLFLOW_SPREADSHEET_ID);
+  if (!__ssCache) __ssCache = SpreadsheetApp.openById(WALLFLOW_SPREADSHEET_ID);
+  return __ssCache;
 }
 
 function sheet_(name) {
+  if (__sheetCache[name]) return __sheetCache[name];
   var sh = ss_().getSheetByName(name);
   if (!sh) throw new Error("Saknar flik: " + name);
+  __sheetCache[name] = sh;
   return sh;
 }
 
@@ -352,14 +359,25 @@ function readRoutes_() {
   var sh = sheet_(WALLFLOW_SHEET_ROUTES);
   var table = readTable_(WALLFLOW_SHEET_ROUTES);
   var out = [];
+  // Batch-läs kolumn I (livslängd) — undvik N× getValue per rad
+  var lifeByRow = {};
+  try {
+    var lastRow = sh.getLastRow();
+    if (lastRow >= 2) {
+      var lifeVals = sh.getRange(2, ROUTE_LIFETIME_COL, lastRow, ROUTE_LIFETIME_COL).getValues();
+      for (var li = 0; li < lifeVals.length; li++) {
+        var rawLife = lifeVals[li][0];
+        if (rawLife !== "" && rawLife != null) {
+          lifeByRow[li + 2] = normalizeRouteLifetimeDays_(rawLife);
+        }
+      }
+    }
+  } catch (eLife) { /* behåll default per led */ }
+
   for (var i = 0; i < table.rows.length; i++) {
     if (!isRouteRow_(table.rows[i])) continue;
     var route = mapRoute_(table.rows[i]);
-    // Kolumn I saknar ofta header — läs per rad
-    try {
-      var rawI = sh.getRange(route.__row, ROUTE_LIFETIME_COL).getValue();
-      if (rawI !== "" && rawI != null) route.Livslangd = normalizeRouteLifetimeDays_(rawI);
-    } catch (eI) { /* behåll default */ }
+    if (lifeByRow[route.__row] != null) route.Livslangd = lifeByRow[route.__row];
     out.push(route);
   }
   out.sort(function (a, b) {
@@ -421,8 +439,9 @@ function userDisplayName_(u) {
   return String(raw == null ? "" : raw).trim();
 }
 
-function readUsers_() {
-  ensureUserSheetHeaders_();
+function readUsers_(opts) {
+  opts = opts || {};
+  if (!opts.skipEnsureHeaders) ensureUserSheetHeaders_();
   var table = readTable_(WALLFLOW_SHEET_USERS);
   return table.rows.map(function (u) {
     return {
@@ -925,23 +944,15 @@ function normalizeRouteLifetimeDays_(n) {
   return days;
 }
 
-/** Standardlivslängd för nya leder (script property, fallback första radens I / 30). */
+/** Standardlivslängd för nya leder (script property, fallback rad 2 kolumn I / 30). */
 function readRouteLifetimeDays_() {
   try {
     var prop = PropertiesService.getScriptProperties().getProperty("routeLifetimeDaysDefault");
     if (prop !== null && prop !== "") return normalizeRouteLifetimeDays_(prop);
   } catch (eProp) { /* ignore */ }
   try {
-    var sh = sheet_(WALLFLOW_SHEET_ROUTES);
-    var table = readTable_(WALLFLOW_SHEET_ROUTES);
-    for (var i = 0; i < table.rows.length; i++) {
-      if (!isRouteRow_(table.rows[i])) continue;
-      var raw = sh.getRange(table.rows[i].__row, ROUTE_LIFETIME_COL).getValue();
-      if (raw !== "" && raw != null && isFinite(Number(raw)) && Number(raw) > 0) {
-        return normalizeRouteLifetimeDays_(raw);
-      }
-    }
-    var fallback = sh.getRange(2, ROUTE_LIFETIME_COL).getValue();
+    // Undvik att läsa hela ledfliken — en cell räcker som fallback
+    var fallback = sheet_(WALLFLOW_SHEET_ROUTES).getRange(2, ROUTE_LIFETIME_COL).getValue();
     if (fallback !== "" && fallback != null) return normalizeRouteLifetimeDays_(fallback);
     return DEFAULT_ROUTE_LIFETIME_DAYS;
   } catch (e) {
@@ -1010,21 +1021,30 @@ function cellBaseUrlText_(range) {
 
 /**
  * Läs bas-URL för QR (flik BaseUrlQr). Tom sträng = rena lednummer-QR utan prefix.
- * Hoppar över rubrikrader som "BaseUrlQr" / "URL".
- * Värdet ska vara vanlig text i sheetet (inte länkformat).
+ * Snabbväg: A2/A1 display text. Rich-text/formel bara om display är tom.
  */
 function readBaseUrlQr_() {
   try {
     var sh = findBaseUrlQrSheet_();
     if (!sh) return "";
-    var lastRow = Math.max(sh.getLastRow(), 1);
-    for (var r = 1; r <= lastRow; r++) {
-      var cell = cellBaseUrlText_(sh.getRange(r, 1));
-      if (!cell) continue;
-      var low = cell.toLowerCase().replace(/\s+/g, "");
-      if (low === "baseurlqr" || low === "url" || low === "basurl" || low === "baseurl") continue;
-      return cell;
+
+    function isHeaderLabel_(s) {
+      var low = String(s || "").toLowerCase().replace(/\s+/g, "");
+      return low === "baseurlqr" || low === "url" || low === "basurl" || low === "baseurl";
     }
+
+    // Snabbväg — vanlig layout: header i A1, värde i A2 som text
+    var a2Display = String(sh.getRange(2, 1).getDisplayValue() || "").trim();
+    if (a2Display && !isHeaderLabel_(a2Display)) return a2Display;
+
+    var a1Display = String(sh.getRange(1, 1).getDisplayValue() || "").trim();
+    if (a1Display && !isHeaderLabel_(a1Display)) return a1Display;
+
+    // Fallback för äldre länkformat / HYPERLINK
+    var a2Rich = cellBaseUrlText_(sh.getRange(2, 1));
+    if (a2Rich && !isHeaderLabel_(a2Rich)) return a2Rich;
+    var a1Rich = cellBaseUrlText_(sh.getRange(1, 1));
+    if (a1Rich && !isHeaderLabel_(a1Rich)) return a1Rich;
     return "";
   } catch (e) {
     return "";
