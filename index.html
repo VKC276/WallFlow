@@ -3212,6 +3212,7 @@ function renderBaseUrlQrSettings() {
       <p class="small mb-3" style="color:var(--muted);">
         Prefixe som strippas från skannade QR-koder (flik <strong>BaseUrlQr</strong>).
         Lämna tomt om QR-koderna bara innehåller lednummer (t.ex. <code>13</code> eller <code>W1</code>).
+        Om QR är en hel URL tas lednumret i slutet även utan exakt bas-match (efter <code>=</code> eller <code>/</code>).
       </p>
       <label class="form-label" for="baseurl-qr">Bas-URL</label>
       <input id="baseurl-qr" type="text" class="form-control mb-3" placeholder="t.ex. https://exempel.se/led?id=" value="${escapeHtml_(current)}" autocomplete="off" spellcheck="false">
