@@ -3215,6 +3215,7 @@ function saveLifetimeDays() {
           if (data && data.routeLifetimeDays) {
             db.routeLifetimeDays = Math.max(1, Math.round(Number(data.routeLifetimeDays) || db.routeLifetimeDays));
           }
+          if (data && data.baseUrlQr != null) db.baseUrlQr = String(data.baseUrlQr || "");
           filterData();
         })
         .getAppData();
