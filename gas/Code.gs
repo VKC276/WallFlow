@@ -22,6 +22,7 @@
  *   "Alla leder" — Nr | Gradering | Dags att bygga om | Ledbyggare | Byggdatum | Slutdatum | Anteckningar | Bild
  *   "Grades"     — Ordning | Färgnamn (t.ex. 1|Grön … 5|Vit) — tillåtna graderingar
  *   "Users"      — Username | passwordHash | salt | role | name | FirstLogin   (samma som Crags)
+ *   "BaseUrlQr"  — A1 header + A2 bas-URL som strippas från skannade QR-koder (lednr sist)
  *
  * API: POST text/plain JSON { action, token, args: [...] } → JSON
  */
@@ -30,6 +31,7 @@ var WALLFLOW_SPREADSHEET_ID = "1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0";
 var WALLFLOW_SHEET_ROUTES = "Alla leder";
 var WALLFLOW_SHEET_GRADES = "Grades";
 var WALLFLOW_SHEET_USERS = "Users";
+var WALLFLOW_SHEET_BASE_URL_QR = "BaseUrlQr";
 
 /**
  * Kolumn I (per led-rad): antal dagar från Byggdatum (E) till Slutdatum (F).
@@ -105,7 +107,8 @@ function dispatch_(action, token, args) {
       var appData = {
         routes: readRoutes_(),
         grades: readGrades_(),
-        routeLifetimeDays: readRouteLifetimeDays_()
+        routeLifetimeDays: readRouteLifetimeDays_(),
+        baseUrlQr: readBaseUrlQr_()
       };
       // Om token finns: bifoga inloggad användares visningsnamn (inte användarnamn)
       if (token) {
@@ -174,6 +177,9 @@ function dispatch_(action, token, args) {
 
     case "setRouteLifetimeDays":
       return setRouteLifetimeDays_(args[0], session);
+
+    case "setBaseUrlQr":
+      return setBaseUrlQr_(args[0], session);
 
     default:
       return { ok: false, error: "Okänd action: " + action };
@@ -957,6 +963,58 @@ function setRouteLifetimeDays_(days, session) {
   }
   PropertiesService.getScriptProperties().setProperty("routeLifetimeDaysDefault", String(parsed));
   return { ok: true, routeLifetimeDays: parsed };
+}
+
+/** Skapa fliken BaseUrlQr om den saknas (header i A1, värde i A2). */
+function ensureBaseUrlQrSheet_() {
+  var ss = ss_();
+  var sh = ss.getSheetByName(WALLFLOW_SHEET_BASE_URL_QR);
+  if (!sh) {
+    sh = ss.insertSheet(WALLFLOW_SHEET_BASE_URL_QR);
+    sh.getRange(1, 1).setValue("BaseUrlQr");
+    sh.getRange(2, 1).setValue("");
+  }
+  return sh;
+}
+
+/**
+ * Läs bas-URL för QR (flik BaseUrlQr). Tom sträng = rena lednummer-QR utan prefix.
+ * Hoppar över rubrikrader som "BaseUrlQr" / "URL".
+ */
+function readBaseUrlQr_() {
+  try {
+    var sh = ss_().getSheetByName(WALLFLOW_SHEET_BASE_URL_QR);
+    if (!sh) return "";
+    var values = sh.getDataRange().getDisplayValues();
+    for (var r = 0; r < values.length; r++) {
+      var cell = String(values[r][0] || "").trim();
+      if (!cell) continue;
+      var low = cell.toLowerCase().replace(/\s+/g, "");
+      if (low === "baseurlqr" || low === "url" || low === "basurl") continue;
+      return cell;
+    }
+    return "";
+  } catch (e) {
+    return "";
+  }
+}
+
+/**
+ * Superadmin: spara QR-bas-URL i fliken BaseUrlQr (A1=header, A2=värde).
+ * Tom sträng tillåten (rena siffer-/lednummer-QR).
+ */
+function setBaseUrlQr_(url, session) {
+  if (!canManageLifetime_(session)) {
+    return { ok: false, error: "Bara superadmin kan ändra QR-bas-URL" };
+  }
+  var value = String(url == null ? "" : url).trim();
+  if (value.length > 500) {
+    return { ok: false, error: "URL:en är för lång (max 500 tecken)" };
+  }
+  var sh = ensureBaseUrlQrSheet_();
+  sh.getRange(1, 1).setValue("BaseUrlQr");
+  sh.getRange(2, 1).setValue(value);
+  return { ok: true, baseUrlQr: value };
 }
 
 /**

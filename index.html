@@ -1187,7 +1187,7 @@ const EJ_UPPSATT_GRADE = "Ej uppsatt";
 
 let __sessionToken = null;
 let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
-let db = { routes: [], grades: DEFAULT_GRADES.slice(), routeLifetimeDays: 30 };
+let db = { routes: [], grades: DEFAULT_GRADES.slice(), routeLifetimeDays: 30, baseUrlQr: "" };
 let currentView = "colors";
 let rebuildFilter = "ALL"; // default: visa alla leder
 let colorFilter = "ALL";
@@ -1231,6 +1231,7 @@ window.google.script.run = createRunProxy_();
 function seedDemoDb_() {
   return {
     routeLifetimeDays: 30,
+    baseUrlQr: "",
     grades: DEFAULT_GRADES.slice(),
     routes: [
       { Nr: "1", Gradering: "Blå", DagsAttByggaOm: "Ja", Ledbyggare: "", Byggdatum: "2026-06-14", Slutdatum: "2026-07-14", Anteckningar: "Nått nytt", Bild: "" },
@@ -1273,6 +1274,7 @@ function demoApi_(action, args) {
           routes: store.routes,
           grades: store.grades || DEFAULT_GRADES.slice(),
           routeLifetimeDays: Number(store.routeLifetimeDays) || 30,
+          baseUrlQr: String(store.baseUrlQr || ""),
           me: meUser ? { username: meUser.username, name: meUser.name || "", role: meUser.role } : null
         });
       }
@@ -1443,6 +1445,16 @@ function demoApi_(action, args) {
         store.routeLifetimeDays = parsed;
         saveDemoDb_(store);
         return ok({ ok: true, routeLifetimeDays: parsed });
+      }
+      if (action === "setBaseUrlQr") {
+        if (String(currentUser.role || "").toLowerCase() !== "superadmin") {
+          return fail("Bara superadmin kan ändra QR-bas-URL");
+        }
+        const value = String(args[0] == null ? "" : args[0]).trim();
+        if (value.length > 500) return fail("URL:en är för lång (max 500 tecken)");
+        store.baseUrlQr = value;
+        saveDemoDb_(store);
+        return ok({ ok: true, baseUrlQr: value });
       }
       if (action === "changeOwnPassword" || action === "finalizeUserPassword") {
         const u = (store.users || []).find((x) => x.username === currentUser.username);
@@ -1755,14 +1767,46 @@ function routeKey_(r) {
 function routeByNr_(nr) {
   return db.routes.find((r) => String(r.Nr) === String(nr));
 }
-function routeByNumericValue_(value) {
+
+/** Max längd på lednummer från QR efter strip av BaseUrlQr (längre = ignorera). */
+const QR_ROUTE_ID_MAX_LEN = 4;
+
+function stripQrBaseUrl_(rawValue) {
+  let value = String(rawValue == null ? "" : rawValue).trim();
+  const base = String(db.baseUrlQr || "").trim();
+  if (!value || !base) return value;
+  if (value.length >= base.length && value.slice(0, base.length).toLowerCase() === base.toLowerCase()) {
+    value = value.slice(base.length);
+  }
+  return value.trim();
+}
+
+/**
+ * Tolka skannad QR → led-id.
+ * Strippar BaseUrlQr om satt. Tom BaseUrlQr = hela värdet är lednr.
+ * Ignorerar värden längre än 4 tecken (troligen fel QR).
+ */
+function parseQrRouteId_(rawValue) {
+  const value = stripQrBaseUrl_(rawValue);
+  if (!value) return { ok: false, reason: "empty", value: "" };
+  if (value.length > QR_ROUTE_ID_MAX_LEN) return { ok: false, reason: "too_long", value: value };
+  return { ok: true, value: value };
+}
+
+/** Hitta led via QR-id (siffror eller t.ex. W1) — ej enbart numeriskt. */
+function routeByQrValue_(value) {
   const raw = String(value == null ? "" : value).trim();
-  if (!/^\d+$/.test(raw)) return null;
+  if (!raw || raw.length > QR_ROUTE_ID_MAX_LEN) return null;
   const direct = routeByNr_(raw);
   if (direct) return direct;
-  const normalized = String(Number(raw));
-  if (!/^\d+$/.test(normalized)) return null;
-  return routeByNr_(normalized);
+  const low = raw.toLowerCase();
+  const ci = db.routes.find((r) => String(r.Nr || "").trim().toLowerCase() === low);
+  if (ci) return ci;
+  if (/^\d+$/.test(raw)) {
+    const normalized = String(Number(raw));
+    if (normalized !== raw) return routeByNr_(normalized);
+  }
+  return null;
 }
 function normalizeRoute_(r) {
   const lifeRaw = r.Livslangd != null ? r.Livslangd : r.Livslängd;
@@ -1809,6 +1853,7 @@ function bootAppData_() {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
       db.routeLifetimeDays = Math.max(1, Math.round(Number(data && data.routeLifetimeDays) || 30));
+      db.baseUrlQr = String((data && data.baseUrlQr) || "");
       if (colorFilter !== "ALL" && !isListableGrade_(colorFilter)) colorFilter = "ALL";
       // Uppdatera visningsnamn från Users-fliken (aldrig användarnamn som Ledbyggare-default)
       if (data && data.me && currentUser.authorized) {
@@ -1835,6 +1880,7 @@ function bootAppData_() {
       db.routes = seeded.routes.map(normalizeRoute_);
       db.grades = seeded.grades.slice();
       db.routeLifetimeDays = seeded.routeLifetimeDays || 30;
+      db.baseUrlQr = String(seeded.baseUrlQr || "");
       document.getElementById("demo-banner").style.display = "block";
       showAppShell_();
       filterData();
@@ -2403,21 +2449,19 @@ function closeQrScanner_(fromPopstate) {
 }
 
 function handleScannedRouteValue_(rawValue) {
-  const value = String(rawValue == null ? "" : rawValue).trim();
-  if (!value) {
-    showToast("QR-koden var tom");
-    return;
+  const parsed = parseQrRouteId_(rawValue);
+  if (!parsed.ok) {
+    if (parsed.reason === "too_long") showToast("QR-värdet är för långt (max 4 tecken efter bas-URL)");
+    else showToast("QR-koden var tom");
+    return false;
   }
-  if (!/^\d+$/.test(value)) {
-    showToast("QR-värdet är inte numeriskt");
-    return;
-  }
-  const route = routeByNumericValue_(value);
+  const route = routeByQrValue_(parsed.value);
   if (!route) {
-    showToast("Hittade ingen led " + value);
-    return;
+    showToast("Hittade ingen led " + parsed.value);
+    return false;
   }
   openRoute(routeKey_(route));
+  return true;
 }
 
 function manualQrInput_() {
@@ -2446,10 +2490,12 @@ function qrScanTick_(timestamp) {
     .then((codes) => {
       const first = Array.isArray(codes) && codes.length ? codes[0] : null;
       const value = first && first.rawValue ? String(first.rawValue).trim() : "";
-      if (value) {
-        closeQrScanner_();
-        handleScannedRouteValue_(value);
-      }
+      if (!value) return;
+      const parsed = parseQrRouteId_(value);
+      // För långa koder (utan giltigt strip) — fortsätt skanna
+      if (!parsed.ok && parsed.reason === "too_long") return;
+      closeQrScanner_();
+      handleScannedRouteValue_(value);
     })
     .catch(() => {
       // Ignore detect errors from noisy frames.
@@ -2659,23 +2705,22 @@ function routeDetailHtml_(r, opts) {
 function renderQuickInfoResult_(rawValue) {
   const host = document.getElementById("quickinfo-result");
   if (!host) return;
-  const value = String(rawValue == null ? "" : rawValue).trim();
-  if (!value) {
+  const parsed = parseQrRouteId_(rawValue);
+  if (!parsed.ok) {
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
+    if (parsed.reason === "too_long") {
+      host.innerHTML = `
+        <h4>Ignorerad kod</h4>
+        <div class="small" style="color:var(--muted);">Lednummer längre än ${QR_ROUTE_ID_MAX_LEN} tecken efter bas-URL — troligen fel QR.</div>
+      `;
+      return;
+    }
     host.innerHTML = `<div class="empty">QR-koden var tom.</div>`;
     return;
   }
-  if (!/^\d+$/.test(value)) {
-    quickInfoState_.currentRouteNr = "";
-    setQuickInfoEditEnabled_(false);
-    host.innerHTML = `
-      <h4>Senaste kod: ${escapeHtml_(value)}</h4>
-      <div class="small" style="color:var(--muted);">QR-värdet är inte numeriskt och kunde inte kopplas till en led.</div>
-    `;
-    return;
-  }
-  const route = routeByNumericValue_(value);
+  const value = parsed.value;
+  const route = routeByQrValue_(value);
   if (!route) {
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
@@ -2696,12 +2741,18 @@ function renderQuickInfoResult_(rawValue) {
 }
 
 function handleQuickInfoValue_(rawValue) {
-  const value = String(rawValue == null ? "" : rawValue).trim();
-  if (!value) return;
+  const parsed = parseQrRouteId_(rawValue);
+  if (!parsed.ok) {
+    if (parsed.reason === "too_long") {
+      setQuickInfoStatus_("Ignorerar lång QR-kod (>" + QR_ROUTE_ID_MAX_LEN + " tecken)");
+      return;
+    }
+    return;
+  }
   const overlay = document.getElementById("quickinfo-overlay");
   const manual = !!(overlay && overlay.classList.contains("manual-mode"));
-  setQuickInfoStatus_(manual ? ("Visar led: " + value) : ("Skannar… senast: " + value));
-  renderQuickInfoResult_(value);
+  setQuickInfoStatus_(manual ? ("Visar led: " + parsed.value) : ("Skannar… senast: " + parsed.value));
+  renderQuickInfoResult_(rawValue);
 }
 
 function manualQuickInfoInput_() {
@@ -3069,6 +3120,7 @@ function renderSettingsHome() {
         <button class="btn btn-ghost btn-sm" type="button" onclick="renderPasswordForm()">Byt lösenord</button>
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</button>` : ""}
         ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
+        ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderBaseUrlQrSettings()">QR-bas-URL</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
     </div>
@@ -3097,6 +3149,47 @@ function renderLifetimeSettings() {
       <input id="lifetime-days" type="number" min="1" max="3650" step="1" class="form-control mb-3" value="${days}">
       <button class="btn btn-accent w-100" type="button" id="lifetime-save-btn" onclick="saveLifetimeDays()">Spara</button>
     </div>`;
+}
+
+function renderBaseUrlQrSettings() {
+  if (!canManageLifetimeRole()) return showToast("Bara superadmin");
+  const current = String(db.baseUrlQr || "");
+  document.getElementById("app-admin").classList.add("show");
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
+      <h3>QR-bas-URL</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Prefixe som strippas från skannade QR-koder (flik <strong>BaseUrlQr</strong>).
+        Lämna tomt om QR-koderna bara innehåller lednummer (t.ex. <code>13</code> eller <code>W1</code>).
+        Lednummer längre än ${QR_ROUTE_ID_MAX_LEN} tecken efter strip ignoreras.
+      </p>
+      <label class="form-label" for="baseurl-qr">Bas-URL</label>
+      <input id="baseurl-qr" type="text" class="form-control mb-3" placeholder="t.ex. https://exempel.se/led?id=" value="${escapeHtml_(current)}" autocomplete="off" spellcheck="false">
+      <button class="btn btn-accent w-100" type="button" id="baseurl-qr-save-btn" onclick="saveBaseUrlQr()">Spara</button>
+    </div>`;
+}
+
+function saveBaseUrlQr() {
+  if (!canManageLifetimeRole()) return showToast("Bara superadmin");
+  const el = document.getElementById("baseurl-qr");
+  const value = String(el && el.value != null ? el.value : "").trim();
+  if (value.length > 500) return showToast("URL:en är för lång (max 500 tecken)");
+  const btn = document.getElementById("baseurl-qr-save-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+      db.baseUrlQr = String(res.baseUrlQr != null ? res.baseUrlQr : value);
+      showToast(db.baseUrlQr ? "QR-bas-URL sparad" : "QR-bas-URL rensad");
+      renderSettingsHome();
+    })
+    .withFailureHandler(() => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      showToast("Kunde inte spara");
+    })
+    .setBaseUrlQr(value);
 }
 
 function saveLifetimeDays() {
