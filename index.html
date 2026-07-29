@@ -1768,9 +1768,6 @@ function routeByNr_(nr) {
   return db.routes.find((r) => String(r.Nr) === String(nr));
 }
 
-/** Max längd på lednummer från QR — mäts endast EFTER strip av BaseUrlQr. */
-const QR_ROUTE_ID_MAX_LEN = 4;
-
 /**
  * Ta bort BaseUrlQr-prefix från skannad QR.
  * Om bas-URL saknas returneras hela värdet orört (rena lednummer-QR).
@@ -1793,18 +1790,12 @@ function stripQrBaseUrl_(rawValue) {
 }
 
 /**
- * Tolka skannad QR → led-id.
- * 1) Strippa BaseUrlQr (om satt)
- * 2) Ignorera bara om resultatet EFTER strip är längre än 4 tecken
+ * Tolka skannad QR → led-id (efter strip av BaseUrlQr om satt).
  */
 function parseQrRouteId_(rawValue) {
   const raw = String(rawValue == null ? "" : rawValue).trim();
   const stripped = stripQrBaseUrl_(raw);
   if (!stripped) return { ok: false, reason: "empty", value: "", raw: raw };
-  // Längdkontroll gäller enbart stripped led-id — aldrig hela HTML/URL-strängen
-  if (stripped.length > QR_ROUTE_ID_MAX_LEN) {
-    return { ok: false, reason: "too_long", value: stripped, raw: raw };
-  }
   return { ok: true, value: stripped, raw: raw };
 }
 
@@ -1812,8 +1803,6 @@ function parseQrRouteId_(rawValue) {
 function routeByQrValue_(value) {
   const raw = String(value == null ? "" : value).trim();
   if (!raw) return null;
-  // value ska redan vara parseat (≤4); säkerhetskontroll
-  if (raw.length > QR_ROUTE_ID_MAX_LEN) return null;
   const direct = routeByNr_(raw);
   if (direct) return direct;
   const low = raw.toLowerCase();
@@ -2468,13 +2457,12 @@ function closeQrScanner_(fromPopstate) {
 function handleScannedRouteValue_(rawValue) {
   const parsed = parseQrRouteId_(rawValue);
   if (!parsed.ok) {
-    if (parsed.reason === "too_long") showToast("Lednummer efter bas-URL är för långt (max 4 tecken)");
-    else showToast("QR-koden var tom");
+    showToast("QR-koden var tom");
     return false;
   }
   const route = routeByQrValue_(parsed.value);
   if (!route) {
-    showToast("Hittade ingen led " + parsed.value);
+    showToast("Läste \"" + parsed.value + "\" — ingen matchande led");
     return false;
   }
   openRoute(routeKey_(route));
@@ -2508,9 +2496,6 @@ function qrScanTick_(timestamp) {
       const first = Array.isArray(codes) && codes.length ? codes[0] : null;
       const value = first && first.rawValue ? String(first.rawValue).trim() : "";
       if (!value) return;
-      const parsed = parseQrRouteId_(value);
-      // Ignorera bara om led-id EFTER strip är >4 tecken — fortsätt skanna
-      if (!parsed.ok && parsed.reason === "too_long") return;
       closeQrScanner_();
       handleScannedRouteValue_(value);
     })
@@ -2726,13 +2711,6 @@ function renderQuickInfoResult_(rawValue) {
   if (!parsed.ok) {
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
-    if (parsed.reason === "too_long") {
-      host.innerHTML = `
-        <h4>Ignorerad kod</h4>
-        <div class="small" style="color:var(--muted);">Efter borttagen bas-URL blev lednumret längre än ${QR_ROUTE_ID_MAX_LEN} tecken — ignoreras.</div>
-      `;
-      return;
-    }
     host.innerHTML = `<div class="empty">QR-koden var tom.</div>`;
     return;
   }
@@ -2742,7 +2720,7 @@ function renderQuickInfoResult_(rawValue) {
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
     host.innerHTML = `
-      <h4>Led ${escapeHtml_(value)}</h4>
+      <h4>Läste: ${escapeHtml_(value)}</h4>
       <div class="small" style="color:var(--muted);">Ingen led med detta nummer hittades.</div>
     `;
     return;
@@ -2759,13 +2737,7 @@ function renderQuickInfoResult_(rawValue) {
 
 function handleQuickInfoValue_(rawValue) {
   const parsed = parseQrRouteId_(rawValue);
-  if (!parsed.ok) {
-    if (parsed.reason === "too_long") {
-      setQuickInfoStatus_("Ignorerar: lednr efter strip >" + QR_ROUTE_ID_MAX_LEN + " tecken");
-      return;
-    }
-    return;
-  }
+  if (!parsed.ok) return;
   const overlay = document.getElementById("quickinfo-overlay");
   const manual = !!(overlay && overlay.classList.contains("manual-mode"));
   setQuickInfoStatus_(manual ? ("Visar led: " + parsed.value) : ("Skannar… senast: " + parsed.value));
@@ -3179,7 +3151,6 @@ function renderBaseUrlQrSettings() {
       <p class="small mb-3" style="color:var(--muted);">
         Prefixe som strippas från skannade QR-koder (flik <strong>BaseUrlQr</strong>).
         Lämna tomt om QR-koderna bara innehåller lednummer (t.ex. <code>13</code> eller <code>W1</code>).
-        Bara om lednumret <em>efter</em> strip är längre än ${QR_ROUTE_ID_MAX_LEN} tecken ignoreras koden.
       </p>
       <label class="form-label" for="baseurl-qr">Bas-URL</label>
       <input id="baseurl-qr" type="text" class="form-control mb-3" placeholder="t.ex. https://exempel.se/led?id=" value="${escapeHtml_(current)}" autocomplete="off" spellcheck="false">

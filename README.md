@@ -60,7 +60,7 @@ Bas-URL som strippas från skannade QR-koder innan lednummer läses.
 | A1 | Rubrik `BaseUrlQr` (valfritt) |
 | A2 | Prefixe, t.ex. `https://exempel.se/routecard?nr=` — eller tomt för rena lednummer-QR |
 
-Superadmin kan ändra värdet under **Inställningar → QR-bas-URL**. Efter strip får bara led-id kvar (t.ex. `13` eller `W1`). Värden ignoreras **bara** om de *efter* strip är längre än **4 tecken**.
+Superadmin kan ändra värdet under **Inställningar → QR-bas-URL**. Efter strip får bara led-id kvar (t.ex. `13` eller `W1`).
 
 ### Flik `Users` (samma som Crags)
 
