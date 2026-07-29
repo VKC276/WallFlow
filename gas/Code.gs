@@ -977,16 +977,49 @@ function ensureBaseUrlQrSheet_() {
 }
 
 /**
+ * Läs textvärde från cell — fungerar för vanlig text, tidigare länkformat och HYPERLINK-formler.
+ */
+function cellBaseUrlText_(range) {
+  try {
+    var rich = range.getRichTextValue();
+    if (rich) {
+      var linkUrl = rich.getLinkUrl();
+      if (linkUrl) return String(linkUrl).trim();
+      var richText = String(rich.getText() || "").trim();
+      if (richText) return richText;
+    }
+  } catch (eRich) { /* ignore */ }
+
+  try {
+    var formula = String(range.getFormula() || "");
+    if (formula) {
+      var m = formula.match(/HYPERLINK\s*\(\s*"([^"]+)"/i);
+      if (!m) m = formula.match(/HYPERLINK\s*\(\s*'([^']+)'/i);
+      if (m && m[1]) return String(m[1]).trim();
+    }
+  } catch (eFormula) { /* ignore */ }
+
+  var display = String(range.getDisplayValue() || "").trim();
+  var raw = range.getValue();
+  var value = raw == null ? "" : String(raw).trim();
+  // Föredra det värde som ser mest ut som en URL/prefix
+  if (value && /^https?:\/\//i.test(value)) return value;
+  if (display && /^https?:\/\//i.test(display)) return display;
+  return display || value;
+}
+
+/**
  * Läs bas-URL för QR (flik BaseUrlQr). Tom sträng = rena lednummer-QR utan prefix.
  * Hoppar över rubrikrader som "BaseUrlQr" / "URL".
+ * Värdet ska vara vanlig text i sheetet (inte länkformat).
  */
 function readBaseUrlQr_() {
   try {
     var sh = findBaseUrlQrSheet_();
     if (!sh) return "";
-    var values = sh.getDataRange().getDisplayValues();
-    for (var r = 0; r < values.length; r++) {
-      var cell = String(values[r][0] || "").trim();
+    var lastRow = Math.max(sh.getLastRow(), 1);
+    for (var r = 1; r <= lastRow; r++) {
+      var cell = cellBaseUrlText_(sh.getRange(r, 1));
       if (!cell) continue;
       var low = cell.toLowerCase().replace(/\s+/g, "");
       if (low === "baseurlqr" || low === "url" || low === "basurl" || low === "baseurl") continue;
@@ -1016,7 +1049,7 @@ function findBaseUrlQrSheet_() {
 }
 
 /**
- * Superadmin: spara QR-bas-URL i fliken BaseUrlQr (A1=header, A2=värde).
+ * Superadmin: spara QR-bas-URL i fliken BaseUrlQr (A1=header, A2=värde som ren text).
  * Tom sträng tillåten (rena siffer-/lednummer-QR).
  */
 function setBaseUrlQr_(url, session) {
@@ -1029,7 +1062,10 @@ function setBaseUrlQr_(url, session) {
   }
   var sh = ensureBaseUrlQrSheet_();
   sh.getRange(1, 1).setValue("BaseUrlQr");
-  sh.getRange(2, 1).setValue(value);
+  var valueCell = sh.getRange(2, 1);
+  // Spara alltid som ren text (inte automatisk länk)
+  valueCell.setNumberFormat("@");
+  valueCell.setValue(value);
   return { ok: true, baseUrlQr: value };
 }
 

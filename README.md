@@ -53,12 +53,12 @@ Appen använder **bara** dessa i filter och admin-val.
 
 ### Flik `BaseUrlQr`
 
-Bas-URL som strippas från skannade QR-koder innan lednummer läses.
+Bas-URL som strippas från skannade QR-koder innan lednummer läses. Värdet ska vara **ren text** (inte länkformat) — appen strippar exakt den strängen, och den kan ändras över tid.
 
 | Cell | Innehåll |
 |------|----------|
 | A1 | Rubrik `BaseUrlQr` (valfritt) |
-| A2 | Prefixe, t.ex. `https://exempel.se/routecard?nr=` — eller tomt för rena lednummer-QR |
+| A2 | Prefixe som text, t.ex. `https://exempel.se/routecard?nr=` — eller tomt för rena lednummer-QR |
 
 Superadmin kan ändra värdet under **Inställningar → QR-bas-URL**. Efter strip får bara led-id kvar (t.ex. `13` eller `W1`).
 

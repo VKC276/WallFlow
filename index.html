@@ -1794,34 +1794,52 @@ function applyBaseUrlQrFromAppData_(data) {
 }
 
 /**
- * Ta bort BaseUrlQr-prefix från skannad QR.
- * Om bas-URL saknas returneras hela värdet orört (rena lednummer-QR).
+ * Aktuell BaseUrlQr som ska strippas (sheet → app, kan ändras över tid).
+ */
+function currentBaseUrlQr_() {
+  return String(db.baseUrlQr || loadCachedBaseUrlQr_() || "").trim();
+}
+
+/**
+ * Ta bort hela BaseUrlQr-strängen från skannad QR (case-insensitive).
+ * BaseUrlQr är sanningen och kan ändras över tid — allt i den måste bort.
  */
 function stripQrBaseUrl_(rawValue) {
   let value = String(rawValue == null ? "" : rawValue).trim();
-  const base = String(db.baseUrlQr || loadCachedBaseUrlQr_() || "").trim();
+  const base = currentBaseUrlQr_();
   if (!value || !base) return value;
 
-  let work = value;
-  let baseWork = base;
-  try { work = decodeURIComponent(value); } catch (_) { /* keep raw */ }
-  try { baseWork = decodeURIComponent(base); } catch (_) { /* keep raw */ }
+  const candidates = [value];
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded && decoded !== value) candidates.push(decoded);
+  } catch (_) { /* ignore */ }
 
-  const valueLow = work.toLowerCase();
-  const baseLow = baseWork.toLowerCase();
-  if (valueLow.startsWith(baseLow)) {
-    work = work.slice(baseWork.length);
-  } else {
-    const idx = valueLow.indexOf(baseLow);
-    if (idx >= 0) work = work.slice(idx + baseWork.length);
+  const baseVariants = [base];
+  try {
+    const decodedBase = decodeURIComponent(base);
+    if (decodedBase && decodedBase !== base) baseVariants.push(decodedBase);
+  } catch (_) { /* ignore */ }
+
+  for (let c = 0; c < candidates.length; c++) {
+    for (let b = 0; b < baseVariants.length; b++) {
+      const src = candidates[c];
+      const prefix = baseVariants[b];
+      const srcLow = src.toLowerCase();
+      const prefixLow = prefix.toLowerCase();
+      const idx = srcLow.indexOf(prefixLow);
+      if (idx < 0) continue;
+      // Ta bort exakt den matchande BaseUrlQr-texten (hela innehållet)
+      value = (src.slice(0, idx) + src.slice(idx + prefix.length)).trim();
+      return value.replace(/^[=?&#/]+/, "").trim();
+    }
   }
-  // Vanliga rester efter HTML/query-prefix
-  return work.replace(/^[=?&#/]+/, "").trim();
+  return value;
 }
 
 /**
  * Om värdet fortfarande ser ut som URL/path — ta lednr i slutet
- * (...?nr=13, .../W1, ...=42).
+ * (...?nr=13, .../W1, ...=42). Används bara om BaseUrlQr saknas eller inte matchade.
  */
 function extractTrailingRouteId_(value) {
   const v = String(value == null ? "" : value).trim();
@@ -1845,8 +1863,8 @@ function extractTrailingRouteId_(value) {
 
 /**
  * Tolka skannad QR → led-id.
- * 1) Strippa BaseUrlQr om satt
- * 2) Om resultatet fortfarande är URL-likt: ta värdet efter sista = eller /
+ * 1) Strippa allt som står i BaseUrlQr (aktuellt värde från sheet — kan ändras över tid)
+ * 2) Fallback om resultatet fortfarande är URL-likt: ta värdet efter sista = eller /
  */
 function parseQrRouteId_(rawValue) {
   const raw = String(rawValue == null ? "" : rawValue).trim();
@@ -3210,9 +3228,9 @@ function renderBaseUrlQrSettings() {
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderSettingsHome()">← Tillbaka</button>
       <h3>QR-bas-URL</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Prefixe som strippas från skannade QR-koder (flik <strong>BaseUrlQr</strong>).
+        All text i <strong>BaseUrlQr</strong> strippas från skannade QR-koder (kan ändras över tid).
+        Spara som <strong>ren text</strong> i sheetet (inte länkformat).
         Lämna tomt om QR-koderna bara innehåller lednummer (t.ex. <code>13</code> eller <code>W1</code>).
-        Om QR är en hel URL tas lednumret i slutet även utan exakt bas-match (efter <code>=</code> eller <code>/</code>).
       </p>
       <label class="form-label" for="baseurl-qr">Bas-URL</label>
       <input id="baseurl-qr" type="text" class="form-control mb-3" placeholder="t.ex. https://exempel.se/led?id=" value="${escapeHtml_(current)}" autocomplete="off" spellcheck="false">
