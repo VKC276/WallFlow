@@ -860,13 +860,14 @@
       min-height: 0;
       overflow: hidden;
       padding: 14px;
-      display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      display: flex;
+      flex-direction: column;
       gap: 10px;
     }
     .quickinfo-overlay.manual-mode .quickinfo-stage { display: none; }
     .quickinfo-stage {
       position: relative;
+      flex: 0 0 auto;
       border-radius: 16px;
       border: 1px solid var(--line);
       background: #050608;
@@ -891,12 +892,14 @@
       background: #050608;
     }
     .quickinfo-status {
+      flex: 0 0 auto;
       color: var(--muted);
       font-size: 0.9rem;
       min-height: 1.4em;
       padding: 0 2px;
     }
     .quickinfo-result {
+      flex: 1 1 auto;
       border: 1px solid var(--line);
       border-radius: 14px;
       background: var(--surface);
@@ -950,10 +953,30 @@
       margin-top: 8px;
     }
     .quickinfo-actions {
+      flex: 0 0 auto;
       display: flex;
       gap: 8px;
+      align-items: stretch;
     }
-    .quickinfo-actions .btn { flex: 1 1 auto; }
+    .quickinfo-actions .btn {
+      flex: 1 1 0;
+      min-height: 44px;
+      height: 44px;
+      padding-top: 0;
+      padding-bottom: 0;
+      font-weight: 600;
+    }
+    .quickinfo-actions .btn-ghost {
+      background: var(--surface-2);
+      border: 1px solid color-mix(in srgb, var(--text) 28%, transparent);
+      color: var(--text);
+    }
+    .quickinfo-actions .btn-ghost:hover,
+    .quickinfo-actions .btn-ghost:focus {
+      background: var(--surface-3);
+      border-color: color-mix(in srgb, var(--text) 40%, transparent);
+      color: var(--text);
+    }
     body.quickinfo-open { overflow: hidden; }
   </style>
 </head>
