@@ -1937,11 +1937,6 @@ function startAppBoot_() {
   }
   bootAppData_();
 }
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", startAppBoot_);
-} else {
-  startAppBoot_();
-}
 function hideLoadingScreen() { document.getElementById("loading-screen").classList.add("hide"); }
 
 function bootAppData_() {
@@ -4242,6 +4237,12 @@ function deleteUser(username) {
       renderUserManagement();
     })
     .deleteUserAction(username);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startAppBoot_);
+} else {
+  startAppBoot_();
 }
   </script>
 </body>
