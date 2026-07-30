@@ -4,9 +4,9 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Live:** [https://wallflow.vastervikclimbing.se](https://wallflow.vastervikclimbing.se)
 
-**Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. **Space** (eller GPIO-knapp på Pi) bläddrar en ledlista per färg, nyaste längst upp.
+**Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. **Space** (eller GPIO-knapp på Pi / kiosk-skal) bläddrar en ledlista per färg, nyaste längst upp. Lyssnar även på `postMessage` `{ type: "wallflow-cycle-view" }` så den kan köras i iframe.
 
-**Hallkiosk (RFID + statistik samtidigt):** [https://wallflow.vastervikclimbing.se/kiosk.html](https://wallflow.vastervikclimbing.se/kiosk.html) — övre del RFID-markering (10 kort), nedre del statistik. Parent-sidan äger tangentbordet så RFID-läsare och Space fungerar tillsammans. Egen RFID-URL: `kiosk.html?rfid=https://…`. Mer i [`pi/README.md`](pi/README.md).
+**Hallkiosk (RFID + statistik):** nya kiosksidor ligger i [VKC276/Kiosk](https://github.com/VKC276/Kiosk) — inte i det här repot. Kiosken bäddar in `display.html` och skickar Space/RFID via `postMessage`.
 
 ## Google Sheet
 
