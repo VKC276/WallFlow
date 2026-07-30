@@ -1,0 +1,15 @@
+[Unit]
+Description=WallFlow display GPIO view toggle
+After=multi-user.target
+
+[Service]
+Type=simple
+# Byt User till den som kör kiosk/Chromium (ofta pi)
+User=pi
+Environment=WALLFLOW_GPIO_PIN=17
+ExecStart=/usr/bin/python3 /home/pi/wallflow-pi/gpio-view-toggle.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

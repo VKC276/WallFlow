@@ -190,25 +190,54 @@
       font-weight: 600;
     }
     .board-foot .status.is-error { color: #e08a8a; }
+    .board-foot .view-hint {
+      cursor: pointer;
+      color: var(--accent-2);
+      user-select: none;
+    }
     .loading-msg {
       margin: auto;
       color: var(--muted);
       font-size: 1rem;
       font-weight: 600;
     }
+    /* Status-vy: stora siffror för hallskärm */
+    .board[data-view="status"] .board-main {
+      justify-content: center;
+      gap: 16px;
+    }
+    .board[data-view="status"] .stats {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .board[data-view="status"] .stat {
+      padding: 22px 16px;
+      border-radius: 22px;
+    }
+    .board[data-view="status"] .stat strong {
+      font-size: clamp(2.6rem, 14vw, 4.2rem);
+      margin-bottom: 10px;
+    }
+    .board[data-view="status"] .stat span {
+      font-size: 0.9rem;
+      max-width: none;
+      letter-spacing: 0.08em;
+    }
     /* Portrait / högkant (hallskärm): stora siffror, 2×2-status, 2-kolumn färger */
     @media (orientation: portrait) {
-      .stats { grid-template-columns: repeat(2, 1fr); }
+      .board[data-view="fordelning"] .stats { grid-template-columns: repeat(2, 1fr); }
       .cards { grid-template-columns: repeat(2, 1fr); }
-      .stat strong { font-size: clamp(1.85rem, 8vw, 2.6rem); }
+      .board[data-view="fordelning"] .stat strong { font-size: clamp(1.85rem, 8vw, 2.6rem); }
       .card .count { font-size: clamp(1.5rem, 6vw, 2rem); }
       .color-dist-center-label { font-size: 32px; }
       .color-dist-pie { width: min(86vw, 44vh, 520px); }
+      .board[data-view="status"] .stats { grid-template-columns: 1fr; }
     }
     @media (orientation: landscape) {
-      .stats { grid-template-columns: repeat(4, 1fr); }
+      .board[data-view="fordelning"] .stats { grid-template-columns: repeat(4, 1fr); }
       .cards { grid-template-columns: repeat(4, 1fr); }
       .color-dist-pie { width: min(36vw, 58vh, 360px); }
+      .board[data-view="status"] .stats { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -220,6 +249,8 @@
   <script>
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
 const REFRESH_MS = 120000;
+const VIEWS = ["fordelning", "status"];
+const VIEW_LABELS = { fordelning: "Fördelning", status: "Status" };
 const COLOR_HEX = {
   "Grön": "#2ecc71",
   "Blå": "#3498db",
@@ -237,6 +268,34 @@ const EJ_UPPSATT_GRADE = "Ej uppsatt";
 let db = { routes: [], grades: DEFAULT_GRADES.slice() };
 let refreshTimer = null;
 let lastUpdatedAt = null;
+let currentView = "fordelning";
+let lastRenderOpts = {};
+
+function readViewFromUrl_() {
+  const hash = String(location.hash || "").replace(/^#/, "").toLowerCase();
+  if (VIEWS.includes(hash)) return hash;
+  try {
+    const q = new URLSearchParams(location.search).get("view");
+    if (q && VIEWS.includes(String(q).toLowerCase())) return String(q).toLowerCase();
+  } catch (_) {}
+  return "fordelning";
+}
+function setView_(view, opts) {
+  opts = opts || {};
+  const next = VIEWS.includes(view) ? view : "fordelning";
+  if (next === currentView && !opts.force) return;
+  currentView = next;
+  if (opts.syncUrl !== false) {
+    try {
+      history.replaceState(null, "", "#" + currentView);
+    } catch (_) {}
+  }
+  if (db.routes.length || lastUpdatedAt) renderBoard_(lastRenderOpts);
+}
+function cycleView_() {
+  const i = VIEWS.indexOf(currentView);
+  setView_(VIEWS[(i + 1) % VIEWS.length]);
+}
 
 function escapeHtml_(str) {
   return String(str == null ? "" : str)
@@ -371,6 +430,7 @@ function formatClock_(d) {
 
 function renderBoard_(opts) {
   opts = opts || {};
+  lastRenderOpts = opts;
   const routes = listableRoutes_();
   const c = counts_(routes);
   const byColor = {};
@@ -398,29 +458,39 @@ function renderBoard_(opts) {
   const status = opts.error
     ? `<span class="status is-error">${escapeHtml_(opts.error)}</span>`
     : `<span class="status">Auto-uppdateras</span>`;
-
-  document.getElementById("board").innerHTML = `
-    <header class="board-head">
-      <h1 class="brand">WallFlow</h1>
-      <p class="board-sub">Ledbyggnation</p>
-    </header>
-    <main class="board-main">
-      <section class="pie-panel" aria-label="Färgfördelning">
-        ${buildColorPieSvg_(slices, routes.length)}
-      </section>
+  const viewTitle = VIEW_LABELS[currentView] || currentView;
+  const statsHtml = `
       <section class="stats" aria-label="Status">
         <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Markerade för ombyggnation</span></div>
         <div class="stat"><strong style="color:var(--ok)">${c.nej}</strong><span>Aktuella</span></div>
         <div class="stat"><strong style="color:var(--unset)">${c.ej}</strong><span>Ej uppsatt</span></div>
         <div class="stat"><strong>${c.total}</strong><span>Totalt</span></div>
+      </section>`;
+  const mainHtml = currentView === "status"
+    ? statsHtml
+    : `
+      <section class="pie-panel" aria-label="Färgfördelning">
+        ${buildColorPieSvg_(slices, routes.length)}
       </section>
-      <section class="cards" aria-label="Per färg">${cards || `<div class="card"><span class="name">Ingen data</span></div>`}</section>
-    </main>
+      ${statsHtml}
+      <section class="cards" aria-label="Per färg">${cards || `<div class="card"><span class="name">Ingen data</span></div>`}</section>`;
+
+  document.getElementById("board").innerHTML = `
+    <header class="board-head">
+      <h1 class="brand">WallFlow</h1>
+      <p class="board-sub">${escapeHtml_(viewTitle)}</p>
+    </header>
+    <main class="board-main">${mainHtml}</main>
     <footer class="board-foot">
       <span>${escapeHtml_(updated)}</span>
+      <span class="view-hint" id="view-hint" title="Byt vy (GPIO / Space)">Vy · ${escapeHtml_(viewTitle)}</span>
       ${status}
     </footer>
   `;
+  const board = document.getElementById("board");
+  board.setAttribute("data-view", currentView);
+  const hint = document.getElementById("view-hint");
+  if (hint) hint.addEventListener("click", (e) => { e.preventDefault(); cycleView_(); });
 }
 
 function fetchAppData_() {
@@ -464,10 +534,27 @@ function loadDisplay_(isRefresh) {
     });
 }
 
+function isViewToggleKey_(e) {
+  if (e.altKey || e.ctrlKey || e.metaKey) return false;
+  const k = e.key;
+  return k === " " || k === "Spacebar" || k === "PageDown" || k === "v" || k === "V" || k === "ArrowRight";
+}
+
 function startDisplay_() {
+  currentView = readViewFromUrl_();
   loadDisplay_(false);
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => loadDisplay_(true), REFRESH_MS);
+
+  // GPIO på Pi skickar Space via gpio-view-toggle.py (se pi/README.md)
+  window.addEventListener("keydown", (e) => {
+    if (!isViewToggleKey_(e)) return;
+    e.preventDefault();
+    cycleView_();
+  });
+  window.addEventListener("hashchange", () => {
+    setView_(readViewFromUrl_(), { syncUrl: false });
+  });
 }
 
 if (document.readyState === "loading") {
