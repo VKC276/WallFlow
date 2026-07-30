@@ -1,8 +1,26 @@
-# Raspberry Pi — byt vy med GPIO-knapp
+# Raspberry Pi — hallkiosk (RFID + statistik)
 
-Statistiksidan ([display.html](https://wallflow.vastervikclimbing.se/display.html)) har två vyer. En fysisk knapp på en GPIO-pin skickar **Space**, som sidan tolkar som vybyte.
+## Rekommenderad URL
 
-## Vyer
+Öppna **kiosk.html** i Chromium kiosk — då visas RFID och statistik samtidigt:
+
+```bash
+chromium-browser --kiosk --app=https://wallflow.vastervikclimbing.se/kiosk.html
+```
+
+`kiosk.html` äger tangentbordet:
+- **RFID-läsare** (tangentbordskil) → räknar ner markering i `rfid.html` (10 kort)
+- **Space** / GPIO-knapp → byter statistikvy i `display.html`
+
+Egen RFID-sida (måste lyssna på `postMessage` `{ type: "wallflow-rfid-scan", code }`):
+
+```text
+https://wallflow.vastervikclimbing.se/kiosk.html?rfid=https://din-sida.example/
+```
+
+Bara statistik (utan RFID): [display.html](https://wallflow.vastervikclimbing.se/display.html)
+
+## Statistikvyer
 
 1. **Fördelning** — paj + status + färger  
 2. **En lista per färg** (Grön, Blå, Röd, …) — Space bläddrar till nästa färg. Nyaste leden (Byggdatum) längst upp.

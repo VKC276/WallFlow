@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12151a">
+  <meta name="robots" content="noindex">
+  <title>WallFlow — Hallkiosk</title>
+  <style>
+    :root {
+      --bg: #0e1116;
+      --line: rgba(255, 255, 255, 0.08);
+      --rfid-share: 34%;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    .kiosk {
+      height: 100%;
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: minmax(180px, var(--rfid-share)) 1fr;
+    }
+    .pane {
+      position: relative;
+      min-height: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .pane:last-child { border-bottom: 0; }
+    iframe {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #12151a;
+    }
+    /* Osynlig fokus-fångare: äger Space (statistik) och RFID-tangentbord */
+    #key-sink {
+      position: fixed;
+      opacity: 0;
+      pointer-events: none;
+      width: 1px;
+      height: 1px;
+      left: -20px;
+      top: 0;
+      border: 0;
+      padding: 0;
+    }
+    @media (orientation: landscape) {
+      .kiosk {
+        grid-template-rows: 1fr;
+        grid-template-columns: minmax(280px, 38%) 1fr;
+      }
+      .pane { border-bottom: 0; border-right: 1px solid var(--line); }
+      .pane:last-child { border-right: 0; }
+    }
+  </style>
+</head>
+<body>
+  <input id="key-sink" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="RFID och genvägar">
+  <div class="kiosk">
+    <div class="pane" id="pane-rfid">
+      <iframe id="frame-rfid" title="RFID-markering" src="rfid.html"></iframe>
+    </div>
+    <div class="pane" id="pane-stats">
+      <iframe id="frame-stats" title="Statistik" src="display.html"></iframe>
+    </div>
+  </div>
+
+  <script>
+/**
+ * Hallkiosk: RFID + statistik samtidigt.
+ *
+ * Parent-fönstret äger tangentbordet (key-sink alltid fokuserad):
+ *  - Space / v / PageDown  → byt statistikvy (postMessage till display.html)
+ *  - övriga tecken + Enter → RFID-skanning (postMessage till rfid.html)
+ *
+ * Query:
+ *  ?rfid=URL     egen RFID-sida (måste lyssna på wallflow-rfid-scan om den ska få koder härifrån)
+ *  ?stats=URL    egen statistik-sida (standard display.html)
+ *  ?rfidShare=40 RFID-andel i % (portrait radhöjd / landscape kolumnbredd)
+ */
+(function () {
+  const params = new URLSearchParams(location.search);
+  const rfidUrl = params.get("rfid") || "rfid.html";
+  const statsUrl = params.get("stats") || "display.html";
+  const share = Number(params.get("rfidShare") || 34);
+  if (share >= 20 && share <= 70) {
+    document.documentElement.style.setProperty("--rfid-share", share + "%");
+  }
+
+  const sink = document.getElementById("key-sink");
+  const frameRfid = document.getElementById("frame-rfid");
+  const frameStats = document.getElementById("frame-stats");
+  frameRfid.src = rfidUrl;
+  frameStats.src = statsUrl;
+
+  let buffer = "";
+  let bufferTimer = null;
+
+  function focusSink_() {
+    try { sink.focus({ preventScroll: true }); } catch (_) { try { sink.focus(); } catch (__) {} }
+  }
+
+  function post_(frame, msg) {
+    try {
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage(msg, "*");
+    } catch (_) {}
+  }
+
+  function isViewToggleKey_(e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return false;
+    const k = e.key;
+    return k === " " || k === "Spacebar" || k === "PageDown" || k === "v" || k === "V" || k === "ArrowRight";
+  }
+
+  function flushScan_() {
+    const code = buffer.trim();
+    buffer = "";
+    if (!code) return;
+    post_(frameRfid, { type: "wallflow-rfid-scan", code: code });
+  }
+
+  sink.addEventListener("keydown", (e) => {
+    if (isViewToggleKey_(e)) {
+      e.preventDefault();
+      buffer = "";
+      post_(frameStats, { type: "wallflow-cycle-view" });
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (bufferTimer) clearTimeout(bufferTimer);
+      flushScan_();
+      sink.value = "";
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      buffer = "";
+      sink.value = "";
+      return;
+    }
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      buffer += e.key;
+      if (bufferTimer) clearTimeout(bufferTimer);
+      bufferTimer = setTimeout(flushScan_, 140);
+    }
+  });
+
+  // Behåll fokus så RFID-läsare och GPIO-Space alltid når parent
+  window.addEventListener("load", focusSink_);
+  window.addEventListener("blur", () => setTimeout(focusSink_, 0));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) focusSink_();
+  });
+  setInterval(focusSink_, 800);
+  focusSink_();
+})();
+  </script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12151a">
+  <meta name="robots" content="noindex">
+  <title>WallFlow — RFID-markering</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #12151a;
+      --bg-deep: #0e1116;
+      --text: #f2efe8;
+      --muted: #9aa3b2;
+      --line: rgba(255, 255, 255, 0.1);
+      --accent: #e8a54b;
+      --accent-2: #6ec8b0;
+      --danger: #e08a8a;
+      --surface: rgba(255, 255, 255, 0.04);
+      --font-display: "Syne", sans-serif;
+      --font-body: "Figtree", sans-serif;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      color: var(--text);
+      font-family: var(--font-body);
+      background:
+        radial-gradient(700px 360px at 20% -10%, rgba(110, 200, 176, 0.16), transparent 55%),
+        linear-gradient(180deg, #161a21 0%, var(--bg) 50%, var(--bg-deep) 100%);
+      overflow: hidden;
+    }
+    .wrap {
+      height: 100%;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: calc(12px + var(--safe-top)) 16px calc(12px + var(--safe-bottom));
+      text-align: center;
+    }
+    .brand {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1.4rem, 5vw, 2rem);
+      letter-spacing: -0.03em;
+      background: linear-gradient(120deg, #fff 12%, var(--accent-2) 60%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .count {
+      margin: 4px 0 0;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(4.5rem, 22vw, 7rem);
+      line-height: 0.9;
+      letter-spacing: -0.05em;
+    }
+    .count.is-zero { color: var(--danger); }
+    .count-label {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+    .last {
+      margin-top: 8px;
+      min-height: 3.2rem;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      max-width: 100%;
+    }
+    .last strong {
+      display: block;
+      font-size: 1.05rem;
+      font-weight: 700;
+      word-break: break-all;
+    }
+    .last span {
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 4px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent-2);
+      color: #0d1a16;
+      border-color: transparent;
+    }
+    .flash {
+      animation: flash 0.45s ease;
+    }
+    @keyframes flash {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <h1 class="brand">WallFlow</h1>
+    <p class="sub">RFID-markering</p>
+    <p class="count" id="count">10</p>
+    <p class="count-label" id="count-label">kort kvar</p>
+    <div class="last">
+      <span>Senaste kort</span>
+      <strong id="last-card">Väntar på skanning…</strong>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="btn-reset">Återställ 10</button>
+    </div>
+    <p class="hint">Skanna kort (tangentbordsläsare) · Enter avslutar kod</p>
+  </div>
+
+  <script>
+const MARK_SIZE = 10;
+const DUPLICATE_MS = 2500;
+
+let remaining = MARK_SIZE;
+let lastCode = "";
+let lastAt = 0;
+let buffer = "";
+let bufferTimer = null;
+
+function $(id) { return document.getElementById(id); }
+
+function render_() {
+  const countEl = $("count");
+  countEl.textContent = String(remaining);
+  countEl.classList.toggle("is-zero", remaining <= 0);
+  $("count-label").textContent = remaining === 1 ? "kort kvar" : (remaining <= 0 ? "markering klar" : "kort kvar");
+  $("last-card").textContent = lastCode || "Väntar på skanning…";
+}
+
+function resetMark_() {
+  remaining = MARK_SIZE;
+  lastCode = "";
+  lastAt = 0;
+  render_();
+}
+
+function acceptScan_(code) {
+  const id = String(code || "").trim();
+  if (!id) return;
+  const now = Date.now();
+  if (id === lastCode && now - lastAt < DUPLICATE_MS) return; // undvik dubbel-skanning
+  if (remaining <= 0) return;
+  lastCode = id;
+  lastAt = now;
+  remaining = Math.max(0, remaining - 1);
+  render_();
+  const countEl = $("count");
+  countEl.classList.remove("flash");
+  void countEl.offsetWidth;
+  countEl.classList.add("flash");
+}
+
+function onKey_(e) {
+  // Space sköts av kiosk-skalet för statistikvy — ignorera här
+  if (e.key === " " || e.key === "Spacebar") return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (bufferTimer) clearTimeout(bufferTimer);
+    acceptScan_(buffer);
+    buffer = "";
+    return;
+  }
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    buffer += e.key;
+    if (bufferTimer) clearTimeout(bufferTimer);
+    // Vissa läsare skickar ingen Enter — flush efter kort paus
+    bufferTimer = setTimeout(() => {
+      acceptScan_(buffer);
+      buffer = "";
+    }, 120);
+  }
+}
+
+function onMessage_(ev) {
+  const data = ev && ev.data;
+  if (!data || typeof data !== "object") return;
+  if (data.type === "wallflow-rfid-scan") {
+    acceptScan_(data.code || data.uid || "");
+  } else if (data.type === "wallflow-rfid-reset") {
+    resetMark_();
+  }
+}
+
+$("btn-reset").addEventListener("click", resetMark_);
+window.addEventListener("keydown", onKey_);
+window.addEventListener("message", onMessage_);
+render_();
+  </script>
+</body>
+</html>
