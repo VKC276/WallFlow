@@ -2036,8 +2036,6 @@ function renderFilters() {
     </div>
     <button type="button" class="chip quickinfo-inline" onclick="closeRebuildFilterMenu_(); openQuickInfo_();">Quickinfo</button>
   `;
-  // Ej uppsatt är ingen färg — rensa om det ändå satts via äldre UI
-  if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
 }
 function toggleRebuildFilterMenu_(evt) {
   if (evt) {
@@ -2064,7 +2062,6 @@ function setColorFilter(key) {
   // Färgfilter via pie / färgkort / färgblock — ingen separat chip-rad
   colorFilter = key;
   rebuildFilterMenuOpen_ = false;
-  if (isEjUppsattGrade_(colorFilter)) colorFilter = "ALL";
   renderFilters();
   filterData();
 }
