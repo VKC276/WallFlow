@@ -137,11 +137,15 @@
       margin-bottom: 6px;
     }
     .stat span {
+      display: block;
       color: var(--muted);
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
+      line-height: 1.25;
+      max-width: 12em;
+      margin: 0 auto;
     }
     .cards {
       flex: 0 0 auto;
@@ -405,7 +409,7 @@ function renderBoard_(opts) {
         ${buildColorPieSvg_(slices, routes.length)}
       </section>
       <section class="stats" aria-label="Status">
-        <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Bygg om</span></div>
+        <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Markerade för ombyggnation</span></div>
         <div class="stat"><strong style="color:var(--ok)">${c.nej}</strong><span>Aktuella</span></div>
         <div class="stat"><strong style="color:var(--unset)">${c.ej}</strong><span>Ej uppsatt</span></div>
         <div class="stat"><strong>${c.total}</strong><span>Totalt</span></div>
