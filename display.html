@@ -700,17 +700,10 @@ function startDisplay_() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => loadDisplay_(true), REFRESH_MS);
 
-  // GPIO på Pi skickar Space via gpio-view-toggle.py (se pi/README.md)
-  // I kiosk.html (iframe) kommer Space via postMessage i stället.
   window.addEventListener("keydown", (e) => {
     if (!isViewToggleKey_(e)) return;
     e.preventDefault();
     cycleView_();
-  });
-  window.addEventListener("message", (ev) => {
-    const data = ev && ev.data;
-    if (!data || typeof data !== "object") return;
-    if (data.type === "wallflow-cycle-view") cycleView_();
   });
   window.addEventListener("hashchange", () => {
     setView_(readViewFromUrl_(), { syncUrl: false });
