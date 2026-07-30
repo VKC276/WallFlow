@@ -4,8 +4,8 @@ Statistiksidan ([display.html](https://wallflow.vastervikclimbing.se/display.htm
 
 ## Vyer
 
-1. **Fördelning** — paj + färger  
-2. **Status** — stora statussiffror (Markerade för ombyggnation, Aktuella, …)
+1. **Fördelning** — paj + status + färger  
+2. **En lista per färg** (Grön, Blå, Röd, …) — Space bläddrar till nästa färg. Nyaste leden (Byggdatum) längst upp.
 
 Tangentbord (för test): `Space`, `v` eller `PageDown`.
 
