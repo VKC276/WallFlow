@@ -251,7 +251,7 @@
     }
     .route-builder {
       font-size: 0.95rem;
-      font-weight: 650;
+      font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -664,6 +664,7 @@ function loadDisplay_(isRefresh) {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
       lastUpdatedAt = new Date();
+      currentView = normalizeViewId_(currentView);
       renderBoard_();
     })
     .catch((err) => {
