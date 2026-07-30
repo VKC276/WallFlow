@@ -184,11 +184,14 @@
       flex: 0 0 auto;
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 10px;
       color: var(--muted);
       font-size: 0.78rem;
       font-weight: 600;
     }
+    .board-foot > span:first-child { min-width: 0; }
+    .board-foot > .status { text-align: right; }
     .board-foot .status.is-error { color: #e08a8a; }
     .board-foot .view-hint {
       cursor: pointer;
