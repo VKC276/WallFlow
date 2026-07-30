@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12151a">
+  <meta name="robots" content="noindex">
+  <title>WallFlow — Fördelning</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #12151a;
+      --bg-deep: #0e1116;
+      --text: #f2efe8;
+      --muted: #9aa3b2;
+      --line: rgba(255, 255, 255, 0.1);
+      --accent: #e8a54b;
+      --accent-2: #6ec8b0;
+      --rebuild: #e8a54b;
+      --ok: #6ec8b0;
+      --unset: #9aa3b2;
+      --surface: rgba(255, 255, 255, 0.04);
+      --pie-hole: #171b22;
+      --pie-empty: rgba(255, 255, 255, 0.06);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --font-display: "Syne", sans-serif;
+      --font-body: "Figtree", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      color: var(--text);
+      font-family: var(--font-body);
+      background:
+        radial-gradient(900px 520px at 50% -8%, rgba(232, 165, 75, 0.14), transparent 55%),
+        radial-gradient(700px 420px at 100% 100%, rgba(110, 200, 176, 0.1), transparent 50%),
+        linear-gradient(180deg, #161a21 0%, var(--bg) 42%, var(--bg-deep) 100%);
+      overflow: hidden;
+    }
+    .board {
+      height: 100%;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding:
+        calc(18px + var(--safe-top))
+        18px
+        calc(14px + var(--safe-bottom));
+      gap: 14px;
+    }
+    .board-head {
+      flex: 0 0 auto;
+      text-align: center;
+    }
+    .brand {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(2rem, 8vw, 3rem);
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      background: linear-gradient(120deg, #fff 12%, var(--accent) 55%, var(--accent-2) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .board-sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .board-main {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .pie-panel {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      border-radius: 28px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .color-dist-pie {
+      /* Högkant: stor paj som fyller bredden, begränsas av tillgänglig höjd */
+      width: min(86vw, 46vh, 520px);
+      height: auto;
+      display: block;
+      filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.35));
+    }
+    .color-dist-center-label {
+      fill: var(--text);
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 800;
+      text-anchor: middle;
+    }
+    .color-dist-center-sub {
+      fill: var(--muted);
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      text-anchor: middle;
+    }
+    .stats {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .stat {
+      padding: 14px 12px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      text-align: center;
+    }
+    .stat strong {
+      display: block;
+      font-family: var(--font-display);
+      font-size: clamp(1.6rem, 7vw, 2.2rem);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat span {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .cards {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 10px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.18);
+    }
+    .blob {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+    }
+    .card .count {
+      font-size: 1.45rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .card .name {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+    }
+    .board-foot {
+      flex: 0 0 auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .board-foot .status.is-error { color: #e08a8a; }
+    .loading-msg {
+      margin: auto;
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    /* Portrait / högkant: behåll 2 kolumner så siffror och färger är stora */
+    @media (orientation: portrait) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .stat strong { font-size: clamp(1.85rem, 8vw, 2.6rem); }
+      .card .count { font-size: clamp(1.5rem, 6vw, 2rem); }
+      .color-dist-center-label { font-size: 32px; }
+    }
+    /* Landscape: mer kolumner om skärmen ligger ner */
+    @media (orientation: landscape) {
+      .board { flex-direction: row; flex-wrap: wrap; align-content: stretch; }
+      .board-head { width: 100%; }
+      .board-main {
+        flex: 1 1 auto;
+        flex-direction: row;
+        align-items: stretch;
+      }
+      .pie-panel { flex: 1 1 42%; }
+      .stats {
+        flex: 0 0 auto;
+        width: 28%;
+        grid-template-columns: 1fr;
+        align-content: start;
+      }
+      .cards {
+        flex: 1 1 28%;
+        grid-template-columns: 1fr 1fr;
+        align-content: start;
+      }
+      .color-dist-pie { width: min(42vw, 70vh, 420px); }
+      .board-foot { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="board" id="board">
+    <div class="loading-msg" id="boot-msg">Hämtar ledstatistik…</div>
+  </div>
+
+  <script>
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
+const REFRESH_MS = 120000;
+const COLOR_HEX = {
+  "Grön": "#2ecc71",
+  "Blå": "#3498db",
+  "Röd": "#e74c3c",
+  "Svart": "#2c3e50",
+  "Vit": "#ecf0f1",
+  "Wildcard": "#c4a35a",
+  "Wildcards": "#c4a35a",
+  "Ej uppsatt": "#6b7280"
+};
+const DEFAULT_GRADES = ["Grön", "Blå", "Röd", "Svart", "Vit"];
+const WILDCARD_NAMES = ["wildcard", "wildcards"];
+const EJ_UPPSATT_GRADE = "Ej uppsatt";
+
+let db = { routes: [], grades: DEFAULT_GRADES.slice() };
+let refreshTimer = null;
+let lastUpdatedAt = null;
+
+function escapeHtml_(str) {
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function colorHex_(name) { return COLOR_HEX[name] || "#95a5a6"; }
+function gradeList_() {
+  return (db.grades && db.grades.length) ? db.grades.slice() : DEFAULT_GRADES.slice();
+}
+function isWildcardGrade_(name) {
+  return WILDCARD_NAMES.includes(String(name || "").trim().toLowerCase());
+}
+function isEjUppsattGrade_(name) {
+  return String(name || "").trim().toLowerCase().replace(/\s+/g, " ") === "ej uppsatt";
+}
+function isDashStatus_(v) {
+  return /^[-–—−‐‒―]$/.test(String(v == null ? "" : v).trim());
+}
+function isWildcardNr_(nr) {
+  return /^w\d+$/i.test(String(nr == null ? "" : nr).trim());
+}
+function isAllowedGrade_(name) {
+  const t = String(name || "").trim().toLowerCase();
+  return gradeList_().some((g) => String(g).toLowerCase() === t);
+}
+function isListableGrade_(name) {
+  return isAllowedGrade_(name) || isWildcardGrade_(name) || isEjUppsattGrade_(name);
+}
+function isListableRoute_(r) {
+  if (!r) return false;
+  if (isListableGrade_(r.Gradering)) return true;
+  return isWildcardNr_(r.Nr);
+}
+function isEjUppsattRoute_(r) {
+  return isEjUppsattGrade_(r && r.Gradering) || isDashStatus_(r && r.DagsAttByggaOm);
+}
+function gradeBucketKey_(r) {
+  const g = String(r && r.Gradering || "").trim();
+  if (isEjUppsattGrade_(g)) return EJ_UPPSATT_GRADE;
+  if (isWildcardGrade_(g) || isWildcardNr_(r && r.Nr)) {
+    const wc = availableColors_().find((c) => WILDCARD_NAMES.includes(String(c).toLowerCase()));
+    return wc || "Wildcard";
+  }
+  return g || "—";
+}
+function availableColors_() {
+  const list = gradeList_().slice();
+  const hasWildcard = db.routes.some((r) => isWildcardGrade_(r.Gradering) || isWildcardNr_(r.Nr));
+  const hasEj = db.routes.some((r) => isEjUppsattGrade_(r.Gradering) || isDashStatus_(r.DagsAttByggaOm));
+  if (hasWildcard && !list.some((c) => WILDCARD_NAMES.includes(String(c).toLowerCase()))) list.push("Wildcard");
+  if (hasEj && !list.some((c) => isEjUppsattGrade_(c))) list.push(EJ_UPPSATT_GRADE);
+  return list;
+}
+function normalizeRoute_(r) {
+  return {
+    Nr: r.Nr == null ? "" : String(r.Nr),
+    Gradering: String(r.Gradering || "").trim(),
+    DagsAttByggaOm: (function () {
+      const raw = String(r.DagsAttByggaOm || r["Dags att bygga om"] || "").trim();
+      const low = raw.toLowerCase();
+      if (low === "ja") return "Ja";
+      if (low === "nej") return "Nej";
+      if (isDashStatus_(raw)) return "-";
+      return raw;
+    })()
+  };
+}
+
+function listableRoutes_() {
+  return db.routes.filter(isListableRoute_);
+}
+function counts_(routes) {
+  let ja = 0, nej = 0, ej = 0;
+  routes.forEach((r) => {
+    if (isEjUppsattRoute_(r)) ej++;
+    else if (r.DagsAttByggaOm === "Ja") ja++;
+    else if (r.DagsAttByggaOm === "Nej") nej++;
+  });
+  return { ja, nej, ej, total: routes.length };
+}
+
+function polarToCartesian_(cx, cy, r, angleDeg) {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+function pieSlicePath_(cx, cy, r, startAngle, endAngle) {
+  const sweep = endAngle - startAngle;
+  if (sweep >= 359.999) {
+    const mid = startAngle + 180;
+    const a0 = polarToCartesian_(cx, cy, r, startAngle);
+    const a1 = polarToCartesian_(cx, cy, r, mid);
+    const a2 = polarToCartesian_(cx, cy, r, startAngle + 360);
+    return ["M", cx, cy, "L", a0.x, a0.y, "A", r, r, 0, 1, 1, a1.x, a1.y, "A", r, r, 0, 1, 1, a2.x, a2.y, "Z"].join(" ");
+  }
+  const start = polarToCartesian_(cx, cy, r, endAngle);
+  const end = polarToCartesian_(cx, cy, r, startAngle);
+  const largeArc = sweep > 180 ? 1 : 0;
+  return ["M", cx, cy, "L", start.x, start.y, "A", r, r, 0, largeArc, 0, end.x, end.y, "Z"].join(" ");
+}
+function buildColorPieSvg_(slices, total) {
+  const cx = 100, cy = 100, r = 78, inner = 44;
+  const center = `
+    <circle cx="${cx}" cy="${cy}" r="${inner}" fill="var(--pie-hole)"></circle>
+    <text class="color-dist-center-label" x="${cx}" y="${cy - 2}">${total}</text>
+    <text class="color-dist-center-sub" x="${cx}" y="${cy + 18}">leder</text>`;
+  if (!total) {
+    return `<svg class="color-dist-pie" viewBox="0 0 200 200" role="img" aria-label="Ingen data">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--pie-empty)"></circle>${center}
+    </svg>`;
+  }
+  let angle = 0;
+  const paths = slices.map((s) => {
+    const sweep = (s.count / total) * 360;
+    const start = angle;
+    const end = angle + sweep;
+    angle = end;
+    return `<path d="${pieSlicePath_(cx, cy, r, start, end)}" fill="${s.color}">
+      <title>${escapeHtml_(s.name)}: ${s.count}</title>
+    </path>`;
+  }).join("");
+  return `<svg class="color-dist-pie" viewBox="0 0 200 200" role="img" aria-label="Fördelning">${paths}${center}</svg>`;
+}
+
+function formatClock_(d) {
+  try {
+    return new Intl.DateTimeFormat("sv-SE", { hour: "2-digit", minute: "2-digit" }).format(d);
+  } catch (_) {
+    return d.toTimeString().slice(0, 5);
+  }
+}
+
+function renderBoard_(opts) {
+  opts = opts || {};
+  const routes = listableRoutes_();
+  const c = counts_(routes);
+  const byColor = {};
+  const colors = availableColors_();
+  colors.forEach((name) => { byColor[name] = 0; });
+  routes.forEach((r) => {
+    const key = gradeBucketKey_(r);
+    if (byColor[key] == null) byColor[key] = 0;
+    byColor[key]++;
+  });
+  const slices = colors
+    .map((name) => ({ name, count: byColor[name] || 0, color: colorHex_(name) }))
+    .filter((s) => s.count > 0);
+  const cards = colors
+    .filter((name) => (byColor[name] || 0) > 0)
+    .map((name) => `
+      <div class="card">
+        <span class="blob" style="background:${colorHex_(name)}"></span>
+        <span class="count">${byColor[name] || 0}</span>
+        <span class="name">${escapeHtml_(name)}</span>
+      </div>
+    `).join("");
+
+  const updated = lastUpdatedAt ? ("Uppdaterad " + formatClock_(lastUpdatedAt)) : "Hämtar…";
+  const status = opts.error
+    ? `<span class="status is-error">${escapeHtml_(opts.error)}</span>`
+    : `<span class="status">Auto-uppdateras</span>`;
+
+  document.getElementById("board").innerHTML = `
+    <header class="board-head">
+      <h1 class="brand">WallFlow</h1>
+      <p class="board-sub">Ledbyggnation</p>
+    </header>
+    <main class="board-main">
+      <section class="pie-panel" aria-label="Färgfördelning">
+        ${buildColorPieSvg_(slices, routes.length)}
+      </section>
+      <section class="stats" aria-label="Status">
+        <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Bygg om</span></div>
+        <div class="stat"><strong style="color:var(--ok)">${c.nej}</strong><span>Aktuella</span></div>
+        <div class="stat"><strong style="color:var(--unset)">${c.ej}</strong><span>Ej uppsatt</span></div>
+        <div class="stat"><strong>${c.total}</strong><span>Totalt</span></div>
+      </section>
+      <section class="cards" aria-label="Per färg">${cards || `<div class="card"><span class="name">Ingen data</span></div>`}</section>
+    </main>
+    <footer class="board-foot">
+      <span>${escapeHtml_(updated)}</span>
+      ${status}
+    </footer>
+  `;
+}
+
+function fetchAppData_() {
+  if (!GAS_API_URL || GAS_API_URL.indexOf("PASTE_") >= 0) {
+    return Promise.reject(new Error("GAS_API_URL saknas"));
+  }
+  return fetch(GAS_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain; charset=UTF-8" },
+    redirect: "follow",
+    body: JSON.stringify({ action: "getAppData", token: "", args: [] })
+  }).then((r) => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+}
+
+function loadDisplay_(isRefresh) {
+  return fetchAppData_()
+    .then((data) => {
+      db.routes = ((data && data.routes) || []).map(normalizeRoute_);
+      db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
+      lastUpdatedAt = new Date();
+      renderBoard_();
+    })
+    .catch((err) => {
+      if (!isRefresh || !db.routes.length) {
+        document.getElementById("board").innerHTML = `
+          <header class="board-head">
+            <h1 class="brand">WallFlow</h1>
+            <p class="board-sub">Ledbyggnation</p>
+          </header>
+          <p class="loading-msg">Kunde inte hämta statistik just nu.</p>
+          <footer class="board-foot">
+            <span>Försöker igen automatiskt</span>
+            <span class="status is-error">${escapeHtml_(err && err.message ? err.message : "Fel")}</span>
+          </footer>`;
+      } else {
+        renderBoard_({ error: "Uppdatering misslyckades — visar senaste" });
+      }
+    });
+}
+
+function startDisplay_() {
+  loadDisplay_(false);
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => loadDisplay_(true), REFRESH_MS);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startDisplay_);
+} else {
+  startDisplay_();
+}
+  </script>
+</body>
+</html>

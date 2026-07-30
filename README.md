@@ -4,6 +4,8 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Live:** [https://wallflow.vastervikclimbing.se](https://wallflow.vastervikclimbing.se)
 
+**Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. Öppna den URL:en på hallens TV/skärm i stående läge.
+
 ## Google Sheet
 
 Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
