@@ -192,37 +192,19 @@
       font-size: 1rem;
       font-weight: 600;
     }
-    /* Portrait / högkant: behåll 2 kolumner så siffror och färger är stora */
+    /* Portrait / högkant (hallskärm): stora siffror, 2×2-status, 2-kolumn färger */
     @media (orientation: portrait) {
       .stats { grid-template-columns: repeat(2, 1fr); }
       .cards { grid-template-columns: repeat(2, 1fr); }
       .stat strong { font-size: clamp(1.85rem, 8vw, 2.6rem); }
       .card .count { font-size: clamp(1.5rem, 6vw, 2rem); }
       .color-dist-center-label { font-size: 32px; }
+      .color-dist-pie { width: min(86vw, 44vh, 520px); }
     }
-    /* Landscape: mer kolumner om skärmen ligger ner */
     @media (orientation: landscape) {
-      .board { flex-direction: row; flex-wrap: wrap; align-content: stretch; }
-      .board-head { width: 100%; }
-      .board-main {
-        flex: 1 1 auto;
-        flex-direction: row;
-        align-items: stretch;
-      }
-      .pie-panel { flex: 1 1 42%; }
-      .stats {
-        flex: 0 0 auto;
-        width: 28%;
-        grid-template-columns: 1fr;
-        align-content: start;
-      }
-      .cards {
-        flex: 1 1 28%;
-        grid-template-columns: 1fr 1fr;
-        align-content: start;
-      }
-      .color-dist-pie { width: min(42vw, 70vh, 420px); }
-      .board-foot { width: 100%; }
+      .stats { grid-template-columns: repeat(4, 1fr); }
+      .cards { grid-template-columns: repeat(4, 1fr); }
+      .color-dist-pie { width: min(36vw, 58vh, 360px); }
     }
   </style>
 </head>
