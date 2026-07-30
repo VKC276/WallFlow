@@ -263,15 +263,18 @@
     }
     .route-badge {
       justify-self: end;
-      font-size: 0.68rem;
+      max-width: 9.5em;
+      font-size: 0.62rem;
       font-weight: 800;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       padding: 6px 8px;
-      border-radius: 999px;
+      border-radius: 10px;
       border: 1px solid var(--line);
       color: var(--muted);
-      white-space: nowrap;
+      line-height: 1.2;
+      text-align: center;
+      white-space: normal;
     }
     .route-badge.is-rebuild {
       color: #1a140c;
@@ -479,7 +482,7 @@ function statusBadge_(r) {
     return `<span class="route-badge">Ej uppsatt</span>`;
   }
   if (r.DagsAttByggaOm === "Ja") {
-    return `<span class="route-badge is-rebuild">Bygg om</span>`;
+    return `<span class="route-badge is-rebuild">Markerad för ombyggnation</span>`;
   }
   if (r.DagsAttByggaOm === "Nej") {
     return `<span class="route-badge is-ok">Aktuell</span>`;
