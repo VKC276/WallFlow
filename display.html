@@ -341,6 +341,7 @@
   <script>
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
 const REFRESH_MS = 900000;
+const VIEW_CYCLE_MS = 15000;
 const OVERVIEW_VIEW = "fordelning";
 const COLOR_HEX = {
   "Grön": "#2ecc71",
@@ -358,6 +359,7 @@ const EJ_UPPSATT_GRADE = "Ej uppsatt";
 
 let db = { routes: [], grades: DEFAULT_GRADES.slice() };
 let refreshTimer = null;
+let viewCycleTimer = null;
 let lastUpdatedAt = null;
 let currentView = OVERVIEW_VIEW;
 let lastRenderOpts = {};
@@ -427,9 +429,14 @@ function setView_(view, opts) {
 }
 function cycleView_() {
   const seq = viewSequence_();
+  if (seq.length < 2) return;
   let i = seq.findIndex((v) => v.toLowerCase() === String(currentView).toLowerCase());
   if (i < 0) i = 0;
   setView_(seq[(i + 1) % seq.length], { force: true });
+}
+function restartViewCycle_() {
+  if (viewCycleTimer) clearInterval(viewCycleTimer);
+  viewCycleTimer = setInterval(() => cycleView_(), VIEW_CYCLE_MS);
 }
 
 function escapeHtml_(str) {
@@ -756,14 +763,17 @@ function startDisplay_() {
   loadDisplay_(false);
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => loadDisplay_(true), REFRESH_MS);
+  restartViewCycle_();
 
   window.addEventListener("keydown", (e) => {
     if (!isViewToggleKey_(e)) return;
     e.preventDefault();
     cycleView_();
+    restartViewCycle_();
   });
   window.addEventListener("hashchange", () => {
     setView_(readViewFromUrl_(), { syncUrl: false });
+    restartViewCycle_();
   });
 }
 
