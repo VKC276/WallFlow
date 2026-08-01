@@ -236,15 +236,7 @@
       background: var(--surface);
     }
     .route-nr {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      width: 4.75rem;
-    }
-    .route-nr .route-label {
-      font-size: 0.62rem;
-    }
-    .route-nr .route-value {
+      width: 5.25rem;
       font-family: var(--font-display);
       font-size: clamp(1.5rem, 7vw, 2.1rem);
       font-weight: 800;
@@ -633,10 +625,7 @@ function renderColorList_(colorName) {
     const notes = String(r.Anteckningar || "").trim();
     return `
     <article class="route-row">
-      <div class="route-nr">
-        <span class="route-label">Lednr</span>
-        <span class="route-value">${escapeHtml_(r.Nr || "—")}</span>
-      </div>
+      <div class="route-nr">${escapeHtml_(r.Nr || "—")}</div>
       <div class="route-meta">
         <div class="route-field">
           <span class="route-label">Ledbyggare</span>
