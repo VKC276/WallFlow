@@ -341,6 +341,7 @@
   <script>
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzw_23y8uDOGJneWK7sPDAJdaUbOFvHX2X7Xq4qnZ3NF8IjDbNRIcayxFKGof9mg2yglA/exec";
 const REFRESH_MS = 900000;
+const VIEW_CYCLE_MS = 15000;
 const OVERVIEW_VIEW = "fordelning";
 const COLOR_HEX = {
   "Grön": "#2ecc71",
@@ -358,9 +359,11 @@ const EJ_UPPSATT_GRADE = "Ej uppsatt";
 
 let db = { routes: [], grades: DEFAULT_GRADES.slice() };
 let refreshTimer = null;
+let viewCycleTimer = null;
 let lastUpdatedAt = null;
 let currentView = OVERVIEW_VIEW;
 let lastRenderOpts = {};
+let bootFromUrl_ = true;
 
 function colorsWithRoutes_() {
   const counts = {};
@@ -373,12 +376,34 @@ function colorsWithRoutes_() {
 function viewSequence_() {
   return [OVERVIEW_VIEW].concat(colorsWithRoutes_());
 }
+function knownColorNames_() {
+  const seen = new Set();
+  const out = [];
+  availableColors_()
+    .concat(DEFAULT_GRADES)
+    .concat(Object.keys(COLOR_HEX))
+    .concat([EJ_UPPSATT_GRADE])
+    .forEach((c) => {
+      const name = String(c || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(name);
+    });
+  return out;
+}
 function normalizeViewId_(raw) {
-  const v = decodeURIComponent(String(raw || "").trim());
+  let v = String(raw || "").trim();
+  try { v = decodeURIComponent(v); } catch (_) {}
+  v = v.trim();
   if (!v) return OVERVIEW_VIEW;
-  if (v.toLowerCase() === OVERVIEW_VIEW) return OVERVIEW_VIEW;
-  const colors = colorsWithRoutes_();
-  const hit = colors.find((c) => c.toLowerCase() === v.toLowerCase());
+  const low = v.toLowerCase();
+  if (low === OVERVIEW_VIEW || low === "fördelning") return OVERVIEW_VIEW;
+  const withRoutes = colorsWithRoutes_();
+  let hit = withRoutes.find((c) => c.toLowerCase() === low);
+  if (hit) return hit;
+  hit = knownColorNames_().find((c) => c.toLowerCase() === low);
   return hit || OVERVIEW_VIEW;
 }
 function readViewFromUrl_() {
@@ -392,9 +417,7 @@ function readViewFromUrl_() {
 }
 function setView_(view, opts) {
   opts = opts || {};
-  const seq = viewSequence_();
   let next = normalizeViewId_(view);
-  if (!seq.includes(next)) next = OVERVIEW_VIEW;
   if (next === currentView && !opts.force) return;
   currentView = next;
   if (opts.syncUrl !== false) {
@@ -406,9 +429,14 @@ function setView_(view, opts) {
 }
 function cycleView_() {
   const seq = viewSequence_();
+  if (seq.length < 2) return;
   let i = seq.findIndex((v) => v.toLowerCase() === String(currentView).toLowerCase());
   if (i < 0) i = 0;
   setView_(seq[(i + 1) % seq.length], { force: true });
+}
+function restartViewCycle_() {
+  if (viewCycleTimer) clearInterval(viewCycleTimer);
+  viewCycleTimer = setInterval(() => cycleView_(), VIEW_CYCLE_MS);
 }
 
 function escapeHtml_(str) {
@@ -648,8 +676,7 @@ function renderBoard_(opts) {
   opts = opts || {};
   lastRenderOpts = opts;
   const routes = listableRoutes_();
-  const seq = viewSequence_();
-  if (!seq.includes(currentView)) currentView = OVERVIEW_VIEW;
+  currentView = normalizeViewId_(currentView);
 
   const updated = lastUpdatedAt ? ("Uppdaterad " + formatClock_(lastUpdatedAt)) : "Hämtar…";
   const status = opts.error
@@ -697,7 +724,14 @@ function loadDisplay_(isRefresh) {
       db.routes = ((data && data.routes) || []).map(normalizeRoute_);
       db.grades = (data && data.grades && data.grades.length) ? data.grades.slice() : DEFAULT_GRADES.slice();
       lastUpdatedAt = new Date();
-      currentView = normalizeViewId_(currentView);
+      // Re-apply hash/query after routes load. Before that, #grön cannot
+      // match colorsWithRoutes_() and used to fall back to overview.
+      if (bootFromUrl_) {
+        currentView = readViewFromUrl_();
+        bootFromUrl_ = false;
+      } else {
+        currentView = normalizeViewId_(currentView);
+      }
       renderBoard_();
     })
     .catch((err) => {
@@ -729,14 +763,17 @@ function startDisplay_() {
   loadDisplay_(false);
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => loadDisplay_(true), REFRESH_MS);
+  restartViewCycle_();
 
   window.addEventListener("keydown", (e) => {
     if (!isViewToggleKey_(e)) return;
     e.preventDefault();
     cycleView_();
+    restartViewCycle_();
   });
   window.addEventListener("hashchange", () => {
     setView_(readViewFromUrl_(), { syncUrl: false });
+    restartViewCycle_();
   });
 }
 
