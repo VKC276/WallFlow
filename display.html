@@ -227,13 +227,30 @@
     }
     .route-row {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 5.25rem 1fr auto;
       gap: 8px 12px;
       align-items: start;
       padding: 14px 14px;
       border-radius: 16px;
       border: 1px solid var(--line);
       background: var(--surface);
+    }
+    .route-nr {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 4.75rem;
+    }
+    .route-nr .route-label {
+      font-size: 0.62rem;
+    }
+    .route-nr .route-value {
+      font-family: var(--font-display);
+      font-size: clamp(1.5rem, 7vw, 2.1rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
     .route-meta {
       min-width: 0;
@@ -264,13 +281,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
       font-variant-numeric: tabular-nums;
-    }
-    .route-field.is-nr .route-value {
-      font-family: var(--font-display);
-      font-size: clamp(1.5rem, 7vw, 2.1rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1;
     }
     .route-field.is-notes {
       align-items: start;
@@ -623,11 +633,11 @@ function renderColorList_(colorName) {
     const notes = String(r.Anteckningar || "").trim();
     return `
     <article class="route-row">
+      <div class="route-nr">
+        <span class="route-label">Lednr</span>
+        <span class="route-value">${escapeHtml_(r.Nr || "—")}</span>
+      </div>
       <div class="route-meta">
-        <div class="route-field is-nr">
-          <span class="route-label">Lednr</span>
-          <span class="route-value">${escapeHtml_(r.Nr || "—")}</span>
-        </div>
         <div class="route-field">
           <span class="route-label">Ledbyggare</span>
           <span class="route-value">${escapeHtml_(r.Ledbyggare || "—")}</span>
