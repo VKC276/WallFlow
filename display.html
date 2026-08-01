@@ -193,11 +193,6 @@
     .board-foot > span:first-child { min-width: 0; }
     .board-foot > .status { text-align: right; }
     .board-foot .status.is-error { color: #e08a8a; }
-    .board-foot .view-hint {
-      cursor: pointer;
-      color: var(--accent-2);
-      user-select: none;
-    }
     .loading-msg {
       margin: auto;
       color: var(--muted);
@@ -236,15 +231,7 @@
       background: var(--surface);
     }
     .route-nr {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      width: 4.75rem;
-    }
-    .route-nr .route-label {
-      font-size: 0.62rem;
-    }
-    .route-nr .route-value {
+      width: 5.25rem;
       font-family: var(--font-display);
       font-size: clamp(1.5rem, 7vw, 2.1rem);
       font-weight: 800;
@@ -402,10 +389,6 @@ function readViewFromUrl_() {
     if (q) return normalizeViewId_(q);
   } catch (_) {}
   return OVERVIEW_VIEW;
-}
-function viewLabel_(view) {
-  if (view === OVERVIEW_VIEW) return "Fördelning";
-  return view;
 }
 function setView_(view, opts) {
   opts = opts || {};
@@ -633,10 +616,7 @@ function renderColorList_(colorName) {
     const notes = String(r.Anteckningar || "").trim();
     return `
     <article class="route-row">
-      <div class="route-nr">
-        <span class="route-label">Lednr</span>
-        <span class="route-value">${escapeHtml_(r.Nr || "—")}</span>
-      </div>
+      <div class="route-nr">${escapeHtml_(r.Nr || "—")}</div>
       <div class="route-meta">
         <div class="route-field">
           <span class="route-label">Ledbyggare</span>
@@ -655,9 +635,9 @@ function renderColorList_(colorName) {
     </article>`;
   }).join("");
   return `
-    <div class="color-heading" aria-hidden="true">
-      <span class="blob" style="background:${colorHex_(colorName)}"></span>
-      <span class="board-sub" style="margin:0">${escapeHtml_(colorName)} · ${list.length}</span>
+    <div class="color-heading">
+      <span class="blob" style="background:${colorHex_(colorName)}" aria-hidden="true"></span>
+      <h2 class="board-sub" style="margin:0">${escapeHtml_(colorName)} · ${list.length}</h2>
     </div>
     <section class="route-list" aria-label="${escapeHtml_(colorName)} leder">
       ${rows || `<p class="route-empty">Inga leder i ${escapeHtml_(colorName)}</p>`}
@@ -675,7 +655,6 @@ function renderBoard_(opts) {
   const status = opts.error
     ? `<span class="status is-error">${escapeHtml_(opts.error)}</span>`
     : `<span class="status">Auto-uppdateras</span>`;
-  const viewTitle = viewLabel_(currentView);
   const isOverview = currentView === OVERVIEW_VIEW;
   const mainHtml = isOverview
     ? renderOverview_(routes, opts)
@@ -684,20 +663,17 @@ function renderBoard_(opts) {
   document.getElementById("board").innerHTML = `
     <header class="board-head">
       <h1 class="brand">WallFlow</h1>
-      <p class="board-sub">${escapeHtml_(isOverview ? "Ledbyggnation" : viewTitle)}</p>
+      ${isOverview ? `<p class="board-sub">Ledbyggnation</p>` : ""}
     </header>
     <main class="board-main">${mainHtml}</main>
     <footer class="board-foot">
       <span>${escapeHtml_(updated)}</span>
-      <span class="view-hint" id="view-hint" title="Nästa färglista (GPIO / Space)">Space · nästa färg</span>
       ${status}
     </footer>
   `;
   const board = document.getElementById("board");
   board.setAttribute("data-view", isOverview ? OVERVIEW_VIEW : "color");
   board.setAttribute("data-color", isOverview ? "" : currentView);
-  const hint = document.getElementById("view-hint");
-  if (hint) hint.addEventListener("click", (e) => { e.preventDefault(); cycleView_(); });
 }
 
 function fetchAppData_() {
