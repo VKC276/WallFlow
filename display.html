@@ -229,7 +229,7 @@
       display: grid;
       grid-template-columns: auto 1fr auto;
       gap: 8px 12px;
-      align-items: center;
+      align-items: start;
       padding: 14px 14px;
       border-radius: 16px;
       border: 1px solid var(--line);
@@ -261,7 +261,20 @@
       font-size: 0.78rem;
       font-weight: 600;
     }
+    .route-notes {
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 500;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .route-badge {
+      align-self: center;
       justify-self: end;
       max-width: 9.5em;
       font-size: 0.62rem;
@@ -456,7 +469,8 @@ function normalizeRoute_(r) {
       return raw;
     })(),
     Ledbyggare: String(r.Ledbyggare || "").trim(),
-    Byggdatum: String(r.Byggdatum || "").trim().slice(0, 10)
+    Byggdatum: String(r.Byggdatum || "").trim().slice(0, 10),
+    Anteckningar: String(r.Anteckningar || "").trim()
   };
 }
 
@@ -590,16 +604,19 @@ function renderOverview_(routes, opts) {
 
 function renderColorList_(colorName) {
   const list = routesForColorSorted_(colorName);
-  const rows = list.map((r) => `
+  const rows = list.map((r) => {
+    const notes = String(r.Anteckningar || "").trim();
+    return `
     <article class="route-row">
       <div class="route-nr">${escapeHtml_(r.Nr || "—")}</div>
       <div class="route-meta">
         <div class="route-builder">${escapeHtml_(r.Ledbyggare || "—")}</div>
         <div class="route-date">${escapeHtml_(r.Byggdatum || "Inget byggdatum")}</div>
+        ${notes ? `<div class="route-notes">${escapeHtml_(notes)}</div>` : ""}
       </div>
       ${statusBadge_(r)}
-    </article>
-  `).join("");
+    </article>`;
+  }).join("");
   return `
     <div class="color-heading" aria-hidden="true">
       <span class="blob" style="background:${colorHex_(colorName)}"></span>
