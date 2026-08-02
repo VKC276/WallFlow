@@ -2538,17 +2538,34 @@ function closeQrScanner_(fromPopstate) {
   }
 }
 
+/** Kort vibration vid QR-träff (Android m.fl.; ignorerar iOS/saknad support). */
+function hapticSuccess_() {
+  try {
+    if (navigator.vibrate) navigator.vibrate(35);
+  } catch (_) { /* ignore */ }
+}
+
+/** Dubbelpuls när QR lästes men ingen led matchade. */
+function hapticError_() {
+  try {
+    if (navigator.vibrate) navigator.vibrate([40, 45, 40]);
+  } catch (_) { /* ignore */ }
+}
+
 function handleScannedRouteValue_(rawValue) {
   const parsed = parseQrRouteId_(rawValue);
   if (!parsed.ok) {
+    hapticError_();
     showToast("QR-koden var tom");
     return false;
   }
   const route = routeByQrValue_(parsed.value);
   if (!route) {
+    hapticError_();
     showToast("Läste \"" + parsed.value + "\" — ingen matchande led");
     return false;
   }
+  hapticSuccess_();
   openRoute(routeKey_(route));
   return true;
 }
@@ -2793,6 +2810,7 @@ function renderQuickInfoResult_(rawValue) {
   if (!host) return;
   const parsed = parseQrRouteId_(rawValue);
   if (!parsed.ok) {
+    hapticError_();
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
     host.innerHTML = `<div class="empty">QR-koden var tom.</div>`;
@@ -2801,6 +2819,7 @@ function renderQuickInfoResult_(rawValue) {
   const value = parsed.value;
   const route = routeByQrValue_(value);
   if (!route) {
+    hapticError_();
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
     host.innerHTML = `
@@ -2811,6 +2830,7 @@ function renderQuickInfoResult_(rawValue) {
     return;
   }
 
+  hapticSuccess_();
   const canEdit = !!(currentUser.authorized && canEditContentRole() && route.Nr);
   quickInfoState_.currentRouteNr = String(route.Nr);
   setQuickInfoEditEnabled_(canEdit);
