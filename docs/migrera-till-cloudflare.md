@@ -9,9 +9,15 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 Guiden du läser är `/workspace/docs/migrera-till-cloudflare.md` (markdown, inte data).
 
 Skriptet: `/workspace/cloudflare/migrate.mjs`  
-JSON-exporten: lägg filen som `/workspace/cloudflare/snapshots/wallflow-export.json`
+JSON-exporten: `/workspace/cloudflare/snapshots/wallflow-export.json`  
+Token: skapa `/workspace/cloudflare/.env` (gitignoreras) från `cloudflare/.env.example`. Klistra inte in tokenen i chatten.
 
-`CLOUDFLARE_API_TOKEN` ska redan vara satt. Kör inte `wrangler login`.
+```
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_ACCOUNT_ID=...
+```
+
+Kör inte `wrangler login`. När `.env` finns kör jag:
 
 ```bash
 node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json

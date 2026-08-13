@@ -1,2 +1,4 @@
 wrangler.toml
 .wrangler/
+.env
+
