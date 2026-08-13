@@ -6,28 +6,18 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 
 ## Kör så här
 
-Guiden du läser är `/workspace/docs/migrera-till-cloudflare.md` (markdown, inte data).
+Via **din Windows-dator**, samma sätt som när ni deployade: User-miljövariabeln `CLOUDFLARE_API_TOKEN` + Wrangler mot Cloudflares API. Ingen separat Cursor-ingång till Cloudflare, ingen `.env`-fil, ingen `wrangler login`.
 
-Skriptet: `/workspace/cloudflare/migrate.mjs`  
-JSON-exporten: `/workspace/cloudflare/snapshots/wallflow-export.json`
+I PowerShell, i WallFlow-repot:
 
-Ingen separat credentials-fil. Samma som i det andra projektet: `CLOUDFLARE_API_TOKEN` i miljön. Kör inte `wrangler login`.
-
-I den här molnsessionen syns inte det andra projektets miljövariabler. Kör därför migreringen **i samma terminal som det andra projektet** (där tokenen redan finns):
-
-```bash
-node /sökväg/till/WallFlow/cloudflare/migrate.mjs /sökväg/till/wallflow-export.json
+```powershell
+$env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
+node .\cloudflare\migrate.mjs .\sökväg\till\wallflow-export.json
 ```
 
-Eller, i den här sessionen, om tokenen redan är exporterad: `node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json`
+Byt sista sökvägen mot där `wallflow-export.json` ligger hos dig.
 
 Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar upp bilderna. Samma kommando går att köra om (det skriver över D1-tabellerna).
-
-Bara lokala filer, utan att röra Cloudflare:
-
-```bash
-node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json --sql-only
-```
 
 Committa inte `wallflow-export.json` — den innehåller lösenordshashar.
 

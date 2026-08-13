@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Ett kommando: wallflow-export.json → D1 + R2.
+ * Ett kommando: wallflow-export.json → D1 + R2. Körs på din maskin.
  *
- *   node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json
+ *   PowerShell (samma token som övriga Cloudflare-deploys):
+ *     $env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
+ *     node .\cloudflare\migrate.mjs .\wallflow-export.json
  *
- * Använder CLOUDFLARE_API_TOKEN om den är satt (ingen wrangler login).
- * --sql-only  bara SQL + bildnedladdning, ingen Cloudflare.
+ * Ingen wrangler login, ingen .env. --sql-only = bara SQL + bilder, ingen Cloudflare.
  */
 
 import { spawnSync } from "node:child_process";
@@ -17,30 +18,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const SNAP_DIR = path.join(HERE, "snapshots");
 const WRANGLER_TOML = path.join(HERE, "wrangler.toml");
-const ENV_FILE = path.join(HERE, ".env");
 const DB_NAME = "wallflow";
 const KV_TITLE = "SESSIONS";
 const R2_BUCKET = "wallflow-bilder";
 const IS_WIN = process.platform === "win32";
-
-/** Läs cloudflare/.env utan att skriva över variabler som redan är satta. */
-function loadDotEnv() {
-  if (!fs.existsSync(ENV_FILE)) return false;
-  const text = fs.readFileSync(ENV_FILE, "utf8");
-  for (const line of text.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const eq = t.indexOf("=");
-    if (eq < 1) continue;
-    const key = t.slice(0, eq).trim();
-    let val = t.slice(eq + 1).trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    if (key && process.env[key] == null) process.env[key] = val;
-  }
-  return true;
-}
 
 function parseArgs(argv) {
   const args = {
@@ -65,10 +46,11 @@ function parseArgs(argv) {
 
 function usage() {
   return `Ett kommando som tar JSON-exporten till Cloudflare D1 + R2.
+Körs på din maskin, med samma User-token som övriga deploys.
 
-  node cloudflare/migrate.mjs <wallflow-export.json>
+  $env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
+  node .\\cloudflare\\migrate.mjs .\\wallflow-export.json
 
-Om CLOUDFLARE_API_TOKEN redan är satt, eller ligger i cloudflare/.env: kör bara kommandot ovan.
 Kör inte wrangler login — det krockar med tokenen.
 
 Flaggor:
@@ -362,7 +344,6 @@ function verify() {
 }
 
 function main() {
-  if (loadDotEnv()) log("Läste cloudflare/.env");
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(usage());
