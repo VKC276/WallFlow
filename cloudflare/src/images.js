@@ -1,4 +1,4 @@
-/** R2 bildhantering — nycklar led-{nr}.jpg|png */
+/** R2 bildhantering — en bild per led (ersätts 1:1, samma policy som Drive). */
 
 import { safeRouteNrForFile } from "./db.js";
 
@@ -17,26 +17,42 @@ export function isDriveFileId(id) {
   return /^[a-zA-Z0-9_-]{20,}$/.test(s);
 }
 
+/** Stabil nyckel per led — alltid samma basename, extension styrs av mime. */
+export function routeImageKey(nr, mimeType) {
+  const safeNr = safeRouteNrForFile(nr);
+  const mime = String(mimeType || "image/jpeg").toLowerCase();
+  const ext = mime.indexOf("png") >= 0 ? "png" : mime.indexOf("webp") >= 0 ? "webp" : "jpg";
+  return "led-" + safeNr + "." + ext;
+}
+
+/**
+ * Ta bort ALLA R2-objekt för en led (led-13.jpg, led-13.png, led-13-*.…).
+ * Körs före ny uppladdning och vid radering så bucketen inte växer.
+ */
 export async function deleteBilderByRouteNr(env, nr) {
   const safeNr = safeRouteNrForFile(nr);
   if (!safeNr || safeNr === "x") return 0;
   const prefix = "led-" + safeNr;
-  const listed = await env.BILDER.list({ prefix });
+  let cursor;
   let n = 0;
-  for (const obj of listed.objects || []) {
-    const name = String(obj.key || "");
-    if (
-      name === prefix + ".jpg" ||
-      name === prefix + ".png" ||
-      name === prefix + ".jpeg" ||
-      name === prefix + ".webp" ||
-      name.indexOf(prefix + "-") === 0 ||
-      name.indexOf(prefix + ".") === 0
-    ) {
-      await env.BILDER.delete(name);
-      n++;
+  do {
+    const listed = await env.BILDER.list({ prefix, cursor, limit: 1000 });
+    for (const obj of listed.objects || []) {
+      const name = String(obj.key || "");
+      if (
+        name === prefix + ".jpg" ||
+        name === prefix + ".jpeg" ||
+        name === prefix + ".png" ||
+        name === prefix + ".webp" ||
+        name.indexOf(prefix + "-") === 0 ||
+        name.indexOf(prefix + ".") === 0
+      ) {
+        await env.BILDER.delete(name);
+        n++;
+      }
     }
-  }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
   return n;
 }
 
@@ -55,6 +71,8 @@ function base64ToBytes(b64) {
 }
 
 /**
+ * Ladda upp led-bild till R2 — 1:1 ersättning.
+ * Rensar previousFileId + alla led-{nr}* innan put, så ingen lavin av filer.
  * payload: { dataBase64, mimeType, nr, previousFileId }
  * Returnerar fileId = R2-nyckel (samma fält som GAS Drive-ID).
  */
@@ -71,11 +89,11 @@ export async function uploadRouteImage(env, payload) {
   if (!nr || safeNr === "x") {
     return { ok: false, error: "Lednummer krävs för bilduppladdning" };
   }
-  const ext = mime.indexOf("png") >= 0 ? "png" : "jpg";
-  const name = "led-" + safeNr + "." + ext;
+  const name = routeImageKey(nr, mime);
 
+  // 1:1 — rensa gammal referens + alla varianter för samma led innan ny put
   const prev = String(payload.previousFileId || "").trim();
-  if (isR2ImageKey(prev)) await deleteBilderKey(env, prev);
+  if (isR2ImageKey(prev) && prev !== name) await deleteBilderKey(env, prev);
   await deleteBilderByRouteNr(env, nr);
 
   const bytes = base64ToBytes(raw);

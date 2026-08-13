@@ -34,7 +34,7 @@ Worker-API:t ligger i `cloudflare/src/` (samma `{ action, token, args }`-kontrak
 | Sheet-flik `Grades` | D1-tabell `grades` |
 | Sheet-flik `Users` | D1-tabell `users` |
 | Flik `BaseUrlQr` + script property `routeLifetimeDaysDefault` | D1-tabell `settings` |
-| Drive-mappen `Bilder` (`led-{nr}.jpg`) | R2-bucket, nyckel `led-{nr}.jpg` |
+| Drive-mappen `Bilder` (`led-{nr}.jpg`) | R2-bucket, nyckel `led-{nr}.jpg` — **en bild per led**, gamla varianter raderas vid ny uppladdning (samma 1:1 som Drive) |
 | `CacheService` + `PropertiesService` (sessioner 14 dagar) | KV, samma TTL — **importeras inte** |
 | GitHub Pages + CNAME `wallflow.vastervikclimbing.se` | Oförändrat tills API-URL byts, eller Pages |
 
