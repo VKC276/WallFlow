@@ -4,7 +4,7 @@
  *
  *   node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json
  *
- * Första gången: npx wrangler login (webbläsare). Kör sen samma kommando igen.
+ * Använder CLOUDFLARE_API_TOKEN om den är satt (ingen wrangler login).
  * --sql-only  bara SQL + bildnedladdning, ingen Cloudflare.
  */
 
@@ -48,9 +48,8 @@ function usage() {
 
   node cloudflare/migrate.mjs <wallflow-export.json>
 
-Första gången i den här terminalen:
-  npx wrangler login
-  node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json
+Om CLOUDFLARE_API_TOKEN redan är satt: kör bara kommandot ovan.
+Kör inte wrangler login — det krockar med tokenen.
 
 Flaggor:
   --sql-only         bara SQL + bilder lokalt (ingen Wrangler)
@@ -186,17 +185,37 @@ function parseJsonOutput(text) {
   }
 }
 
+function hasApiToken() {
+  return !!(process.env.CLOUDFLARE_API_TOKEN || process.env.CLOUDFLARE_API_KEY);
+}
+
+function ensureAccountId() {
+  if (process.env.CLOUDFLARE_ACCOUNT_ID) return;
+  const r = wrangler(["whoami"], { capture: true, allowFail: true });
+  const out = (r.stdout || "") + (r.stderr || "");
+  const ids = [...out.matchAll(/\b([a-f0-9]{32})\b/gi)].map((m) => m[1]);
+  const unique = [...new Set(ids)];
+  if (unique.length === 1) {
+    process.env.CLOUDFLARE_ACCOUNT_ID = unique[0];
+    log("Satte CLOUDFLARE_ACCOUNT_ID från whoami");
+  }
+}
+
 function ensureLoggedIn() {
+  if (hasApiToken()) {
+    log("Använder CLOUDFLARE_API_TOKEN — hoppar över wrangler login.");
+    ensureAccountId();
+    return;
+  }
   log("Kollar Wrangler-inloggning…");
   const r = wrangler(["whoami"], { capture: true, allowFail: true });
   if (r.status === 0) return;
   const out = ((r.stdout || "") + (r.stderr || "")).trim();
   if (out) console.error(out);
   die(
-    "Inte inloggad i Cloudflare.\n" +
-      "Kör en gång i den här terminalen:\n" +
-      "  npx wrangler login\n" +
-      "Godkänn i webbläsaren och kör sen migrate.mjs igen."
+    "Wrangler hittade ingen inloggning.\n" +
+      "Sätt CLOUDFLARE_API_TOKEN (rekommenderat om du redan är inloggad i ett annat projekt)\n" +
+      "eller kör npx wrangler login i en terminal utan den variabeln."
   );
 }
 
@@ -350,7 +369,7 @@ function main() {
   if (args.sqlOnly) {
     log("Klart lokalt (--sql-only). SQL: " + sqlPath);
     log("Bilder: " + imgDir);
-    log("När du är inloggad: ta bort --sql-only och kör samma kommando igen.");
+    log("Kör samma kommando utan --sql-only för att skicka till Cloudflare.");
     return;
   }
 

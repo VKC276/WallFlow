@@ -6,32 +6,21 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 
 ## Kör så här
 
-Du har redan `wallflow-export.json` och Node.
-
-1. Checka ut den här branchen (PR med `cloudflare/migrate.mjs`).
-2. En gång, i samma terminal som du ska migrera från:
+Du har redan `wallflow-export.json`, Node och Cloudflare-inloggning (API-token). **Kör inte** `npx wrangler login` — det krockar med `CLOUDFLARE_API_TOKEN`.
 
 ```bash
-npx wrangler login
-```
-
-Godkänn Cloudflare i webbläsaren.
-
-3. Kör (valfri sökväg till JSON-filen):
-
-```bash
-node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json
+node cloudflare/migrate.mjs /sökväg/till/wallflow-export.json
 ```
 
 Skriptet kopierar snapshoten, skriver SQL, hämtar Drive-bilder, skapar D1/KV/R2 om de saknas, kör schemat, importerar raderna och laddar upp bilderna till R2. Samma kommando går att köra om (det skriver över D1-tabellerna).
 
-Utan Cloudflare-inloggning just nu:
+Om D1-skapande klagar på konto: sätt `CLOUDFLARE_ACCOUNT_ID` till samma konto som tokenen (Cloudflare Dashboard → höger sidomeny, eller `npx wrangler whoami`).
+
+Bara lokala filer, utan att röra Cloudflare:
 
 ```bash
-node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json --sql-only
+node cloudflare/migrate.mjs /sökväg/till/wallflow-export.json --sql-only
 ```
-
-Då får du bara `cloudflare/snapshots/import.sql` och nedladdade bilder. När `wrangler login` är klar: samma kommando **utan** `--sql-only`.
 
 Committa inte `wallflow-export.json` — den innehåller lösenordshashar.
 
