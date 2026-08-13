@@ -6,15 +6,22 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 
 ## Kör så här
 
-Du har redan `wallflow-export.json`, Node och Cloudflare-inloggning (API-token). **Kör inte** `npx wrangler login` — det krockar med `CLOUDFLARE_API_TOKEN`.
+Två olika system:
+
+| | Vad | Vad du gör |
+|--|-----|------------|
+| **Cloudflare** | Dit datan ska (D1 + R2) | Du är redan inloggad via `CLOUDFLARE_API_TOKEN`. Rör inte `wrangler login`. |
+| **GitHub / den här mappen** | Bara var `migrate.mjs` ligger | Ingen git-inloggning, ingen `git pull` för att prata med Cloudflare. |
+
+Kör skriptet från WallFlow-mappen, med sökvägen till JSON-filen. Tokenen från det andra projektet ska vara satt i **samma terminal**:
 
 ```bash
 node cloudflare/migrate.mjs /sökväg/till/wallflow-export.json
 ```
 
-Skriptet kopierar snapshoten, skriver SQL, hämtar Drive-bilder, skapar D1/KV/R2 om de saknas, kör schemat, importerar raderna och laddar upp bilderna till R2. Samma kommando går att köra om (det skriver över D1-tabellerna).
+Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar upp bilderna. Samma kommando går att köra om (det skriver över D1-tabellerna).
 
-Om D1-skapande klagar på konto: sätt `CLOUDFLARE_ACCOUNT_ID` till samma konto som tokenen (Cloudflare Dashboard → höger sidomeny, eller `npx wrangler whoami`).
+Om D1-skapande klagar på konto: sätt `CLOUDFLARE_ACCOUNT_ID` till samma konto som i det andra Cloudflare-projektet.
 
 Bara lokala filer, utan att röra Cloudflare:
 
