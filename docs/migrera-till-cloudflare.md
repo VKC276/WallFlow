@@ -1,10 +1,41 @@
 # Migrera WallFlow från Google Sheets/GAS till Cloudflare
 
-WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script**-API som läser och skriver ett **Google Sheet** (leder, användare, inställningar) och **Google Drive** (ledbilder). Målet är att flytta backend till Cloudflare: **Workers** (API), **D1** (data), **R2** (bilder) och **KV** (sessioner). Frontend (`index.html`, `display.html`) kan ligga kvar på GitHub Pages i ett första steg, eller flyttas till Cloudflare Pages.
+WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script**-API som läser och skriver ett **Google Sheet** och **Google Drive**. Målet är Cloudflare: **Workers** (API), **D1** (data), **R2** (bilder) och **KV** (sessioner).
 
-**All data ska med** — leder (nummer, färg, byggare, datum, anteckningar, livslängd, bild), användare, graderingar, QR-bas-URL och Drive-foton. Det enda som inte flyttas är tillfälliga GAS-sessioner (alla loggar in igen) och sheet-formlerna i kolumn C/F (samma värden räknas om i Worker).
+**All data ska med.** Du behöver inte klicka dig igenom D1/R2/SQL för hand — ett kommando gör import + bilder + uppladdning.
 
-Den här guiden handlar om **hur datan kommer över**. Själva Worker-API:t (ersättare till `gas/Code.gs`) är ett separat steg; importen kan göras innan det finns.
+## Kör så här
+
+Du har redan `wallflow-export.json` och Node.
+
+1. Checka ut den här branchen (PR med `cloudflare/migrate.mjs`).
+2. En gång, i samma terminal som du ska migrera från:
+
+```bash
+npx wrangler login
+```
+
+Godkänn Cloudflare i webbläsaren.
+
+3. Kör (valfri sökväg till JSON-filen):
+
+```bash
+node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json
+```
+
+Skriptet kopierar snapshoten, skriver SQL, hämtar Drive-bilder, skapar D1/KV/R2 om de saknas, kör schemat, importerar raderna och laddar upp bilderna till R2. Samma kommando går att köra om (det skriver över D1-tabellerna).
+
+Utan Cloudflare-inloggning just nu:
+
+```bash
+node cloudflare/migrate.mjs ~/Downloads/wallflow-export.json --sql-only
+```
+
+Då får du bara `cloudflare/snapshots/import.sql` och nedladdade bilder. När `wrangler login` är klar: samma kommando **utan** `--sql-only`.
+
+Committa inte `wallflow-export.json` — den innehåller lösenordshashar.
+
+Worker-API:t som ersätter GAS är ett senare steg. Live-appen pekar kvar på GAS tills `GAS_API_URL` byts.
 
 ## Målarkitektur
 
@@ -45,7 +76,7 @@ Kontrollera efter import att ett stickprov av leder får samma Ja/Nej/datum som 
 - **GAS-sessioner** — användare loggar in igen mot Worker.
 - Sheetets egna formler, summeringsrader och bunden Kod.gs som inte är WallFlow.
 
-`cloudflare/import.mjs` defaultar till **full kopia**. `--mode=structure` (nollställ leder) finns kvar men ska inte användas här.
+`cloudflare/migrate.mjs` kör allt ovan. Avsnitten nedan är bakgrund och felsökning.
 
 ## Steg 1 — Exportera från Google
 
@@ -239,9 +270,7 @@ Sessionstoken i GAS är UUID i Cache/Properties. De dör vid cutover.
 
 - [ ] `exportMigrationSnapshot` körd, JSON ner i `cloudflare/snapshots/`
 - [ ] Sheetet fryst för skrivning
-- [ ] D1 + KV + R2 skapade, `schema.sql` kört remote
-- [ ] `import.mjs` (full) kört mot remote D1
-- [ ] `download-images.mjs` + R2-uppladdning, samma antal som i sheetet
+- [ ] `node cloudflare/migrate.mjs wallflow-export.json` lyckades (D1 + R2)
 - [ ] Antal leder / users / grades stämmer, stickprov på ledinnehåll OK
 - [ ] Exportfilen inte commitad
 - [ ] Worker deployad och `GAS_API_URL` bytt (senare PR)
@@ -252,6 +281,7 @@ Sessionstoken i GAS är UUID i Cache/Properties. De dör vid cutover.
 
 | Fil | Roll |
 |-----|------|
+| `cloudflare/migrate.mjs` | Ett kommando: JSON → D1 + R2 |
 | `cloudflare/schema.sql` | D1-tabeller |
 | `cloudflare/import.mjs` | Snapshot/CSV → SQL (default: all data) |
 | `cloudflare/download-images.mjs` | Drive → lokala filer inför R2 |
