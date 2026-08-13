@@ -10,11 +10,10 @@ Guiden du läser är `/workspace/docs/migrera-till-cloudflare.md` (markdown, int
 
 Skriptet: `/workspace/cloudflare/migrate.mjs`  
 JSON-exporten: `/workspace/cloudflare/snapshots/wallflow-export.json`  
-Token: skapa `/workspace/cloudflare/.env` (gitignoreras) från `cloudflare/.env.example`. Klistra inte in tokenen i chatten.
+Token: skapa `/workspace/cloudflare/.env` (gitignoreras) med samma `CLOUDFLARE_API_TOKEN` som i det andra projektet. Account ID behövs inte. Klistra inte in tokenen i chatten.
 
 ```
 CLOUDFLARE_API_TOKEN=...
-CLOUDFLARE_ACCOUNT_ID=...
 ```
 
 Kör inte `wrangler login`. När `.env` finns kör jag:
@@ -24,8 +23,6 @@ node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-
 ```
 
 Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar upp bilderna. Samma kommando går att köra om (det skriver över D1-tabellerna).
-
-Om D1-skapande klagar på konto: sätt `CLOUDFLARE_ACCOUNT_ID` till samma konto som i det andra Cloudflare-projektet.
 
 Bara lokala filer, utan att röra Cloudflare:
 

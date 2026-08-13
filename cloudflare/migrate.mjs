@@ -362,7 +362,7 @@ function verify() {
 }
 
 function main() {
-  loadDotEnv();
+  if (loadDotEnv()) log("Läste cloudflare/.env");
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(usage());
