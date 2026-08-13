@@ -6,17 +6,15 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 
 ## Kör så här
 
-Två olika system:
+Guiden du läser är `/workspace/docs/migrera-till-cloudflare.md` (markdown, inte data).
 
-| | Vad | Vad du gör |
-|--|-----|------------|
-| **Cloudflare** | Dit datan ska (D1 + R2) | Du är redan inloggad via `CLOUDFLARE_API_TOKEN`. Rör inte `wrangler login`. |
-| **GitHub / den här mappen** | Bara var `migrate.mjs` ligger | Ingen git-inloggning, ingen `git pull` för att prata med Cloudflare. |
+Skriptet: `/workspace/cloudflare/migrate.mjs`  
+JSON-exporten: lägg filen som `/workspace/cloudflare/snapshots/wallflow-export.json`
 
-Kör skriptet från WallFlow-mappen, med sökvägen till JSON-filen. Tokenen från det andra projektet ska vara satt i **samma terminal**:
+`CLOUDFLARE_API_TOKEN` ska redan vara satt. Kör inte `wrangler login`.
 
 ```bash
-node cloudflare/migrate.mjs /sökväg/till/wallflow-export.json
+node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json
 ```
 
 Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar upp bilderna. Samma kommando går att köra om (det skriver över D1-tabellerna).
@@ -26,7 +24,7 @@ Om D1-skapande klagar på konto: sätt `CLOUDFLARE_ACCOUNT_ID` till samma konto 
 Bara lokala filer, utan att röra Cloudflare:
 
 ```bash
-node cloudflare/migrate.mjs /sökväg/till/wallflow-export.json --sql-only
+node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json --sql-only
 ```
 
 Committa inte `wallflow-export.json` — den innehåller lösenordshashar.
