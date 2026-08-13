@@ -14,13 +14,13 @@
     {
       "binding": "DB",
       "database_name": "wallflow",
-      "database_id": "00000000-0000-0000-0000-000000000001"
+      "database_id": "28346541-e21c-435c-8407-43941e2a93e6"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "SESSIONS",
-      "id": "00000000000000000000000000000001"
+      "id": "ef41bb5ed9d74b6eb68ef0e516867a43"
     }
   ],
   "r2_buckets": [

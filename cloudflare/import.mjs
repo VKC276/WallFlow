@@ -416,12 +416,14 @@ function applyMode(data, mode, rewriteImages) {
 function emitSql(data) {
   const lines = [];
   lines.push("-- Genererad av cloudflare/import.mjs — kör inte in i git.");
+  // Undvik BEGIN/COMMIT — D1 remote (`wrangler d1 execute --remote --file`)
+  // avvisar SQL-transaktioner (kräver DO storage-API i stället).
   lines.push("PRAGMA foreign_keys = OFF;");
-  lines.push("BEGIN TRANSACTION;");
   lines.push("DELETE FROM routes;");
   lines.push("DELETE FROM grades;");
   lines.push("DELETE FROM users;");
   lines.push("DELETE FROM settings;");
+  // … inserts follow below …
 
   data.grades.forEach((namn, i) => {
     lines.push(`INSERT INTO grades (namn, sort_order) VALUES (${sqlStr(namn)}, ${i + 1});`);
@@ -449,7 +451,6 @@ function emitSql(data) {
 
   lines.push(`INSERT INTO settings (key, value) VALUES ('routeLifetimeDays', ${sqlStr(String(data.routeLifetimeDays))});`);
   lines.push(`INSERT INTO settings (key, value) VALUES ('baseUrlQr', ${sqlStr(data.baseUrlQr)});`);
-  lines.push("COMMIT;");
   lines.push("PRAGMA foreign_keys = ON;");
   return lines.join("\n") + "\n";
 }

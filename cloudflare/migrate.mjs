@@ -333,6 +333,13 @@ function ensureR2() {
   log("Säkerställer R2-bucket " + R2_BUCKET + "…");
   const listed = wrangler(["r2", "bucket", "list"], { capture: true, allowFail: true });
   const out = (listed.stdout || "") + (listed.stderr || "");
+  if (/Please enable R2|code: 10042/i.test(out)) {
+    die(
+      "R2 är inte aktiverat på Cloudflare-kontot.\n" +
+        "Öppna https://dash.cloudflare.com/?to=/:account/r2 och klicka Enable/Purchase R2\n" +
+        "(betalningsmetod krävs även för free tier). Kör sedan migrate.mjs igen."
+    );
+  }
   if (out.includes(R2_BUCKET)) {
     log("R2 " + R2_BUCKET + " finns redan");
     return;
@@ -340,6 +347,13 @@ function ensureR2() {
   const created = wrangler(["r2", "bucket", "create", R2_BUCKET], { allowFail: true });
   if (created.status !== 0) {
     const err = (created.stderr || created.stdout || "").trim();
+    if (/Please enable R2|code: 10042/i.test(err)) {
+      die(
+        "R2 är inte aktiverat på Cloudflare-kontot.\n" +
+          "Öppna https://dash.cloudflare.com/?to=/:account/r2 och klicka Enable/Purchase R2\n" +
+          "(betalningsmetod krävs även för free tier). Kör sedan migrate.mjs igen."
+      );
+    }
     if (!/already exists|already owned/i.test(err)) {
       die("Kunde inte skapa R2-bucket:\n" + err);
     }
