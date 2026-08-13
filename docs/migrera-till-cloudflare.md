@@ -9,18 +9,17 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 Guiden du läser är `/workspace/docs/migrera-till-cloudflare.md` (markdown, inte data).
 
 Skriptet: `/workspace/cloudflare/migrate.mjs`  
-JSON-exporten: `/workspace/cloudflare/snapshots/wallflow-export.json`  
-Token: skapa `/workspace/cloudflare/.env` (gitignoreras) med samma `CLOUDFLARE_API_TOKEN` som i det andra projektet. Account ID behövs inte. Klistra inte in tokenen i chatten.
+JSON-exporten: `/workspace/cloudflare/snapshots/wallflow-export.json`
 
-```
-CLOUDFLARE_API_TOKEN=...
-```
+Ingen separat credentials-fil. Samma som i det andra projektet: `CLOUDFLARE_API_TOKEN` i miljön. Kör inte `wrangler login`.
 
-Kör inte `wrangler login`. När `.env` finns kör jag:
+I den här molnsessionen syns inte det andra projektets miljövariabler. Kör därför migreringen **i samma terminal som det andra projektet** (där tokenen redan finns):
 
 ```bash
-node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json
+node /sökväg/till/WallFlow/cloudflare/migrate.mjs /sökväg/till/wallflow-export.json
 ```
+
+Eller, i den här sessionen, om tokenen redan är exporterad: `node /workspace/cloudflare/migrate.mjs /workspace/cloudflare/snapshots/wallflow-export.json`
 
 Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar upp bilderna. Samma kommando går att köra om (det skriver över D1-tabellerna).
 
