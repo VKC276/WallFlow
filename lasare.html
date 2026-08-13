@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12151a">
+  <meta name="description" content="WallFlow läsarvy — nya leder och ledbyggare. Ingen inloggning, inga bilder.">
+  <!-- Google Sites / iframe: tillåt inbäddning -->
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
+  <title>WallFlow — Nytt på väggen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #12151a;
+      --bg-deep: #0e1116;
+      --text: #f2efe8;
+      --muted: #9aa3b2;
+      --line: rgba(255, 255, 255, 0.1);
+      --accent: #e8a54b;
+      --accent-2: #6ec8b0;
+      --surface: rgba(255, 255, 255, 0.04);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --font-display: "Syne", sans-serif;
+      --font-body: "Figtree", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--text);
+      font-family: var(--font-body);
+      background:
+        radial-gradient(800px 420px at 12% -10%, rgba(232, 165, 75, 0.12), transparent 55%),
+        radial-gradient(640px 380px at 100% 0%, rgba(110, 200, 176, 0.08), transparent 50%),
+        linear-gradient(180deg, #161a21 0%, var(--bg) 45%, var(--bg-deep) 100%);
+    }
+    body {
+      padding:
+        calc(14px + var(--safe-top))
+        14px
+        calc(16px + var(--safe-bottom));
+    }
+    /* Tätare chrome i iframe / Google Sites */
+    html.is-embed body { padding: 10px 10px 12px; }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 14px;
+    }
+    .brand {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1.55rem, 5.5vw, 2.1rem);
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      background: linear-gradient(120deg, #fff 12%, var(--accent) 55%, var(--accent-2) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .lede {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.35;
+      max-width: 36em;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 14px 0 10px;
+    }
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .seg button {
+      appearance: none;
+      border: 0;
+      margin: 0;
+      padding: 7px 12px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .seg button[aria-pressed="true"] {
+      background: rgba(232, 165, 75, 0.18);
+      color: var(--text);
+    }
+    .meta {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-error {
+      color: #f0a8a0;
+    }
+    .list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--line);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px 12px;
+      padding: 12px 2px 12px 0;
+      border-bottom: 1px solid var(--line);
+      align-items: start;
+    }
+    .swatch {
+      width: 10px;
+      align-self: stretch;
+      min-height: 2.6rem;
+      border-radius: 999px;
+      background: var(--grade, #6b7280);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    }
+    .row-main { min-width: 0; }
+    .row-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      align-items: baseline;
+    }
+    .nr {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.03em;
+    }
+    .grade {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .builder {
+      margin: 4px 0 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .builder span {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .when {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    .notes {
+      margin: 6px 0 0;
+      color: var(--text);
+      font-size: 0.86rem;
+      line-height: 1.35;
+      opacity: 0.88;
+      white-space: pre-wrap;
+    }
+    .empty {
+      padding: 28px 8px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .boot {
+      padding: 40px 8px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    footer {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.4;
+    }
+    @media (max-width: 420px) {
+      .meta { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <p class="boot" id="boot">Hämtar leder…</p>
+  </div>
+
+  <script>
+const API_URL = "https://wallflow.muddy-rice-38d4.workers.dev/";
+const REFRESH_MS = 5 * 60 * 1000;
+const COLOR_HEX = {
+  "Grön": "#2ecc71",
+  "Blå": "#3498db",
+  "Röd": "#e74c3c",
+  "Svart": "#2c3e50",
+  "Vit": "#ecf0f1",
+  "Wildcard": "#c4a35a",
+  "Wildcards": "#c4a35a",
+  "Ej uppsatt": "#6b7280"
+};
+const EJ_UPPSATT = "Ej uppsatt";
+
+let routes = [];
+let filterMode = "nytt"; // nytt | alla
+let daysWindow = 30;
+let lastUpdatedAt = null;
+let lastError = "";
+let refreshTimer = null;
+
+(function bootEmbedFlag_() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("embed") === "1" || window.self !== window.top) {
+    document.documentElement.classList.add("is-embed");
+  }
+  const d = Number(q.get("days"));
+  if (Number.isFinite(d) && d >= 1 && d <= 3650) daysWindow = Math.round(d);
+  const f = String(q.get("filter") || "").toLowerCase();
+  if (f === "alla" || f === "all") filterMode = "alla";
+  if (f === "nytt" || f === "new") filterMode = "nytt";
+})();
+
+function escapeHtml_(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function colorHex_(name) {
+  const n = String(name || "").trim();
+  return COLOR_HEX[n] || "#95a5a6";
+}
+
+function isEjUppsatt_(r) {
+  return String(r && r.Gradering || "").trim().toLowerCase() === EJ_UPPSATT.toLowerCase();
+}
+
+function normalizeRoute_(r) {
+  return {
+    Nr: String(r.Nr != null ? r.Nr : "").trim(),
+    Gradering: String(r.Gradering || "").trim(),
+    Ledbyggare: String(r.Ledbyggare || "").trim(),
+    Byggdatum: String(r.Byggdatum || "").trim().slice(0, 10),
+    Anteckningar: String(r.Anteckningar || "").trim(),
+    DagsAttByggaOm: String(r.DagsAttByggaOm || "").trim()
+  };
+}
+
+function listableRoutes_() {
+  return routes.filter((r) => {
+    if (!r.Nr && !r.Gradering) return false;
+    if (String(r.DagsAttByggaOm || "") === "Antal") return false;
+    return true;
+  });
+}
+
+function daysAgoYmd_(n) {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function filteredRoutes_() {
+  let list = listableRoutes_().filter((r) => !isEjUppsatt_(r));
+  if (filterMode === "nytt") {
+    const since = daysAgoYmd_(daysWindow);
+    list = list.filter((r) => r.Byggdatum && r.Byggdatum >= since);
+  }
+  list.sort((a, b) => {
+    const da = a.Byggdatum || "";
+    const db = b.Byggdatum || "";
+    if (da !== db) return db.localeCompare(da);
+    return String(a.Nr).localeCompare(String(b.Nr), "sv", { numeric: true });
+  });
+  return list;
+}
+
+function formatDateSv_(ymd) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return ymd || "—";
+  return m[3] + "/" + m[2] + " " + m[1];
+}
+
+function formatClock_(d) {
+  try {
+    return new Intl.DateTimeFormat("sv-SE", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: "Europe/Stockholm"
+    }).format(d);
+  } catch (_) {
+    return d.toLocaleString("sv-SE");
+  }
+}
+
+function setFilter_(mode) {
+  filterMode = mode === "alla" ? "alla" : "nytt";
+  render_();
+}
+
+function render_() {
+  const list = filteredRoutes_();
+  const updated = lastUpdatedAt ? ("Uppdaterad " + formatClock_(lastUpdatedAt)) : "";
+  const err = lastError
+    ? `<span class="meta status-error">${escapeHtml_(lastError)}</span>`
+    : `<span class="meta">${escapeHtml_(updated)}</span>`;
+
+  const rows = list.map((r) => {
+    const builder = r.Ledbyggare || "Okänd byggare";
+    const notes = r.Anteckningar
+      ? `<p class="notes">${escapeHtml_(r.Anteckningar)}</p>`
+      : "";
+    return `
+      <li class="row">
+        <span class="swatch" style="--grade:${escapeHtml_(colorHex_(r.Gradering))}" aria-hidden="true"></span>
+        <div class="row-main">
+          <div class="row-top">
+            <span class="nr">Led ${escapeHtml_(r.Nr || "—")}</span>
+            <span class="grade">${escapeHtml_(r.Gradering || "")}</span>
+          </div>
+          <p class="builder"><span>Byggd av</span> ${escapeHtml_(builder)}</p>
+          <p class="when">${escapeHtml_(formatDateSv_(r.Byggdatum))}</p>
+          ${notes}
+        </div>
+      </li>`;
+  }).join("");
+
+  const emptyMsg = filterMode === "nytt"
+    ? `Inga nya leder senaste ${daysWindow} dagarna.`
+    : "Inga leder att visa.";
+
+  document.getElementById("app").innerHTML = `
+    <header>
+      <h1 class="brand">WallFlow</h1>
+      <p class="lede">Nytt på väggen — vilka leder som satts och vem som byggt. Ingen inloggning.</p>
+    </header>
+    <div class="toolbar" role="toolbar" aria-label="Filter">
+      <div class="seg" role="group">
+        <button type="button" aria-pressed="${filterMode === "nytt"}" onclick="setFilter_('nytt')">Nytt (${daysWindow}d)</button>
+        <button type="button" aria-pressed="${filterMode === "alla"}" onclick="setFilter_('alla')">Alla</button>
+      </div>
+      ${err}
+    </div>
+    <ul class="list" aria-label="Leder">
+      ${rows || `<li class="empty">${escapeHtml_(emptyMsg)}</li>`}
+    </ul>
+    <footer>Bäddas in via Google Sites · uppdateras automatiskt · inga bilder</footer>
+  `;
+}
+
+function fetchAppData_() {
+  return fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain; charset=UTF-8" },
+    redirect: "follow",
+    body: JSON.stringify({ action: "getAppData", token: "", args: [] })
+  }).then((r) => {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+}
+
+function load_(isRefresh) {
+  return fetchAppData_()
+    .then((data) => {
+      routes = ((data && data.routes) || []).map(normalizeRoute_);
+      lastUpdatedAt = new Date();
+      lastError = "";
+      render_();
+    })
+    .catch((e) => {
+      lastError = (e && e.message) || "Kunde inte hämta data";
+      if (!isRefresh || !routes.length) {
+        document.getElementById("app").innerHTML = `
+          <header>
+            <h1 class="brand">WallFlow</h1>
+            <p class="lede status-error">${escapeHtml_(lastError)}</p>
+          </header>`;
+      } else {
+        render_();
+      }
+    });
+}
+
+window.setFilter_ = setFilter_;
+load_(false);
+refreshTimer = setInterval(() => load_(true), REFRESH_MS);
+  </script>
+</body>
+</html>

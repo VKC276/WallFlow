@@ -10,6 +10,8 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. **Space** bläddrar en ledlista per färg (nyaste längst upp).
 
+**Läsarvy (besökare / Google Sites-iframe):** [https://wallflow.vastervikclimbing.se/lasare.html](https://wallflow.vastervikclimbing.se/lasare.html) — nya leder + vem som byggt, **inga bilder**. Bädda in t.ex. med `?embed=1` (tätare layout) eller `?days=14` (fönster för ”Nytt”).
+
 ## Google Sheet
 
 Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`
