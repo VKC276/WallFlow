@@ -201,6 +201,14 @@ function ensureAccountId() {
   }
 }
 
+function wranglerLooksLoggedIn(stdout, stderr, status) {
+  const out = ((stdout || "") + (stderr || "")).toLowerCase();
+  if (/you are not authenticated|not authenticated|please run [`']wrangler login/.test(out)) {
+    return false;
+  }
+  return status === 0;
+}
+
 function ensureLoggedIn() {
   if (hasApiToken()) {
     log("Använder CLOUDFLARE_API_TOKEN — hoppar över wrangler login.");
@@ -209,13 +217,13 @@ function ensureLoggedIn() {
   }
   log("Kollar Wrangler-inloggning…");
   const r = wrangler(["whoami"], { capture: true, allowFail: true });
-  if (r.status === 0) return;
   const out = ((r.stdout || "") + (r.stderr || "")).trim();
+  if (wranglerLooksLoggedIn(r.stdout, r.stderr, r.status)) return;
   if (out) console.error(out);
   die(
-    "Wrangler hittade ingen inloggning.\n" +
-      "Sätt CLOUDFLARE_API_TOKEN (rekommenderat om du redan är inloggad i ett annat projekt)\n" +
-      "eller kör npx wrangler login i en terminal utan den variabeln."
+    "Den här miljön är inte inloggad i Cloudflare (ingen CLOUDFLARE_API_TOKEN).\n" +
+      "Tokenen från det andra projektet måste vara satt i samma terminal som migrate.mjs.\n" +
+      "Kör inte wrangler login om tokenen redan finns där."
   );
 }
 
