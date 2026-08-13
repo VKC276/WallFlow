@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wallflow",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  // Fyll i riktiga ID:n efter `wrangler d1 create` / `kv namespace create` (eller kör migrate.mjs).
+  // Lokalt (`wrangler dev`) fungerar med placeholder-ID:n.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wallflow",
+      "database_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "00000000000000000000000000000001"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BILDER",
+      "bucket_name": "wallflow-bilder"
+    }
+  ]
+}

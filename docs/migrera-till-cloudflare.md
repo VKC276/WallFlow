@@ -23,7 +23,7 @@ Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar up
 
 Committa inte `wallflow-export.json` — den innehåller lösenordshashar.
 
-Worker-API:t som ersätter GAS är ett senare steg. Live-appen pekar kvar på GAS tills `GAS_API_URL` byts.
+Worker-API:t ligger i `cloudflare/src/` (samma `{ action, token, args }`-kontrakt som GAS). Live-appen pekar kvar på GAS tills `GAS_API_URL` i `index.html` / `display.html` byts till Worker-URL.
 
 ## Målarkitektur
 
@@ -191,12 +191,41 @@ const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0"))
 // hex ska matcha users[].passwordHash
 ```
 
-## Steg 6 — Cutover (när Worker är deployad)
+## Steg 6 — Deploya Worker-API
 
-1. Deploya Worker med **samma action-API** som GAS (`getAppData`, `verifyAdminPassword`, `saveRoute`, …) mot D1/R2/KV.
-2. Byt `GAS_API_URL` i `index.html` och `display.html` till Worker-URL (eller samma origin via Pages).
-3. Logga in, öppna ett par kända leder (färg, anteckning, bild), kontrollera `display.html`.
-4. DNS: CNAME `wallflow.vastervikclimbing.se` kan peka kvar på GitHub Pages så länge API-URL är absolut. När Pages flyttas till Cloudflare, peka zonen dit.
+Från `cloudflare/` (efter att `wrangler.jsonc` har riktiga D1/KV/R2-ID:n — `migrate.mjs` kan skapa resurserna):
+
+```powershell
+cd C:\sökväg\till\WallFlow\cloudflare
+$env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
+npx wrangler deploy
+```
+
+Worker svarar på:
+
+| Metod | Sökväg | Syfte |
+|-------|--------|--------|
+| `POST` | `/` eller `/api` | GAS-kompatibelt JSON-API |
+| `GET` | `/img/<nyckel>` | Bild från R2 (`led-13.jpg`) |
+| `GET` | `/` | Health `{ ok, app: "WallFlow", backend: "cloudflare" }` |
+
+Lokal smoke:
+
+```bash
+cd cloudflare
+node scripts/seed-local.mjs
+npx wrangler dev   # annan terminal
+node scripts/smoke-api.mjs
+```
+
+Inloggning lokalt efter seed: `admin` / `wallflow`.
+
+## Steg 7 — Cutover
+
+1. Byt `GAS_API_URL` i `index.html` och `display.html` till Worker-URL (t.ex. `https://wallflow.<konto>.workers.dev/` eller custom domain).
+2. Frontenden mappar R2-nycklar (`led-13.jpg`) till `{API_ORIGIN}/img/led-13.jpg`. Drive-ID:n via `lh3` fungerar kvar under övergången.
+3. Logga in, öppna kända leder (färg, anteckning, bild), kontrollera `display.html`.
+4. DNS: CNAME `wallflow.vastervikclimbing.se` kan peka kvar på GitHub Pages så länge API-URL är absolut.
 5. I GAS: **Deploy → Manage deployments → Disable**. I sheetet: dela som visning eller arkivera.
 6. Drive-mappen `Bilder` kan lämnas som arkiv tills R2 är bekräftad, därefter rensas.
 

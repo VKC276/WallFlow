@@ -3427,10 +3427,37 @@ function plockaNerLed() {
   showToast("Markerad som Ej uppsatt — tryck Spara led för att spara");
 }
 
+/** Origin för Worker-API (bilder under /img/…). Tom om GAS fortfarande används. */
+function apiOrigin_() {
+  const u = String(GAS_API_URL || "").trim();
+  if (!u || u.includes("PASTE_") || u.includes("script.google.com")) return "";
+  try {
+    return new URL(u).origin;
+  } catch (_) {
+    return "";
+  }
+}
+
+function isR2ImageKey_(id) {
+  const s = String(id || "").trim();
+  if (!s || /^https?:/i.test(s) || /^data:/i.test(s)) return false;
+  return /^led-[\w\-]+\.(jpe?g|png|webp)$/i.test(s) || /\.(jpe?g|png|webp)$/i.test(s);
+}
+
 function routeImageSrc_(bild, size) {
   const b = String(bild || "").trim();
   if (!b) return "";
   if (b.startsWith("http") || b.startsWith("data:")) return b;
+  if (b.startsWith("/img/")) {
+    const origin = apiOrigin_();
+    return origin ? origin + b : b;
+  }
+  if (isR2ImageKey_(b)) {
+    const origin = apiOrigin_();
+    const path = "/img/" + encodeURIComponent(b);
+    return origin ? origin + path : path;
+  }
+  // Legacy: Google Drive-fil-ID via lh3
   const px = Math.max(100, Math.min(2048, Number(size) || 800));
   return "https://lh3.googleusercontent.com/d/" + encodeURIComponent(b) + "=s" + px;
 }
@@ -3855,12 +3882,17 @@ function exportRouteImageDataUrl_() {
 function isDriveFileId_(id) {
   const s = String(id || "").trim();
   if (!s || /^https?:/i.test(s) || /^data:/i.test(s)) return false;
+  if (isR2ImageKey_(s)) return false;
   return /^[a-zA-Z0-9_-]{20,}$/.test(s);
+}
+
+function isStoredImageRef_(id) {
+  return isDriveFileId_(id) || isR2ImageKey_(id);
 }
 
 function deleteRouteImageOnServer_(nr, fileId) {
   return new Promise((resolve) => {
-    if (!nr && !isDriveFileId_(fileId)) {
+    if (!nr && !isStoredImageRef_(fileId)) {
       resolve();
       return;
     }

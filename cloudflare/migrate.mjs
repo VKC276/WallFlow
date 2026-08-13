@@ -19,6 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const SNAP_DIR = path.join(HERE, "snapshots");
 const WRANGLER_TOML = path.join(HERE, "wrangler.toml");
+const WRANGLER_JSONC = path.join(HERE, "wrangler.jsonc");
 const DB_NAME = "wallflow";
 const KV_TITLE = "SESSIONS";
 const R2_BUCKET = "wallflow-bilder";
@@ -159,11 +160,32 @@ function readTomlIds(text) {
   };
 }
 
+function readJsoncIds(text) {
+  const d1 = text.match(/"database_id"\s*:\s*"([^"]+)"/);
+  const kv = text.match(/"kv_namespaces"\s*:\s*\[[\s\S]*?"id"\s*:\s*"([^"]+)"/);
+  return {
+    d1: d1 && !tomlHasPlaceholder(d1[1]) ? d1[1] : "",
+    kv: kv && !tomlHasPlaceholder(kv[1]) ? kv[1] : ""
+  };
+}
+
+function readExistingIds() {
+  if (fs.existsSync(WRANGLER_JSONC)) {
+    const ids = readJsoncIds(fs.readFileSync(WRANGLER_JSONC, "utf8"));
+    if (ids.d1 || ids.kv) return ids;
+  }
+  if (fs.existsSync(WRANGLER_TOML)) {
+    return readTomlIds(fs.readFileSync(WRANGLER_TOML, "utf8"));
+  }
+  return { d1: "", kv: "" };
+}
+
 function writeToml(d1Id, kvId) {
   const body =
     `name = "wallflow"\n` +
-    `main = "src/worker.js"\n` +
-    `compatibility_date = "2026-08-13"\n\n` +
+    `main = "src/index.js"\n` +
+    `compatibility_date = "2026-08-13"\n` +
+    `compatibility_flags = [ "nodejs_compat" ]\n\n` +
     `[[d1_databases]]\n` +
     `binding = "DB"\n` +
     `database_name = "${DB_NAME}"\n` +
@@ -176,6 +198,42 @@ function writeToml(d1Id, kvId) {
     `bucket_name = "${R2_BUCKET}"\n`;
   fs.writeFileSync(WRANGLER_TOML, body);
   log("Skrev cloudflare/wrangler.toml (gitignoreras)");
+}
+
+function writeJsonc(d1Id, kvId) {
+  const body = `{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wallflow",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "${DB_NAME}",
+      "database_id": "${d1Id}"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "${kvId}"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BILDER",
+      "bucket_name": "${R2_BUCKET}"
+    }
+  ]
+}
+`;
+  fs.writeFileSync(WRANGLER_JSONC, body);
+  log("Uppdaterade cloudflare/wrangler.jsonc med D1/KV-id");
 }
 
 function parseJsonOutput(text) {
@@ -290,16 +348,11 @@ function ensureR2() {
 
 function ensureCloudflare() {
   ensureLoggedIn();
-  let d1Id = "";
-  let kvId = "";
-  if (fs.existsSync(WRANGLER_TOML)) {
-    const ids = readTomlIds(fs.readFileSync(WRANGLER_TOML, "utf8"));
-    d1Id = ids.d1;
-    kvId = ids.kv;
-  }
+  let { d1: d1Id, kv: kvId } = readExistingIds();
   if (!d1Id) d1Id = ensureD1();
   if (!kvId) kvId = ensureKv();
   ensureR2();
+  writeJsonc(d1Id, kvId);
   writeToml(d1Id, kvId);
 }
 

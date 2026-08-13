@@ -1,0 +1,9 @@
+# Agent tooling (Cloudflare skills etc.) — inte del av appen
+.agents/
+skills-lock.json
+
+# Cloudflare local / secrets
+cloudflare/node_modules/
+cloudflare/.wrangler/
+cloudflare/.env
+cloudflare/wrangler.toml

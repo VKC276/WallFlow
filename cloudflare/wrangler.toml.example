@@ -1,14 +1,16 @@
-# Kopiera till wrangler.toml och fyll i ID:n från:
+# Deprecated — använd wrangler.jsonc i samma mapp.
+# Behålls som referens för migrate.mjs / äldre instruktioner.
+#
+# Kopiera ID:n från:
 #   npx wrangler d1 create wallflow
 #   npx wrangler kv namespace create SESSIONS
 #   npx wrangler r2 bucket create wallflow-bilder
-#
-# name/main pekar på Worker-API:t (kommer i en senare PR).
-# Importen behöver bara D1-blocket.
+# till wrangler.jsonc (d1_databases / kv_namespaces / r2_buckets).
 
 name = "wallflow"
-main = "src/worker.js"
+main = "src/index.js"
 compatibility_date = "2026-08-13"
+compatibility_flags = [ "nodejs_compat" ]
 
 [[d1_databases]]
 binding = "DB"
