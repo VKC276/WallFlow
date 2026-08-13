@@ -1,0 +1,24 @@
+# Kopiera till wrangler.toml och fyll i ID:n från:
+#   npx wrangler d1 create wallflow
+#   npx wrangler kv namespace create SESSIONS
+#   npx wrangler r2 bucket create wallflow-bilder
+#
+# name/main pekar på Worker-API:t (kommer i en senare PR).
+# Importen behöver bara D1-blocket.
+
+name = "wallflow"
+main = "src/worker.js"
+compatibility_date = "2026-08-13"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "wallflow"
+database_id = "PASTE_D1_DATABASE_ID"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "PASTE_KV_NAMESPACE_ID"
+
+[[r2_buckets]]
+binding = "BILDER"
+bucket_name = "wallflow-bilder"

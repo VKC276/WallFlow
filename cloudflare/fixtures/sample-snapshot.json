@@ -1,0 +1,71 @@
+{
+  "app": "WallFlow",
+  "exportedAt": "2026-08-13T00:00:00.000Z",
+  "spreadsheetId": "test",
+  "routeLifetimeDays": 30,
+  "baseUrlQr": "https://exempel.se/routecard?nr=",
+  "grades": ["Grön", "Blå", "Röd", "Svart", "Vit"],
+  "routes": [
+    {
+      "Nr": "1",
+      "Gradering": "Blå",
+      "DagsAttByggaOm": "Ja",
+      "Ledbyggare": "Jesper",
+      "Byggdatum": "2026-06-14",
+      "Slutdatum": "2026-07-14",
+      "Anteckningar": "Nått nytt",
+      "Bild": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+      "Livslangd": 30
+    },
+    {
+      "Nr": "13",
+      "Gradering": "Röd",
+      "DagsAttByggaOm": "Nej",
+      "Ledbyggare": "Christoffer",
+      "Byggdatum": "2026-06-29",
+      "Slutdatum": "2026-07-29",
+      "Anteckningar": "",
+      "Bild": "",
+      "Livslangd": 45
+    },
+    {
+      "Nr": "W1",
+      "Gradering": "Wildcard",
+      "DagsAttByggaOm": "Nej",
+      "Ledbyggare": "Patric",
+      "Byggdatum": "2026-06-01",
+      "Slutdatum": "2026-07-01",
+      "Anteckningar": "Mixade grepp",
+      "Bild": "",
+      "Livslangd": 30
+    },
+    {
+      "Nr": "",
+      "Gradering": "",
+      "DagsAttByggaOm": "Antal",
+      "Ledbyggare": "",
+      "Byggdatum": "",
+      "Slutdatum": "",
+      "Anteckningar": "",
+      "Bild": ""
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "passwordHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "salt": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "role": "superadmin",
+      "name": "Admin",
+      "FirstLogin": "FALSE"
+    },
+    {
+      "username": "patric",
+      "passwordHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "salt": "dddddddddddddddddddddddddddddddd",
+      "role": "ledbyggare",
+      "name": "Patric",
+      "FirstLogin": "TRUE"
+    }
+  ]
+}

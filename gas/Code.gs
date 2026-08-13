@@ -14,6 +14,7 @@
  *        Execute as: Me
  *        Who has access: Anyone
  *   6. Klistra in /exec-URL:en i index.html som GAS_API_URL
+ *   7. Inför Cloudflare: kör exportMigrationSnapshot() (se docs/migrera-till-cloudflare.md)
  *
  * Spreadsheet (öppnas via ID, ej bundet):
  *   1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0
@@ -1455,4 +1456,73 @@ function setupFirstSuperadmin(username, name, password) {
     FirstLogin: "TRUE"
   }]);
   return "OK — logga in och byt lösenord (FirstLogin=TRUE).";
+}
+
+/**
+ * Engångsexport inför Cloudflare-migrering.
+ * Kör manuellt i editorn: exportMigrationSnapshot()
+ *
+ * Skriver wallflow-export.json i samma Drive-mapp som kalkylarket
+ * (innehåller lösenordshashar — dela inte filen, committa den inte).
+ *
+ * Se docs/migrera-till-cloudflare.md
+ */
+function exportMigrationSnapshot() {
+  var routes = readRoutes_();
+  var images = [];
+  for (var i = 0; i < routes.length; i++) {
+    var bild = String(routes[i].Bild || "").trim();
+    if (isWallflowDriveId_(bild)) {
+      images.push({
+        nr: routes[i].Nr,
+        fileId: bild,
+        suggestedKey: "led-" + safeRouteNrForFile_(routes[i].Nr) + ".jpg"
+      });
+    }
+    delete routes[i].__row;
+  }
+  var users = readUsers_({ skipEnsureHeaders: true }).map(function (u) {
+    return {
+      username: u.username,
+      passwordHash: u.passwordHash,
+      salt: u.salt,
+      role: u.role,
+      name: u.name,
+      FirstLogin: u.FirstLogin
+    };
+  });
+  var snapshot = {
+    app: "WallFlow",
+    exportedAt: new Date().toISOString(),
+    spreadsheetId: WALLFLOW_SPREADSHEET_ID,
+    routeLifetimeDays: readRouteLifetimeDays_(),
+    baseUrlQr: readBaseUrlQr_(),
+    grades: readGrades_(),
+    routes: routes,
+    users: users,
+    images: images
+  };
+  var blob = Utilities.newBlob(
+    JSON.stringify(snapshot, null, 2),
+    "application/json",
+    "wallflow-export.json"
+  );
+  var ssFile = DriveApp.getFileById(WALLFLOW_SPREADSHEET_ID);
+  var parents = ssFile.getParents();
+  var folder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+  var existing = folder.getFilesByName("wallflow-export.json");
+  while (existing.hasNext()) {
+    existing.next().setTrashed(true);
+  }
+  var file = folder.createFile(blob);
+  Logger.log("Export OK — " + routes.length + " leder, " + users.length + " användare, " + images.length + " bilder");
+  Logger.log(file.getUrl());
+  return {
+    ok: true,
+    fileId: file.getId(),
+    url: file.getUrl(),
+    routes: routes.length,
+    users: users.length,
+    images: images.length
+  };
 }
