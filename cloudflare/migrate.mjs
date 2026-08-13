@@ -3,8 +3,9 @@
  * Ett kommando: wallflow-export.json → D1 + R2. Körs på din maskin.
  *
  *   PowerShell (samma token som övriga Cloudflare-deploys):
+ *     cd C:\sökväg\till\WallFlow
  *     $env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
- *     node .\cloudflare\migrate.mjs .\wallflow-export.json
+ *     node .\cloudflare\migrate.mjs C:\sökväg\till\wallflow-export.json
  *
  * Ingen wrangler login, ingen .env. --sql-only = bara SQL + bilder, ingen Cloudflare.
  */
@@ -48,8 +49,9 @@ function usage() {
   return `Ett kommando som tar JSON-exporten till Cloudflare D1 + R2.
 Körs på din maskin, med samma User-token som övriga deploys.
 
+  cd C:\\sökväg\\till\\WallFlow
   $env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
-  node .\\cloudflare\\migrate.mjs .\\wallflow-export.json
+  node .\\cloudflare\\migrate.mjs C:\\sökväg\\till\\wallflow-export.json
 
 Kör inte wrangler login — det krockar med tokenen.
 

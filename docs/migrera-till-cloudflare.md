@@ -8,14 +8,16 @@ WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script*
 
 Via **din Windows-dator**, samma sätt som när ni deployade: User-miljövariabeln `CLOUDFLARE_API_TOKEN` + Wrangler mot Cloudflares API. Ingen separat Cursor-ingång till Cloudflare, ingen `.env`-fil, ingen `wrangler login`.
 
-I PowerShell, i WallFlow-repot:
+Rätt mapp är **WallFlow-repot** (där `cloudflare\migrate.mjs` ligger), inte det andra Cloudflare-projektet där ni brukar köra `npx wrangler`.
 
 ```powershell
+cd C:\sökväg\till\WallFlow
+
 $env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")
-node .\cloudflare\migrate.mjs .\sökväg\till\wallflow-export.json
+node .\cloudflare\migrate.mjs C:\sökväg\till\wallflow-export.json
 ```
 
-Byt sista sökvägen mot där `wallflow-export.json` ligger hos dig.
+Andra radens JSON-sökväg är filen du redan har (samma som du skickade hit). Första `cd` är WallFlow-klonens rot.
 
 Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar upp bilderna. Samma kommando går att köra om (det skriver över D1-tabellerna).
 
@@ -256,7 +258,7 @@ Sessionstoken i GAS är UUID i Cache/Properties. De dör vid cutover.
 
 - [ ] `exportMigrationSnapshot` körd, JSON ner i `cloudflare/snapshots/`
 - [ ] Sheetet fryst för skrivning
-- [ ] `node cloudflare/migrate.mjs wallflow-export.json` lyckades (D1 + R2)
+- [ ] På Windows: `$env:CLOUDFLARE_API_TOKEN = [System.Environment]::GetEnvironmentVariable("CLOUDFLARE_API_TOKEN", "User")` sedan `node .\cloudflare\migrate.mjs …` (D1 + R2)
 - [ ] Antal leder / users / grades stämmer, stickprov på ledinnehåll OK
 - [ ] Exportfilen inte commitad
 - [ ] Worker deployad och `GAS_API_URL` bytt (senare PR)
