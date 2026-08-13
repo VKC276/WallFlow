@@ -23,7 +23,7 @@ Skriptet skapar D1/KV/R2 om de saknas, importerar leder/användare och laddar up
 
 Committa inte `wallflow-export.json` — den innehåller lösenordshashar.
 
-Worker-API:t ligger i `cloudflare/src/` (samma `{ action, token, args }`-kontrakt som GAS). Live-appen pekar kvar på GAS tills `GAS_API_URL` i `index.html` / `display.html` byts till Worker-URL.
+Worker-API:t ligger i `cloudflare/src/` (samma `{ action, token, args }`-kontrakt som GAS). `GAS_API_URL` i `index.html` / `display.html` pekar på Worker: `https://wallflow.muddy-rice-38d4.workers.dev/`.
 
 ## Målarkitektur
 
