@@ -116,6 +116,34 @@
       padding: 0;
       border-top: 1px solid var(--line);
     }
+    .group-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0 4px;
+      padding: 4px 0 8px;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.95rem;
+      letter-spacing: -0.02em;
+    }
+    .group-head:first-child { margin-top: 4px; }
+    .group-blob {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--grade, #6b7280);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+      flex: 0 0 auto;
+    }
+    .group-count {
+      margin-left: auto;
+      color: var(--muted);
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
     .row {
       display: grid;
       grid-template-columns: auto 1fr;
@@ -215,8 +243,10 @@ const COLOR_HEX = {
   "Ej uppsatt": "#6b7280"
 };
 const EJ_UPPSATT = "Ej uppsatt";
+const DEFAULT_GRADES = ["Grön", "Blå", "Röd", "Svart", "Vit"];
 
 let routes = [];
+let gradeOrder = DEFAULT_GRADES.slice();
 let filterMode = "nytt"; // nytt | alla
 let daysWindow = 30;
 let lastUpdatedAt = null;
@@ -278,13 +308,35 @@ function daysAgoYmd_(n) {
   return d.toISOString().slice(0, 10);
 }
 
+function gradeSortIndex_(name) {
+  const n = String(name || "").trim().toLowerCase();
+  const i = gradeOrder.findIndex((g) => String(g).trim().toLowerCase() === n);
+  if (i >= 0) return i;
+  // Wildcard efter kända färger, övrigt sist
+  if (n === "wildcard" || n === "wildcards") return gradeOrder.length;
+  return gradeOrder.length + 1;
+}
+
 function filteredRoutes_() {
   let list = listableRoutes_().filter((r) => !isEjUppsatt_(r));
   if (filterMode === "nytt") {
     const since = daysAgoYmd_(daysWindow);
     list = list.filter((r) => r.Byggdatum && r.Byggdatum >= since);
+    list.sort((a, b) => {
+      const da = a.Byggdatum || "";
+      const db = b.Byggdatum || "";
+      if (da !== db) return db.localeCompare(da);
+      return String(a.Nr).localeCompare(String(b.Nr), "sv", { numeric: true });
+    });
+    return list;
   }
+  // Alla: gruppera efter grad (grades-ordning), sedan nyast datum inom grad
   list.sort((a, b) => {
+    const ga = gradeSortIndex_(a.Gradering);
+    const gb = gradeSortIndex_(b.Gradering);
+    if (ga !== gb) return ga - gb;
+    const nameCmp = String(a.Gradering || "").localeCompare(String(b.Gradering || ""), "sv");
+    if (nameCmp) return nameCmp;
     const da = a.Byggdatum || "";
     const db = b.Byggdatum || "";
     if (da !== db) return db.localeCompare(da);
@@ -316,6 +368,57 @@ function setFilter_(mode) {
   render_();
 }
 
+function routeRowHtml_(r) {
+  const builder = r.Ledbyggare || "Okänd byggare";
+  const notes = r.Anteckningar
+    ? `<p class="notes">${escapeHtml_(r.Anteckningar)}</p>`
+    : "";
+  return `
+    <li class="row">
+      <span class="swatch" style="--grade:${escapeHtml_(colorHex_(r.Gradering))}" aria-hidden="true"></span>
+      <div class="row-main">
+        <div class="row-top">
+          <span class="nr">Led ${escapeHtml_(r.Nr || "—")}</span>
+          <span class="grade">${escapeHtml_(r.Gradering || "")}</span>
+        </div>
+        <p class="builder"><span>Byggd av</span> ${escapeHtml_(builder)}</p>
+        <p class="when">${escapeHtml_(formatDateSv_(r.Byggdatum))}</p>
+        ${notes}
+      </div>
+    </li>`;
+}
+
+function renderListHtml_(list) {
+  if (!list.length) return "";
+  if (filterMode !== "alla") {
+    return list.map(routeRowHtml_).join("");
+  }
+  const parts = [];
+  let current = null;
+  let bucket = [];
+  const flush = () => {
+    if (!current) return;
+    parts.push(`
+      <li class="group-head" style="--grade:${escapeHtml_(colorHex_(current))}" aria-label="${escapeHtml_(current)}">
+        <span class="group-blob" aria-hidden="true"></span>
+        <span>${escapeHtml_(current)}</span>
+        <span class="group-count">${bucket.length}</span>
+      </li>`);
+    parts.push(bucket.map(routeRowHtml_).join(""));
+    bucket = [];
+  };
+  list.forEach((r) => {
+    const g = r.Gradering || "Övrigt";
+    if (g !== current) {
+      flush();
+      current = g;
+    }
+    bucket.push(r);
+  });
+  flush();
+  return parts.join("");
+}
+
 function render_() {
   const list = filteredRoutes_();
   const updated = lastUpdatedAt ? ("Uppdaterad " + formatClock_(lastUpdatedAt)) : "";
@@ -323,25 +426,7 @@ function render_() {
     ? `<span class="meta status-error">${escapeHtml_(lastError)}</span>`
     : `<span class="meta">${escapeHtml_(updated)}</span>`;
 
-  const rows = list.map((r) => {
-    const builder = r.Ledbyggare || "Okänd byggare";
-    const notes = r.Anteckningar
-      ? `<p class="notes">${escapeHtml_(r.Anteckningar)}</p>`
-      : "";
-    return `
-      <li class="row">
-        <span class="swatch" style="--grade:${escapeHtml_(colorHex_(r.Gradering))}" aria-hidden="true"></span>
-        <div class="row-main">
-          <div class="row-top">
-            <span class="nr">Led ${escapeHtml_(r.Nr || "—")}</span>
-            <span class="grade">${escapeHtml_(r.Gradering || "")}</span>
-          </div>
-          <p class="builder"><span>Byggd av</span> ${escapeHtml_(builder)}</p>
-          <p class="when">${escapeHtml_(formatDateSv_(r.Byggdatum))}</p>
-          ${notes}
-        </div>
-      </li>`;
-  }).join("");
+  const rows = renderListHtml_(list);
 
   const emptyMsg = filterMode === "nytt"
     ? `Inga nya leder senaste ${daysWindow} dagarna.`
@@ -382,6 +467,9 @@ function load_(isRefresh) {
   return fetchAppData_()
     .then((data) => {
       routes = ((data && data.routes) || []).map(normalizeRoute_);
+      if (data && Array.isArray(data.grades) && data.grades.length) {
+        gradeOrder = data.grades.map((g) => String(g || "").trim()).filter(Boolean);
+      }
       lastUpdatedAt = new Date();
       lastError = "";
       render_();
