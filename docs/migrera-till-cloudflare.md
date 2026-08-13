@@ -2,7 +2,7 @@
 
 WallFlow kör idag statiska sidor på GitHub Pages mot ett **Google Apps Script**-API som läser och skriver ett **Google Sheet** (leder, användare, inställningar) och **Google Drive** (ledbilder). Målet är att flytta backend till Cloudflare: **Workers** (API), **D1** (data), **R2** (bilder) och **KV** (sessioner). Frontend (`index.html`, `display.html`) kan ligga kvar på GitHub Pages i ett första steg, eller flyttas till Cloudflare Pages.
 
-**Nu är ett bra tillfälle.** Leddatan i arket är redan inaktuell, så vi behöver inte släpa med gamla byggdatum, anteckningar och foton. Det som är värt att ta med är **konton**, **graderingar**, **inställningar** och **lednummer** (samma fysiska vägg / QR). Resten fylls i i appen efter cutover.
+**All data ska med** — leder (nummer, färg, byggare, datum, anteckningar, livslängd, bild), användare, graderingar, QR-bas-URL och Drive-foton. Det enda som inte flyttas är tillfälliga GAS-sessioner (alla loggar in igen) och sheet-formlerna i kolumn C/F (samma värden räknas om i Worker).
 
 Den här guiden handlar om **hur datan kommer över**. Själva Worker-API:t (ersättare till `gas/Code.gs`) är ett separat steg; importen kan göras innan det finns.
 
@@ -23,32 +23,29 @@ Kalkylark: [`1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`](https://docs.google.
 
 ## Vad som ska med
 
-### Ta med
+### Flytta rakt av
 
+- **Leder** — `Nr`, `Gradering`, `Ledbyggare`, `Byggdatum`, `Anteckningar`, `Livslangd`, bild (Drive → R2).
 - **Användare** — `username`, `passwordHash`, `salt`, `role`, `name`, `FirstLogin`. Hashen är `SHA-256(UTF-8(salt + lösenord))` som hex. Samma algoritm i Worker ⇒ ingen behöver byta lösenord.
 - **Graderingar** — ordningen i fliken `Grades` (Grön, Blå, Röd, Svart, Vit, …). Wildcard och Ej uppsatt är specialvärden i koden, inte rader i `Grades`.
 - **Inställningar** — standardlivslängd (dagar) och QR-bas-URL.
-- **Lednummer** — numeriska (`1`, `13`) och wildcards (`W1`, `W2`). De sitter på väggen och i QR.
+- **Bilder** — alla filer i Drive-mappen `Bilder`, plus de som sitter som Drive-ID i kolumn H.
 
-### Räkna om, importera inte
+### Räkna om, importera inte som kolumner
 
-Kolumn **C** (`Dags att bygga om`) och **F** (`Slutdatum`) är formler i arket. Worker räknar samma sak vid läsning:
+Kolumn **C** (`Dags att bygga om`) och **F** (`Slutdatum`) är formler i arket. Värdena följer med indirekt: Worker räknar samma sak från `Byggdatum` + `Livslangd` + gradering vid läsning.
 
 - `Slutdatum` = `Byggdatum + Livslangd` dagar, tomt om `Byggdatum` saknas
 - `DagsAttByggaOm` = `""` utan byggdatum, `"-"` om gradering är **Ej uppsatt**, annars `"Ja"` om slutdatum &lt; idag (Europe/Stockholm) annars `"Nej"`
 
-### Lämna kvar / släng
+Kontrollera efter import att ett stickprov av leder får samma Ja/Nej/datum som sheetet visade samma dag.
+
+### Lämna kvar
 
 - **GAS-sessioner** — användare loggar in igen mot Worker.
-- **Ledinnehåll** (rekommenderat nu) — byggare, datum, anteckningar, Drive-bilder. Importläget `structure` nollställer det till **Ej uppsatt**.
 - Sheetets egna formler, summeringsrader och bunden Kod.gs som inte är WallFlow.
 
-Två importlägen i `cloudflare/import.mjs`:
-
-| Läge | Flagga | När |
-|------|--------|-----|
-| **Struktur** (rekommenderat) | `--mode=structure` | Datan är inaktuell. Behåller nr + default-livslängd, sätter Ej uppsatt, tömmer resten. |
-| **Full snapshot** | `--mode=full` | Ni vill ha exakt det som står i arket just nu, inkl. bild-ID:n. |
+`cloudflare/import.mjs` defaultar till **full kopia**. `--mode=structure` (nollställ leder) finns kvar men ska inte användas här.
 
 ## Steg 1 — Exportera från Google
 
@@ -56,7 +53,7 @@ Kör exporten **en gång**, precis innan import. Frys därefter sheetet (dela so
 
 ### A. Snapshot från Apps Script (rekommenderat)
 
-Ger JSON med leder, graderingar, användare (hashar), inställningar och en bildlista.
+Ger JSON med **alla** leder, graderingar, användare (hashar), inställningar och bildlista (kopplade + ev. föräldralösa filer i `Bilder`).
 
 1. Öppna **WallFlow API**-projektet på [script.google.com](https://script.google.com) (standalone, inte sheetets bundna projekt).
 2. Se till att `gas/Code.gs` i projektet innehåller `exportMigrationSnapshot` (den här branchen).
@@ -68,13 +65,13 @@ Funktionen skriver filen i **samma Drive-mapp som kalkylarket**, inte i root.
 
 ### B. CSV från sheetet (reserv)
 
-Om GAS-exporten inte går: **Arkiv → Hämta → CSV** per flik (`Alla leder`, `Grades`, `Users`, `BaseUrlQr`). Standardlivslängd sitter som script property `routeLifetimeDaysDefault` (fallback 30, eller kolumn I rad 2) — notera värdet för hand.
+Om GAS-exporten inte går: **Arkiv → Hämta → CSV** per flik (`Alla leder`, `Grades`, `Users`, `BaseUrlQr`). Standardlivslängd sitter som script property `routeLifetimeDaysDefault` (fallback 30, eller kolumn I rad 2) — notera värdet för hand. Bilder måste då hämtas manuellt från Drive-mappen `Bilder`.
 
 CSV räcker till D1 men saknar script property och Drive-filnamn. Användare-CSV:n är känslig; dela den inte.
 
 ### C. `getAppData` räcker inte
 
-Publika `getAppData` (det display.html anropar) ger leder + grades + inställningar, **inte** Users. Konton måste komma från A eller B.
+Publika `getAppData` (det display.html anropar) ger leder + grades + inställningar, **inte** Users och inte filerna i Drive. Konton och bilder måste komma från A (eller B + manuell Drive-export).
 
 ## Steg 2 — Skapa Cloudflare-resurser
 
@@ -95,16 +92,12 @@ npx wrangler d1 execute wallflow --remote --file=schema.sql
 
 Lokal övning: samma kommando med `--local` i stället för `--remote`.
 
-## Steg 3 — Importera till D1
+## Steg 3 — Importera all leddata till D1
 
-Från repo-roten:
+Från repo-roten. Default är `--mode=full` och `bild_key` som R2-nyckel (`led-13.jpg`), inte Drive-ID.
 
 ```bash
-# Rekommenderat nu: behåll nr + konton, nollställ inaktuella leder
-node cloudflare/import.mjs cloudflare/snapshots/wallflow-export.json --mode=structure > cloudflare/snapshots/import.sql
-
-# Alternativ: exakt kopia av arket
-# node cloudflare/import.mjs cloudflare/snapshots/wallflow-export.json --mode=full > cloudflare/snapshots/import.sql
+node cloudflare/import.mjs cloudflare/snapshots/wallflow-export.json > cloudflare/snapshots/import.sql
 
 npx wrangler d1 execute wallflow --remote --file=cloudflare/snapshots/import.sql
 ```
@@ -113,42 +106,56 @@ Skriptet:
 
 - tömmer tabellerna och skriver om dem (idempotent om ni kör om)
 - skippar summeringsrader och rader utan giltigt lednummer (samma filter som GAS `isRouteRow_`)
-- skriver `cloudflare/snapshots/images-manifest.json` i `--mode=full` om leder har Drive-fil-ID
+- behåller gradering, byggare, datum, anteckningar och livslängd per led
+- skriver `cloudflare/snapshots/images-manifest.json` för Drive-filerna
 
 Kontroll:
 
 ```bash
 npx wrangler d1 execute wallflow --remote --command="SELECT COUNT(*) AS n FROM routes;"
+npx wrangler d1 execute wallflow --remote --command="SELECT nr, gradering, ledbyggare, byggdatum, livslangd, bild_key FROM routes ORDER BY nr LIMIT 20;"
 npx wrangler d1 execute wallflow --remote --command="SELECT username, role, name FROM users;"
 npx wrangler d1 execute wallflow --remote --command="SELECT * FROM grades ORDER BY sort_order;"
 npx wrangler d1 execute wallflow --remote --command="SELECT * FROM settings;"
 ```
 
-Förväntat efter `structure`: lika många `routes` som giltiga lednummer i arket, alla med `gradering = 'Ej uppsatt'` och tomma `ledbyggare` / `byggdatum` / `anteckningar` / `bild_key`.
+Förväntat: lika många `routes` som giltiga lednummer i arket, samma färger/byggare/datum som i snapshoten, `bild_key` ifylld där kolumn H hade Drive-ID.
 
-## Steg 4 — Bilder (valfritt)
+## Steg 4 — Flytta bilder Drive → R2
 
-Hoppa över det här steget med `--mode=structure`. Gamla foton hör till leder som ändå nollställs; nya bilder laddas upp till R2 via Worker senare.
+Gör det här **innan** cutover, annars saknas foton i appen.
 
-Om ni ändå kör `--mode=full`:
-
-1. Öppna Drive-mappen **Bilder** bredvid kalkylarket (filer `led-{nr}.jpg` / `.png`).
-2. Använd `images-manifest.json` (`nr`, `fileId`, `suggestedKey`).
-3. Ladda ner varje fil som är delad med länk (samma som appen använder):
+1. Manifestet från steg 3 (eller `images`-listan i snapshoten) listar `nr`, `fileId`, `suggestedKey`.
+2. Hämta filerna (de är redan delade med länk, samma som appen):
 
 ```bash
-# exempel — byt FILE_ID och nr
-curl -L "https://drive.google.com/uc?export=download&id=FILE_ID" -o led-13.jpg
-npx wrangler r2 object put wallflow-bilder/led-13.jpg --file led-13.jpg --content-type image/jpeg
+node cloudflare/download-images.mjs cloudflare/snapshots/images-manifest.json
 ```
 
-I D1 ska `routes.bild_key` vara R2-nyckeln (`led-13.jpg`), inte Drive-ID. `import.mjs --mode=full --rewrite-images` sätter `bild_key` till `led-{nr}.jpg` / `.png` utifrån fil-ID i snapshoten. Worker serverar sedan t.ex. `GET /img/led-13.jpg` från R2 i stället för `lh3.googleusercontent.com/d/…`.
+3. Ladda upp till R2. Kör från `cloudflare/` där `wrangler.toml` ligger:
 
-Misslyckade Drive-nedladdningar: lämna `bild_key` tomt och ta nya foton i appen.
+```bash
+cd cloudflare
+for f in snapshots/images/*.{jpg,png,jpeg,webp}; do
+  [ -f "$f" ] || continue
+  npx wrangler r2 object put wallflow-bilder/$(basename "$f") --file "$f" --remote
+done
+```
+
+Worker serverar sedan t.ex. `GET /img/led-13.jpg` från R2 i stället för `lh3.googleusercontent.com/d/…`.
+
+Om en nedladdning misslyckas (Drive-HTML / saknad behörighet): öppna mappen **Bilder** bredvid kalkylarket och ladda ner filen för hand till samma `suggestedKey`. Rapport: `snapshots/images/download-report.json`.
+
+Vill ni tillfälligt behålla Drive-ID i D1 (appen pekar kvar på `lh3` tills Worker finns):  
+
+`node cloudflare/import.mjs snapshot.json --keep-drive-ids > import.sql`  
+Byt till R2-nycklar innan cutover.
 
 ## Steg 5 — Verifiera innan cutover
 
 - Antal leder = antal giltiga rader i `Alla leder` (numeriska + `W*`).
+- Stickprov: samma `Gradering`, `Ledbyggare`, `Byggdatum`, `Anteckningar`, `Livslangd` som i arket.
+- Antal rader med `bild_key` ≈ antal leder med bild i sheetet, och samma nycklar finns i R2.
 - Alla konton finns; minst en `superadmin`.
 - `grades` i samma ordning som fliken.
 - `settings.routeLifetimeDays` och `settings.baseUrlQr` stämmer.
@@ -169,10 +176,10 @@ const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0"))
 
 1. Deploya Worker med **samma action-API** som GAS (`getAppData`, `verifyAdminPassword`, `saveRoute`, …) mot D1/R2/KV.
 2. Byt `GAS_API_URL` i `index.html` och `display.html` till Worker-URL (eller samma origin via Pages).
-3. Logga in, skapa en testled, ladda upp en bild, kontrollera `display.html`.
+3. Logga in, öppna ett par kända leder (färg, anteckning, bild), kontrollera `display.html`.
 4. DNS: CNAME `wallflow.vastervikclimbing.se` kan peka kvar på GitHub Pages så länge API-URL är absolut. När Pages flyttas till Cloudflare, peka zonen dit.
 5. I GAS: **Deploy → Manage deployments → Disable**. I sheetet: dela som visning eller arkivera.
-6. Drive-mappen `Bilder` kan tömmas när R2 är bekräftad (eller lämnas som arkiv).
+6. Drive-mappen `Bilder` kan lämnas som arkiv tills R2 är bekräftad, därefter rensas.
 
 Gör inte cutover med två skrivande backend samtidigt.
 
@@ -183,13 +190,13 @@ Gör inte cutover med två skrivande backend samtidigt.
 | Sheet | D1 | Kommentar |
 |-------|----|-----------|
 | A `Nr` | `nr` TEXT PRIMARY KEY | Behåll `W1` som text, inte tal |
-| B `Gradering` | `gradering` | I `structure`: alltid `Ej uppsatt` |
+| B `Gradering` | `gradering` | Exakt värde från arket |
 | C `Dags att bygga om` | — | Beräknas vid läsning |
-| D `Ledbyggare` | `ledbyggare` | Tom i `structure` |
+| D `Ledbyggare` | `ledbyggare` | |
 | E `Byggdatum` | `byggdatum` | `YYYY-MM-DD` eller tom |
 | F `Slutdatum` | — | Beräknas vid läsning |
-| G `Anteckningar` | `anteckningar` | Tom i `structure` |
-| H `Bild` | `bild_key` | Drive-ID idag; R2-nyckel efter import. Tom i `structure` |
+| G `Anteckningar` | `anteckningar` | |
+| H `Bild` | `bild_key` | Drive-ID i snapshot → R2-nyckel `led-{nr}.jpg` vid import |
 | I livslängd | `livslangd` | 1–3650, default från settings |
 
 ### `users` ← flik `Users`
@@ -233,11 +240,12 @@ Sessionstoken i GAS är UUID i Cache/Properties. De dör vid cutover.
 - [ ] `exportMigrationSnapshot` körd, JSON ner i `cloudflare/snapshots/`
 - [ ] Sheetet fryst för skrivning
 - [ ] D1 + KV + R2 skapade, `schema.sql` kört remote
-- [ ] `import.mjs --mode=structure` (eller `full`) kört mot remote D1
-- [ ] Antal leder / users / grades stämmer
+- [ ] `import.mjs` (full) kört mot remote D1
+- [ ] `download-images.mjs` + R2-uppladdning, samma antal som i sheetet
+- [ ] Antal leder / users / grades stämmer, stickprov på ledinnehåll OK
 - [ ] Exportfilen inte commitad
 - [ ] Worker deployad och `GAS_API_URL` bytt (senare PR)
-- [ ] Inloggning + spara led + display.html OK
+- [ ] Inloggning + kända leder + bilder + display.html OK
 - [ ] GAS-deployment avstängd
 
 ## Filer i repot
@@ -245,7 +253,8 @@ Sessionstoken i GAS är UUID i Cache/Properties. De dör vid cutover.
 | Fil | Roll |
 |-----|------|
 | `cloudflare/schema.sql` | D1-tabeller |
-| `cloudflare/import.mjs` | Snapshot/CSV → SQL |
+| `cloudflare/import.mjs` | Snapshot/CSV → SQL (default: all data) |
+| `cloudflare/download-images.mjs` | Drive → lokala filer inför R2 |
 | `cloudflare/wrangler.toml.example` | Wrangler-mall |
 | `cloudflare/fixtures/sample-snapshot.json` | Testdata (inga riktiga hashar) |
 | `gas/Code.gs` → `exportMigrationSnapshot` | JSON-dump till Drive |

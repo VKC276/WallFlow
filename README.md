@@ -4,7 +4,7 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Live:** [https://wallflow.vastervikclimbing.se](https://wallflow.vastervikclimbing.se)
 
-**Migrering:** backend ska flyttas från Google Sheets/GAS till Cloudflare (Workers + D1 + R2). Leddatan i arket är inaktuell — bra tillfälle. Guide: [docs/migrera-till-cloudflare.md](docs/migrera-till-cloudflare.md).
+**Migrering:** backend ska flyttas från Google Sheets/GAS till Cloudflare (Workers + D1 + R2). **All data följer med** (leder, konton, bilder). Guide: [docs/migrera-till-cloudflare.md](docs/migrera-till-cloudflare.md).
 
 **Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. **Space** bläddrar en ledlista per färg (nyaste längst upp).
 

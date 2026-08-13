@@ -1473,14 +1473,50 @@ function exportMigrationSnapshot() {
   for (var i = 0; i < routes.length; i++) {
     var bild = String(routes[i].Bild || "").trim();
     if (isWallflowDriveId_(bild)) {
-      images.push({
+      var rec = {
         nr: routes[i].Nr,
         fileId: bild,
-        suggestedKey: "led-" + safeRouteNrForFile_(routes[i].Nr) + ".jpg"
-      });
+        name: "",
+        mimeType: "",
+        suggestedKey: "led-" + safeRouteNrForFile_(routes[i].Nr) + ".jpg",
+        downloadUrl: "https://drive.google.com/uc?export=download&id=" + bild
+      };
+      try {
+        var driveFile = DriveApp.getFileById(bild);
+        rec.name = driveFile.getName();
+        rec.mimeType = driveFile.getMimeType();
+        var ext = String(rec.mimeType).indexOf("png") >= 0 || /\.png$/i.test(rec.name) ? "png" : "jpg";
+        rec.suggestedKey = "led-" + safeRouteNrForFile_(routes[i].Nr) + "." + ext;
+      } catch (eFile) { /* fil saknas / saknar behörighet — behåll ID */ }
+      images.push(rec);
     }
     delete routes[i].__row;
   }
+  // Ta med filer i Bilder-mappen som inte är kopplade till en led-rad
+  try {
+    var seenIds = {};
+    for (var si = 0; si < images.length; si++) seenIds[images[si].fileId] = true;
+    var folderFiles = getBilderFolder_().getFiles();
+    while (folderFiles.hasNext()) {
+      var ff = folderFiles.next();
+      var fid = ff.getId();
+      if (seenIds[fid]) continue;
+      var fname = String(ff.getName() || "");
+      if (!fname || fname.indexOf("wallflow-auth-probe") === 0) continue;
+      var fext = String(ff.getMimeType()).indexOf("png") >= 0 || /\.png$/i.test(fname) ? "png" : "jpg";
+      var m = fname.match(/^led-([^.]+)\./i);
+      images.push({
+        nr: m ? m[1] : "",
+        fileId: fid,
+        name: fname,
+        mimeType: ff.getMimeType(),
+        suggestedKey: fname || ("led-okand." + fext),
+        downloadUrl: "https://drive.google.com/uc?export=download&id=" + fid,
+        orphan: true
+      });
+      seenIds[fid] = true;
+    }
+  } catch (eFolder) { /* Drive-listning är bäst-effort */ }
   var users = readUsers_({ skipEnsureHeaders: true }).map(function (u) {
     return {
       username: u.username,

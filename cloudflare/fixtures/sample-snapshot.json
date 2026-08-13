@@ -50,6 +50,16 @@
       "Bild": ""
     }
   ],
+  "images": [
+    {
+      "nr": "1",
+      "fileId": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+      "name": "led-1.jpg",
+      "mimeType": "image/jpeg",
+      "suggestedKey": "led-1.jpg",
+      "downloadUrl": "https://drive.google.com/uc?export=download&id=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"
+    }
+  ],
   "users": [
     {
       "username": "admin",

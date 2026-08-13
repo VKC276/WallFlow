@@ -2,14 +2,14 @@
 /**
  * WallFlow: Sheets/GAS-snapshot → D1 SQL.
  *
- *   node cloudflare/import.mjs snapshot.json --mode=structure > import.sql
- *   node cloudflare/import.mjs snapshot.json --mode=full --rewrite-images > import.sql
- *   node cloudflare/import.mjs --csv-dir ./csv --mode=structure > import.sql
+ *   node cloudflare/import.mjs snapshot.json > import.sql
+ *   node cloudflare/import.mjs snapshot.json --keep-drive-ids > import.sql
+ *   node cloudflare/import.mjs --csv-dir ./csv > import.sql
  *
  * Snapshot-JSON kommer från GAS exportMigrationSnapshot().
- * --mode=structure nollställer inaktuella leder (rekommenderat).
- * --mode=full kopierar byggare/datum/anteckningar/bild.
- * --rewrite-images (endast full): bild_key = led-{nr}.jpg|png i stället för Drive-ID.
+ * Default --mode=full kopierar all leddata (byggare, datum, anteckningar, bild).
+ * bild_key skrivs om till led-{nr}.jpg|png (R2). --keep-drive-ids behåller Drive-ID.
+ * --mode=structure nollställer leder till Ej uppsatt.
  */
 
 import fs from "node:fs";
@@ -19,26 +19,32 @@ const DEFAULT_LIFETIME = 30;
 const DEFAULT_GRADES = ["Grön", "Blå", "Röd", "Svart", "Vit"];
 
 function parseArgs(argv) {
-  const args = { mode: "structure", rewriteImages: false, csvDir: "", input: "" };
+  const args = { mode: "full", rewriteImages: null, csvDir: "", input: "" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--mode" && argv[i + 1]) args.mode = argv[++i];
     else if (a.startsWith("--mode=")) args.mode = a.slice("--mode=".length);
     else if (a === "--rewrite-images") args.rewriteImages = true;
+    else if (a === "--keep-drive-ids") args.rewriteImages = false;
     else if (a === "--csv-dir" && argv[i + 1]) args.csvDir = argv[++i];
     else if (a.startsWith("--csv-dir=")) args.csvDir = a.slice("--csv-dir=".length);
     else if (a === "--help" || a === "-h") args.help = true;
     else if (!a.startsWith("-") && !args.input) args.input = a;
   }
+  if (args.rewriteImages == null) args.rewriteImages = args.mode === "full";
   return args;
 }
 
 function usage() {
   return `Användning:
-  node cloudflare/import.mjs <snapshot.json> [--mode=structure|full] [--rewrite-images]
-  node cloudflare/import.mjs --csv-dir <mapp> [--mode=structure|full]
+  node cloudflare/import.mjs <snapshot.json> [--mode=full|structure] [--keep-drive-ids]
+  node cloudflare/import.mjs --csv-dir <mapp> [--mode=full|structure]
 
-Skriv SQL till stdout. Bildmanifest (full) skrivs bredvid indata som images-manifest.json.`;
+Default: --mode=full (all leddata) och R2-nycklar i bild_key.
+--keep-drive-ids behåller Google Drive-ID i bild_key.
+--mode=structure nollställer leder till Ej uppsatt (används inte vid full överföring).
+
+Skriv SQL till stdout. Bildmanifest skrivs bredvid indata som images-manifest.json.`;
 }
 
 function sqlStr(v) {
@@ -362,12 +368,24 @@ function normalizeSnapshot(raw) {
     routes,
     users,
     routeLifetimeDays: lifetime,
-    baseUrlQr: String(raw.baseUrlQr || "").trim()
+    baseUrlQr: String(raw.baseUrlQr || "").trim(),
+    images: Array.isArray(raw.images) ? raw.images : []
   };
+}
+
+function imageKeyByNr(images) {
+  const map = new Map();
+  for (const img of images || []) {
+    const nr = String(img.nr || "").trim();
+    const key = String(img.suggestedKey || "").trim();
+    if (nr && key) map.set(nr.toLowerCase(), key);
+  }
+  return map;
 }
 
 function applyMode(data, mode, rewriteImages) {
   const structure = mode === "structure";
+  const keys = imageKeyByNr(data.images);
   const routes = data.routes.map((r) => {
     if (structure) {
       return {
@@ -382,7 +400,13 @@ function applyMode(data, mode, rewriteImages) {
     }
     let bild = r.Bild;
     if (rewriteImages) {
-      bild = isDriveFileId(r.Bild) ? suggestedImageKey(r.Nr, r.Bild) : (/^https?:/i.test(r.Bild) ? r.Bild : "");
+      if (isDriveFileId(r.Bild)) {
+        bild = keys.get(String(r.Nr).toLowerCase()) || suggestedImageKey(r.Nr, r.Bild);
+      } else if (/^https?:/i.test(r.Bild)) {
+        bild = r.Bild;
+      } else {
+        bild = "";
+      }
     }
     return { ...r, Bild: bild };
   });
@@ -431,16 +455,34 @@ function emitSql(data) {
 }
 
 function writeManifest(data, outPath) {
-  const items = [];
-  for (const r of data.routes) {
-    if (!isDriveFileId(r.Bild)) continue;
-    items.push({
-      nr: r.Nr,
-      fileId: r.Bild,
-      suggestedKey: suggestedImageKey(r.Nr, r.Bild),
-      downloadUrl: "https://drive.google.com/uc?export=download&id=" + r.Bild
+  const byId = new Map();
+  for (const img of data.images || []) {
+    const fileId = String(img.fileId || "").trim();
+    if (!isDriveFileId(fileId)) continue;
+    byId.set(fileId, {
+      nr: img.nr || "",
+      fileId,
+      name: img.name || "",
+      mimeType: img.mimeType || "",
+      suggestedKey: img.suggestedKey || suggestedImageKey(img.nr, img.name || img.fileId),
+      downloadUrl: img.downloadUrl || ("https://drive.google.com/uc?export=download&id=" + fileId),
+      orphan: !!img.orphan
     });
   }
+  for (const r of data.routes) {
+    if (!isDriveFileId(r.Bild)) continue;
+    if (byId.has(r.Bild)) continue;
+    byId.set(r.Bild, {
+      nr: r.Nr,
+      fileId: r.Bild,
+      name: "",
+      mimeType: "",
+      suggestedKey: suggestedImageKey(r.Nr, r.Bild),
+      downloadUrl: "https://drive.google.com/uc?export=download&id=" + r.Bild,
+      orphan: false
+    });
+  }
+  const items = [...byId.values()];
   fs.writeFileSync(outPath, JSON.stringify({ count: items.length, images: items }, null, 2) + "\n");
   return items.length;
 }
@@ -475,7 +517,7 @@ function main() {
       : path.dirname(path.resolve(args.input));
     const manifestPath = path.join(dir, "images-manifest.json");
     const n = writeManifest(original, manifestPath);
-    process.stderr.write(`Bildmanifest: ${n} Drive-ID:n → ${manifestPath}\n`);
+    process.stderr.write(`Bildmanifest: ${n} filer → ${manifestPath}\n`);
   }
 
   process.stdout.write(emitSql(data));
