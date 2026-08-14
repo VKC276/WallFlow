@@ -717,6 +717,55 @@
       gap: 8px;
       margin-top: 12px;
     }
+    .route-form-kebab-wrap {
+      position: relative;
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    .route-form-kebab-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .route-form-kebab-btn:hover { background: var(--panel-bg); }
+    .route-form-kebab-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 45;
+      min-width: 190px;
+      padding: 6px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--panel-bg);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .route-form-kebab-wrap.open .route-form-kebab-menu { display: flex; }
+    .route-form-kebab-item {
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      font-size: 0.86rem;
+      font-weight: 600;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background .18s ease;
+    }
+    .route-form-kebab-item:hover { background: var(--surface-2); }
+    .route-form-kebab-item.danger { color: var(--danger, #e5484d); }
+    .route-form-kebab-item.danger:hover { background: rgba(229, 72, 77, 0.12); }
     .route-form-save {
       margin-top: 18px;
     }
@@ -3394,9 +3443,12 @@ function renderRouteForm(nr) {
         <div class="img-editor-status" id="img-editor-status"></div>
       </div>
       ${(nr || canManageRouteStructureRole()) ? `
-      <div class="route-form-secondary">
-        ${nr ? `<button class="btn btn-ghost w-100" type="button" onclick="plockaNerLed()">Plocka ner led</button>` : ""}
-        ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
+      <div class="route-form-kebab-wrap" id="route-kebab-wrap">
+        <button type="button" class="route-form-kebab-btn" id="route-kebab-btn" aria-haspopup="true" aria-expanded="false" aria-controls="route-kebab-menu" aria-label="Fler alternativ" onclick="toggleRouteFormKebab_(event)">⋯</button>
+        <div class="route-form-kebab-menu" id="route-kebab-menu" role="menu" aria-label="Fler alternativ">
+          ${nr ? `<button type="button" role="menuitem" class="route-form-kebab-item" onclick="closeRouteFormKebab_(); plockaNerLed();">Plocka ner led</button>` : ""}
+          ${nr && canManageRouteStructureRole() ? `<button type="button" role="menuitem" class="route-form-kebab-item danger" onclick="closeRouteFormKebab_(); deleteRoute('${escapeHtml_(nr)}');">Radera led</button>` : ""}
+        </div>
       </div>` : ""}
       <button class="btn btn-accent w-100 route-form-save" type="button" id="save-route-btn" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
   `;
@@ -3414,6 +3466,25 @@ function renderRouteForm(nr) {
       }, { once: true });
     }
   }
+}
+
+function toggleRouteFormKebab_(evt) {
+  if (evt) {
+    evt.preventDefault();
+    evt.stopPropagation();
+  }
+  const wrap = document.getElementById("route-kebab-wrap");
+  const btn = document.getElementById("route-kebab-btn");
+  if (!wrap || !btn) return;
+  const open = !wrap.classList.contains("open");
+  wrap.classList.toggle("open", open);
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+function closeRouteFormKebab_() {
+  const wrap = document.getElementById("route-kebab-wrap");
+  const btn = document.getElementById("route-kebab-btn");
+  if (wrap) wrap.classList.remove("open");
+  if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
 /** Töm redigeringsfält och sätt dagens datum; gradering → Ej uppsatt. */
@@ -3529,9 +3600,17 @@ document.addEventListener("click", (e) => {
   if (!host || !host.contains(e.target)) closeRebuildFilterMenu_();
 });
 
+document.addEventListener("click", (e) => {
+  const wrap = document.getElementById("route-kebab-wrap");
+  if (!wrap || !wrap.classList.contains("open")) return;
+  if (!wrap.contains(e.target)) closeRouteFormKebab_();
+});
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (rebuildFilterMenuOpen_) return closeRebuildFilterMenu_();
+    const routeKebabWrap = document.getElementById("route-kebab-wrap");
+    if (routeKebabWrap && routeKebabWrap.classList.contains("open")) return closeRouteFormKebab_();
     if (isQuickInfoOpen_()) return closeQuickInfo_();
     if (isQrScannerOpen_()) return closeQrScanner_();
     if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
