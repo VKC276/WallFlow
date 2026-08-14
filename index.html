@@ -2505,6 +2505,10 @@ function routeRowHtml_(r) {
 let panelHistory_ = false;
 let qrScanHistory_ = false;
 let quickInfoHistory_ = false;
+/** Sätts precis innan en stängningsfunktion själv kör history.back() för att
+ * konsumera sin egen historikpost. Popstate-hanteraren ska då inte agera på
+ * det poppet – lagret är redan stängt manuellt av samma funktion. */
+let suppressNextPopstate_ = false;
 let quickInfoEditPendingNr_ = "";
 let qrScanState_ = {
   open: false,
@@ -2593,7 +2597,8 @@ function closeQrScanner_(fromPopstate) {
   document.body.classList.remove("qr-scan-open");
   if (!fromPopstate && qrScanHistory_) {
     qrScanHistory_ = false;
-    try { history.back(); } catch (e) { /* ignore */ }
+    suppressNextPopstate_ = true;
+    try { history.back(); } catch (e) { suppressNextPopstate_ = false; }
   } else {
     qrScanHistory_ = false;
   }
@@ -2823,7 +2828,8 @@ function closeQuickInfo_(fromPopstate) {
   document.body.classList.remove("quickinfo-open");
   if (!fromPopstate && quickInfoHistory_) {
     quickInfoHistory_ = false;
-    try { history.back(); } catch (e) { /* ignore */ }
+    suppressNextPopstate_ = true;
+    try { history.back(); } catch (e) { suppressNextPopstate_ = false; }
   } else {
     quickInfoHistory_ = false;
   }
@@ -3070,7 +3076,8 @@ function closePanel(fromPopstate) {
   document.getElementById("panel-header-actions").innerHTML = "";
   if (!fromPopstate && panelHistory_) {
     panelHistory_ = false;
-    try { history.back(); } catch (e) { /* ignore */ }
+    suppressNextPopstate_ = true;
+    try { history.back(); } catch (e) { suppressNextPopstate_ = false; }
   } else {
     panelHistory_ = false;
   }
@@ -3592,7 +3599,8 @@ function closeRouteImageLightbox_(fromPopstate) {
   if (img) img.removeAttribute("src");
   if (!fromPopstate && routeImgLightboxHistory_) {
     routeImgLightboxHistory_ = false;
-    try { history.back(); } catch (e) { /* ignore */ }
+    suppressNextPopstate_ = true;
+    try { history.back(); } catch (e) { suppressNextPopstate_ = false; }
   } else {
     routeImgLightboxHistory_ = false;
   }
@@ -3625,6 +3633,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("popstate", () => {
+  if (suppressNextPopstate_) {
+    suppressNextPopstate_ = false;
+    return;
+  }
   if (quickInfoEditPendingNr_) {
     const pendingNr = quickInfoEditPendingNr_;
     quickInfoEditPendingNr_ = "";
