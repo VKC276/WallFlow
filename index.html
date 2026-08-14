@@ -711,6 +711,15 @@
     }
     .img-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .img-editor-actions .btn { flex: 1 1 auto; min-width: 120px; }
+    .route-form-secondary {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .route-form-save {
+      margin-top: 18px;
+    }
     .img-editor-status { color: var(--accent); font-size: 0.82rem; margin-top: 6px; min-height: 1.2em; }
 
     /* Fullskärm: markera led på foto — alltid mörk krom för kontrast mot fotot */
@@ -3384,9 +3393,12 @@ function renderRouteForm(nr) {
         </div>
         <div class="img-editor-status" id="img-editor-status"></div>
       </div>
-      ${nr ? `<button class="btn btn-ghost w-100 mb-2" type="button" onclick="plockaNerLed()">Plocka ner led</button>` : ""}
-      <button class="btn btn-accent w-100" type="button" id="save-route-btn" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
-      ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
+      ${(nr || canManageRouteStructureRole()) ? `
+      <div class="route-form-secondary">
+        ${nr ? `<button class="btn btn-ghost w-100" type="button" onclick="plockaNerLed()">Plocka ner led</button>` : ""}
+        ${nr && canManageRouteStructureRole() ? `<button class="btn btn-outline-danger w-100" type="button" onclick="deleteRoute('${escapeHtml_(nr)}')">Radera led</button>` : ""}
+      </div>` : ""}
+      <button class="btn btn-accent w-100 route-form-save" type="button" id="save-route-btn" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
   `;
   const wasOpen = isPanelOpen_();
   document.getElementById("panel").classList.add("open");
