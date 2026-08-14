@@ -717,15 +717,16 @@
       gap: 8px;
       margin-top: 12px;
     }
-    .route-form-kebab-wrap {
+    .panel-header-actions {
       position: relative;
       display: flex;
-      justify-content: flex-end;
-      margin-top: 12px;
+      align-items: center;
+      flex: 0 0 auto;
     }
+    .panel-header-actions:empty { display: none; }
     .route-form-kebab-btn {
-      width: 40px;
-      height: 40px;
+      width: 34px;
+      height: 34px;
       border-radius: 10px;
       border: 1px solid var(--line);
       background: var(--surface-2);
@@ -733,6 +734,7 @@
       font-size: 1.1rem;
       line-height: 1;
       cursor: pointer;
+      margin-top: 1px;
     }
     .route-form-kebab-btn:hover { background: var(--panel-bg); }
     .route-form-kebab-menu {
@@ -750,7 +752,7 @@
       flex-direction: column;
       gap: 2px;
     }
-    .route-form-kebab-wrap.open .route-form-kebab-menu { display: flex; }
+    #panel-header-actions.open .route-form-kebab-menu { display: flex; }
     .route-form-kebab-item {
       border: 0;
       border-radius: 8px;
@@ -1116,6 +1118,7 @@
   <div id="panel">
     <div class="panel-header">
       <h5 id="panel-title"></h5>
+      <div class="panel-header-actions" id="panel-header-actions"></div>
       <button class="icon-btn" type="button" onclick="closePanel()" aria-label="Stäng">✕</button>
     </div>
     <div id="panel-body"></div>
@@ -3042,6 +3045,7 @@ function openRoute(key) {
   if (!r) return;
   const title = r.Nr ? `Led ${r.Nr}` : (r.Gradering || "Led");
   document.getElementById("panel-title").textContent = title;
+  document.getElementById("panel-header-actions").innerHTML = "";
   document.getElementById("panel-body").innerHTML = routeDetailHtml_(r, {
     thumbClass: "topo-img",
     thumbSize: 400,
@@ -3062,6 +3066,8 @@ function closePanel(fromPopstate) {
     return;
   }
   panel.classList.remove("open");
+  closeRouteFormKebab_();
+  document.getElementById("panel-header-actions").innerHTML = "";
   if (!fromPopstate && panelHistory_) {
     panelHistory_ = false;
     try { history.back(); } catch (e) { /* ignore */ }
@@ -3442,16 +3448,14 @@ function renderRouteForm(nr) {
         </div>
         <div class="img-editor-status" id="img-editor-status"></div>
       </div>
-      ${(nr || canManageRouteStructureRole()) ? `
-      <div class="route-form-kebab-wrap" id="route-kebab-wrap">
-        <button type="button" class="route-form-kebab-btn" id="route-kebab-btn" aria-haspopup="true" aria-expanded="false" aria-controls="route-kebab-menu" aria-label="Fler alternativ" onclick="toggleRouteFormKebab_(event)">⋯</button>
-        <div class="route-form-kebab-menu" id="route-kebab-menu" role="menu" aria-label="Fler alternativ">
-          ${nr ? `<button type="button" role="menuitem" class="route-form-kebab-item" onclick="closeRouteFormKebab_(); plockaNerLed();">Plocka ner led</button>` : ""}
-          ${nr && canManageRouteStructureRole() ? `<button type="button" role="menuitem" class="route-form-kebab-item danger" onclick="closeRouteFormKebab_(); deleteRoute('${escapeHtml_(nr)}');">Radera led</button>` : ""}
-        </div>
-      </div>` : ""}
       <button class="btn btn-accent w-100 route-form-save" type="button" id="save-route-btn" onclick="saveRoute('${escapeHtml_(nr || "")}')">Spara led</button>
   `;
+  document.getElementById("panel-header-actions").innerHTML = (nr || canManageRouteStructureRole()) ? `
+    <button type="button" class="route-form-kebab-btn" id="route-kebab-btn" aria-haspopup="true" aria-expanded="false" aria-controls="route-kebab-menu" aria-label="Fler alternativ" onclick="toggleRouteFormKebab_(event)">⋯</button>
+    <div class="route-form-kebab-menu" id="route-kebab-menu" role="menu" aria-label="Fler alternativ">
+      ${nr ? `<button type="button" role="menuitem" class="route-form-kebab-item" onclick="closeRouteFormKebab_(); plockaNerLed();">Plocka ner led</button>` : ""}
+      ${nr && canManageRouteStructureRole() ? `<button type="button" role="menuitem" class="route-form-kebab-item danger" onclick="closeRouteFormKebab_(); deleteRoute('${escapeHtml_(nr)}');">Radera led</button>` : ""}
+    </div>` : "";
   const wasOpen = isPanelOpen_();
   document.getElementById("panel").classList.add("open");
   if (!wasOpen) ensurePanelHistory_();
@@ -3473,17 +3477,17 @@ function toggleRouteFormKebab_(evt) {
     evt.preventDefault();
     evt.stopPropagation();
   }
-  const wrap = document.getElementById("route-kebab-wrap");
+  const host = document.getElementById("panel-header-actions");
   const btn = document.getElementById("route-kebab-btn");
-  if (!wrap || !btn) return;
-  const open = !wrap.classList.contains("open");
-  wrap.classList.toggle("open", open);
+  if (!host || !btn) return;
+  const open = !host.classList.contains("open");
+  host.classList.toggle("open", open);
   btn.setAttribute("aria-expanded", open ? "true" : "false");
 }
 function closeRouteFormKebab_() {
-  const wrap = document.getElementById("route-kebab-wrap");
+  const host = document.getElementById("panel-header-actions");
   const btn = document.getElementById("route-kebab-btn");
-  if (wrap) wrap.classList.remove("open");
+  if (host) host.classList.remove("open");
   if (btn) btn.setAttribute("aria-expanded", "false");
 }
 
@@ -3601,16 +3605,16 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("click", (e) => {
-  const wrap = document.getElementById("route-kebab-wrap");
-  if (!wrap || !wrap.classList.contains("open")) return;
-  if (!wrap.contains(e.target)) closeRouteFormKebab_();
+  const host = document.getElementById("panel-header-actions");
+  if (!host || !host.classList.contains("open")) return;
+  if (!host.contains(e.target)) closeRouteFormKebab_();
 });
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (rebuildFilterMenuOpen_) return closeRebuildFilterMenu_();
-    const routeKebabWrap = document.getElementById("route-kebab-wrap");
-    if (routeKebabWrap && routeKebabWrap.classList.contains("open")) return closeRouteFormKebab_();
+    const routeKebabHost = document.getElementById("panel-header-actions");
+    if (routeKebabHost && routeKebabHost.classList.contains("open")) return closeRouteFormKebab_();
     if (isQuickInfoOpen_()) return closeQuickInfo_();
     if (isQrScannerOpen_()) return closeQrScanner_();
     if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
