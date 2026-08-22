@@ -4,18 +4,18 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes, viewport-fit=cover">
-  <meta name="theme-color" content="#12151a" id="meta-theme-color">
+  <meta name="theme-color" content="#f2f0eb" id="meta-theme-color">
   <meta name="description" content="WallFlow — följ ledbyggnationen i klätterhallen.">
   <title>WallFlow</title>
   <script>
     (function () {
       try {
-        if (localStorage.getItem("wallflow_theme_v1") === "light") {
+        if (localStorage.getItem("wallflow_theme_v1") !== "dark") {
           document.documentElement.setAttribute("data-theme", "light");
-          var m = document.getElementById("meta-theme-color");
-          if (m) m.setAttribute("content", "#f2f0eb");
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
     })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -64,6 +64,10 @@
       --pie-empty: rgba(255, 255, 255, 0.06);
       --swatch-ring: rgba(255, 255, 255, 0.22);
       --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+      --panel-sheet: #1e2530;
+      --panel-scrim: rgba(0, 0, 0, 0.78);
+      --panel-shadow: 0 -28px 70px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.16);
+      --panel-handle: rgba(255, 255, 255, 0.38);
       --body-glow-1: rgba(232, 165, 75, 0.16);
       --body-glow-2: rgba(110, 200, 176, 0.12);
       --body-grad: linear-gradient(180deg, #161a21 0%, var(--bg) 40%, #0e1116 100%);
@@ -111,6 +115,10 @@
       --pie-empty: rgba(28, 32, 40, 0.08);
       --swatch-ring: rgba(28, 32, 40, 0.2);
       --shadow: 0 16px 40px rgba(28, 32, 40, 0.12);
+      --panel-sheet: #ffffff;
+      --panel-scrim: rgba(14, 18, 26, 0.58);
+      --panel-shadow: 0 -24px 64px rgba(14, 18, 26, 0.4), 0 0 0 1px rgba(28, 32, 40, 0.12);
+      --panel-handle: rgba(28, 32, 40, 0.32);
       --body-glow-1: rgba(201, 132, 42, 0.12);
       --body-glow-2: rgba(47, 154, 127, 0.1);
       --body-grad: linear-gradient(180deg, #f7f5f0 0%, var(--bg) 42%, #ebe8e1 100%);
@@ -482,14 +490,34 @@
       color: var(--muted); cursor: pointer; font-weight: 700; font-size: 0.82rem; transition: all .25s ease;
     }
     .nav-item.active { background: var(--nav-active); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+    .panel-backdrop {
+      position: fixed; inset: 0; z-index: 45;
+      background: var(--panel-scrim);
+      -webkit-backdrop-filter: blur(10px) saturate(0.65);
+      backdrop-filter: blur(10px) saturate(0.65);
+      opacity: 0; visibility: hidden; pointer-events: none;
+      transition: opacity .35s cubic-bezier(.2,.8,.2,1), visibility .35s cubic-bezier(.2,.8,.2,1);
+    }
+    .panel-backdrop.open {
+      opacity: 1; visibility: visible; pointer-events: auto;
+    }
     #panel {
-      position: fixed; left: 0; right: 0; bottom: 0; max-height: min(82vh, 720px); background: var(--panel-bg);
+      position: fixed; left: 0; right: 0; bottom: 0; max-height: min(82vh, 720px); background: var(--panel-sheet);
       border-radius: 22px 22px 0 0; border: 1px solid var(--line); border-bottom: 0; z-index: 50;
       transform: translateY(110%); transition: transform .35s cubic-bezier(.2,.8,.2,1);
-      display: flex; flex-direction: column; box-shadow: var(--shadow);
+      display: flex; flex-direction: column; box-shadow: var(--panel-shadow);
     }
     #panel.open { transform: translateY(0); }
-    .panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 16px 10px; border-bottom: 1px solid var(--line); overflow: visible; }
+    #panel::before {
+      content: "";
+      display: block;
+      width: 40px; height: 4px;
+      margin: 10px auto 0;
+      border-radius: 999px;
+      background: var(--panel-handle);
+      flex: 0 0 auto;
+    }
+    .panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 16px 10px; border-bottom: 1px solid var(--line); overflow: visible; }
     .panel-header h5 {
       font-family: var(--font-body);
       font-size: 1.2rem;
@@ -1071,7 +1099,8 @@
     </nav>
   </div>
 
-  <div id="panel">
+  <div id="panel-backdrop" class="panel-backdrop" aria-hidden="true" onclick="closePanel()"></div>
+  <div id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" aria-hidden="true">
     <div class="panel-header">
       <h5 id="panel-title"></h5>
       <div class="panel-header-actions" id="panel-header-actions"></div>
@@ -1633,9 +1662,9 @@ function showToast(msg) {
 
 function getTheme_() {
   try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
   } catch (_) {
-    return "dark";
+    return "light";
   }
 }
 
@@ -2490,6 +2519,21 @@ function isPanelOpen_() {
   return !!(panel && panel.classList.contains("open"));
 }
 
+function setPanelOpen_(open) {
+  const panel = document.getElementById("panel");
+  const backdrop = document.getElementById("panel-backdrop");
+  const isOpen = !!open;
+  if (panel) {
+    panel.classList.toggle("open", isOpen);
+    panel.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  }
+  if (backdrop) {
+    backdrop.classList.toggle("open", isOpen);
+    backdrop.setAttribute("aria-hidden", isOpen ? "false" : "true");
+  }
+  document.body.classList.toggle("panel-open", isOpen);
+}
+
 function ensurePanelHistory_() {
   if (panelHistory_) return;
   try {
@@ -3015,7 +3059,7 @@ function openRoute(key) {
     includeEditButtons: true
   });
   const wasOpen = isPanelOpen_();
-  document.getElementById("panel").classList.add("open");
+  setPanelOpen_(true);
   if (!wasOpen) ensurePanelHistory_();
 }
 function closePanel(fromPopstate) {
@@ -3027,7 +3071,7 @@ function closePanel(fromPopstate) {
     panelHistory_ = false;
     return;
   }
-  panel.classList.remove("open");
+  setPanelOpen_(false);
   document.getElementById("panel-header-actions").innerHTML = "";
   if (!fromPopstate && panelHistory_) {
     panelHistory_ = false;
@@ -3414,7 +3458,7 @@ function renderRouteForm(nr) {
   `;
   document.getElementById("panel-header-actions").innerHTML = "";
   const wasOpen = isPanelOpen_();
-  document.getElementById("panel").classList.add("open");
+  setPanelOpen_(true);
   if (!wasOpen) ensurePanelHistory_();
   bindRouteImageEditor_(route.Bild || "");
   // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad persons namn (inte användarnamn)
