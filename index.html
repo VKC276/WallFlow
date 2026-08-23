@@ -872,6 +872,17 @@
       -webkit-backdrop-filter: blur(8px);
       backdrop-filter: blur(8px);
       color-scheme: dark;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity .35s ease, visibility .35s ease, transform .35s ease;
+    }
+    .cam-zoom.is-visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: none;
     }
     .cam-zoom[hidden] { display: none !important; }
     .cam-zoom-btn {
@@ -2752,6 +2763,7 @@ function qrScanTick_(timestamp) {
 }
 
 const CAM_ZOOM_DIGITAL_MAX = 4;
+const CAM_ZOOM_HIDE_MS = 1600;
 const camZoomState_ = Object.create(null);
 
 function camZoomClamp_(value, min, max) {
@@ -2801,6 +2813,32 @@ function camZoomApplyHardware_(track, value) {
     .catch(() => track.applyConstraints({ zoom }).catch(() => {}));
 }
 
+function showCamZoomUi_(state, thenHide) {
+  if (!state || !state.wrap) return;
+  clearTimeout(state.hideTimer);
+  state.wrap.hidden = false;
+  state.wrap.classList.add("is-visible");
+  state.wrap.setAttribute("aria-hidden", "false");
+  if (thenHide !== false) scheduleCamZoomHide_(state);
+}
+
+function scheduleCamZoomHide_(state) {
+  if (!state) return;
+  clearTimeout(state.hideTimer);
+  state.hideTimer = setTimeout(() => {
+    if (camZoomState_[state.id] !== state) return;
+    hideCamZoomUi_(state);
+  }, CAM_ZOOM_HIDE_MS);
+}
+
+function hideCamZoomUi_(state) {
+  if (!state || !state.wrap) return;
+  clearTimeout(state.hideTimer);
+  state.hideTimer = 0;
+  state.wrap.classList.remove("is-visible");
+  state.wrap.setAttribute("aria-hidden", "true");
+}
+
 function applyCamZoom_(state, nextValue) {
   if (!state) return;
   const value = camZoomClamp_(nextValue, state.min, state.max);
@@ -2811,10 +2849,11 @@ function applyCamZoom_(state, nextValue) {
     if (state.video) state.video.style.transform = "";
     state.digital = 1;
     camZoomApplyHardware_(state.track, value);
-    return;
+  } else {
+    state.digital = value;
+    if (state.video) state.video.style.transform = value > 1.02 ? ("scale(" + value + ")") : "";
   }
-  state.digital = value;
-  if (state.video) state.video.style.transform = value > 1.02 ? ("scale(" + value + ")") : "";
+  showCamZoomUi_(state);
 }
 
 function camZoomDetectSource_(id, video) {
@@ -2850,12 +2889,22 @@ function bindCamZoomPinch_(stage, id) {
   stage.dataset.camZoomBound = "1";
   let startDist = 0;
   let startValue = 1;
-  stage.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 2) return;
+  stage.addEventListener("click", (e) => {
+    if (e.target.closest(".cam-zoom")) return;
     const state = camZoomState_[id];
     if (!state) return;
+    showCamZoomUi_(state);
+  });
+  stage.addEventListener("touchstart", (e) => {
+    const state = camZoomState_[id];
+    if (!state) return;
+    if (e.touches.length === 1 && !e.target.closest(".cam-zoom")) {
+      showCamZoomUi_(state, false);
+    }
+    if (e.touches.length !== 2) return;
     startDist = camZoomTouchDist_(e.touches);
     startValue = state.value;
+    showCamZoomUi_(state, false);
   }, { passive: true });
   stage.addEventListener("touchmove", (e) => {
     if (e.touches.length !== 2 || startDist < 8) return;
@@ -2865,7 +2914,10 @@ function bindCamZoomPinch_(stage, id) {
     applyCamZoom_(state, startValue * (camZoomTouchDist_(e.touches) / startDist));
   }, { passive: false });
   stage.addEventListener("touchend", (e) => {
-    if (e.touches.length < 2) startDist = 0;
+    if (e.touches.length >= 2) return;
+    startDist = 0;
+    const state = camZoomState_[id];
+    if (state) scheduleCamZoomHide_(state);
   }, { passive: true });
 }
 
@@ -2880,7 +2932,7 @@ function initCamZoom_(id, stream, video) {
   const max = hw ? hw.max : CAM_ZOOM_DIGITAL_MAX;
   const step = hw ? hw.step : 0.1;
   const value = camZoomClamp_(hw ? hw.current : 1, min, max);
-  const state = { id, track, video, wrap, range, label, hw: !!hw, min, max, step, value, digital: 1, canvas: null };
+  const state = { id, track, video, wrap, range, label, hw: !!hw, min, max, step, value, digital: 1, canvas: null, hideTimer: 0 };
   camZoomState_[id] = state;
   if (range) {
     range.min = String(min);
@@ -2901,17 +2953,34 @@ function initCamZoom_(id, stream, video) {
       const nudge = Math.max(current.step, span / 10) * Number(btn.getAttribute("data-zoom-nudge"));
       applyCamZoom_(current, current.value + nudge);
     });
-    wrap.addEventListener("pointerdown", (e) => e.stopPropagation());
+    wrap.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const current = camZoomState_[id];
+      if (!current) return;
+      clearTimeout(current.hideTimer);
+    });
+    wrap.addEventListener("pointerup", () => {
+      const current = camZoomState_[id];
+      if (current) scheduleCamZoomHide_(current);
+    });
   }
-  if (wrap) wrap.hidden = false;
+  if (wrap) {
+    wrap.hidden = false;
+    wrap.setAttribute("aria-hidden", "false");
+  }
   bindCamZoomPinch_(stage, id);
   applyCamZoom_(state, value);
 }
 
 function resetCamZoom_(id) {
   const state = camZoomState_[id];
+  if (state) clearTimeout(state.hideTimer);
   if (state && state.video) state.video.style.transform = "";
-  if (state && state.wrap) state.wrap.hidden = true;
+  if (state && state.wrap) {
+    state.wrap.classList.remove("is-visible");
+    state.wrap.hidden = true;
+    state.wrap.setAttribute("aria-hidden", "true");
+  }
   if (state && state.range) {
     state.range.min = "1";
     state.range.max = String(CAM_ZOOM_DIGITAL_MAX);
