@@ -839,6 +839,7 @@
       background: #050608;
       overflow: hidden;
       min-height: 220px;
+      touch-action: none;
     }
     .qr-scan-stage::after {
       content: "";
@@ -854,6 +855,53 @@
       min-height: 220px;
       object-fit: cover;
       display: block;
+      transform-origin: center center;
+    }
+    .cam-zoom {
+      position: absolute;
+      left: 10px; right: 10px; bottom: 10px;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(5, 6, 8, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #f2efe8;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      color-scheme: dark;
+    }
+    .cam-zoom[hidden] { display: none !important; }
+    .cam-zoom-btn {
+      flex: 0 0 auto;
+      width: 36px; height: 36px;
+      border: 0; border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      color: inherit;
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+      display: grid; place-items: center;
+    }
+    .cam-zoom-btn:active { background: rgba(255, 255, 255, 0.22); }
+    .cam-zoom input[type="range"] {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 28px;
+      margin: 0;
+      accent-color: var(--accent);
+    }
+    .cam-zoom-label {
+      flex: 0 0 auto;
+      min-width: 2.8em;
+      text-align: right;
+      font-size: 0.78rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.01em;
     }
     .qr-scan-status {
       padding: 0 14px 10px;
@@ -922,6 +970,7 @@
       overflow: hidden;
       min-height: 180px;
       height: min(36vh, 280px);
+      touch-action: none;
     }
     .quickinfo-stage::after {
       content: "";
@@ -938,6 +987,7 @@
       display: block;
       object-fit: cover;
       background: #050608;
+      transform-origin: center center;
     }
     .quickinfo-status {
       flex: 0 0 auto;
@@ -1115,8 +1165,14 @@
         <strong id="qr-scan-title">Skanna routecard-QR</strong>
         <button class="icon-btn" type="button" onclick="closeQrScanner_()" aria-label="Stäng QR-skanner">✕</button>
       </div>
-      <div class="qr-scan-stage">
+      <div class="qr-scan-stage" id="qr-scan-stage">
         <video id="qr-scan-video" autoplay playsinline muted></video>
+        <div class="cam-zoom" id="qr-scan-zoom" hidden>
+          <button type="button" class="cam-zoom-btn" data-zoom-nudge="-1" aria-label="Zooma ut">−</button>
+          <input id="qr-scan-zoom-range" type="range" min="1" max="4" step="0.1" value="1" aria-label="Kamerazoom">
+          <button type="button" class="cam-zoom-btn" data-zoom-nudge="1" aria-label="Zooma in">+</button>
+          <span class="cam-zoom-label" id="qr-scan-zoom-label">1×</span>
+        </div>
       </div>
       <div id="qr-scan-status" class="qr-scan-status">Startar kamera…</div>
       <div class="qr-scan-actions">
@@ -1135,8 +1191,14 @@
       <button class="icon-btn" type="button" onclick="closeQuickInfo_()" aria-label="Stäng Quickinfo">✕</button>
     </div>
     <div class="quickinfo-body">
-      <div class="quickinfo-stage">
+      <div class="quickinfo-stage" id="quickinfo-stage">
         <video id="quickinfo-video" autoplay playsinline muted></video>
+        <div class="cam-zoom" id="quickinfo-zoom" hidden>
+          <button type="button" class="cam-zoom-btn" data-zoom-nudge="-1" aria-label="Zooma ut">−</button>
+          <input id="quickinfo-zoom-range" type="range" min="1" max="4" step="0.1" value="1" aria-label="Kamerazoom">
+          <button type="button" class="cam-zoom-btn" data-zoom-nudge="1" aria-label="Zooma in">+</button>
+          <span class="cam-zoom-label" id="quickinfo-zoom-label">1×</span>
+        </div>
       </div>
       <div id="quickinfo-status" class="quickinfo-status">Startar kamera…</div>
       <div id="quickinfo-result" class="quickinfo-result">
@@ -2584,6 +2646,7 @@ function stopQrScannerLoop_() {
 }
 
 function stopQrScannerStream_() {
+  resetCamZoom_("qr-scan");
   const stream = qrScanState_.stream;
   if (stream) {
     stream.getTracks().forEach((track) => {
@@ -2671,7 +2734,7 @@ function qrScanTick_(timestamp) {
   }
   qrScanState_.detectBusy = true;
   qrScanState_.lastDetectAt = timestamp;
-  qrScanState_.detector.detect(video)
+  qrScanState_.detector.detect(camZoomDetectSource_("qr-scan", video))
     .then((codes) => {
       const first = Array.isArray(codes) && codes.length ? codes[0] : null;
       const value = first && first.rawValue ? String(first.rawValue).trim() : "";
@@ -2686,6 +2749,177 @@ function qrScanTick_(timestamp) {
       qrScanState_.detectBusy = false;
       if (qrScanState_.open) qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
     });
+}
+
+const CAM_ZOOM_DIGITAL_MAX = 4;
+const camZoomState_ = Object.create(null);
+
+function camZoomClamp_(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, n));
+}
+
+function camZoomLabel_(state) {
+  const rel = state && state.min > 0 ? state.value / state.min : (state ? state.value : 1);
+  const n = Math.round(camZoomClamp_(rel, 0, 99) * 10) / 10;
+  return (Math.abs(n - Math.round(n)) < 0.05 ? String(Math.round(n)) : n.toFixed(1)) + "×";
+}
+
+function camZoomTrack_(stream) {
+  if (!stream || typeof stream.getVideoTracks !== "function") return null;
+  const tracks = stream.getVideoTracks();
+  return tracks && tracks[0] ? tracks[0] : null;
+}
+
+function camZoomHardwareRange_(track) {
+  if (!track || typeof track.getCapabilities !== "function") return null;
+  try {
+    const caps = track.getCapabilities() || {};
+    const z = caps.zoom;
+    if (z == null) return null;
+    const min = Number(z.min);
+    const max = Number(z.max);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+    const step = Number(z.step) > 0 ? Number(z.step) : 0.1;
+    let current = min;
+    if (typeof track.getSettings === "function") {
+      const settings = track.getSettings() || {};
+      if (Number.isFinite(settings.zoom)) current = settings.zoom;
+    }
+    return { min, max, step, current };
+  } catch (_) {
+    return null;
+  }
+}
+
+function camZoomApplyHardware_(track, value) {
+  if (!track || typeof track.applyConstraints !== "function") return;
+  const zoom = Number(value);
+  if (!Number.isFinite(zoom)) return;
+  Promise.resolve(track.applyConstraints({ advanced: [{ zoom }] }))
+    .catch(() => track.applyConstraints({ zoom }).catch(() => {}));
+}
+
+function applyCamZoom_(state, nextValue) {
+  if (!state) return;
+  const value = camZoomClamp_(nextValue, state.min, state.max);
+  state.value = value;
+  if (state.range && Number(state.range.value) !== value) state.range.value = String(value);
+  if (state.label) state.label.textContent = camZoomLabel_(state);
+  if (state.hw && state.track) {
+    if (state.video) state.video.style.transform = "";
+    state.digital = 1;
+    camZoomApplyHardware_(state.track, value);
+    return;
+  }
+  state.digital = value;
+  if (state.video) state.video.style.transform = value > 1.02 ? ("scale(" + value + ")") : "";
+}
+
+function camZoomDetectSource_(id, video) {
+  const state = camZoomState_[id];
+  const zoom = state && !state.hw ? Number(state.digital || state.value || 1) : 1;
+  if (!video || zoom <= 1.02) return video;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return video;
+  const cw = Math.max(32, Math.round(vw / zoom));
+  const ch = Math.max(32, Math.round(vh / zoom));
+  if (!state.canvas) state.canvas = document.createElement("canvas");
+  if (state.canvas.width !== cw) state.canvas.width = cw;
+  if (state.canvas.height !== ch) state.canvas.height = ch;
+  const ctx = state.canvas.getContext("2d");
+  if (!ctx) return video;
+  const sx = Math.round((vw - cw) / 2);
+  const sy = Math.round((vh - ch) / 2);
+  ctx.drawImage(video, sx, sy, cw, ch, 0, 0, cw, ch);
+  return state.canvas;
+}
+
+function camZoomTouchDist_(touches) {
+  const a = touches[0];
+  const b = touches[1];
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function bindCamZoomPinch_(stage, id) {
+  if (!stage || stage.dataset.camZoomBound === "1") return;
+  stage.dataset.camZoomBound = "1";
+  let startDist = 0;
+  let startValue = 1;
+  stage.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 2) return;
+    const state = camZoomState_[id];
+    if (!state) return;
+    startDist = camZoomTouchDist_(e.touches);
+    startValue = state.value;
+  }, { passive: true });
+  stage.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 2 || startDist < 8) return;
+    e.preventDefault();
+    const state = camZoomState_[id];
+    if (!state) return;
+    applyCamZoom_(state, startValue * (camZoomTouchDist_(e.touches) / startDist));
+  }, { passive: false });
+  stage.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) startDist = 0;
+  }, { passive: true });
+}
+
+function initCamZoom_(id, stream, video) {
+  const wrap = document.getElementById(id + "-zoom");
+  const range = document.getElementById(id + "-zoom-range");
+  const label = document.getElementById(id + "-zoom-label");
+  const stage = document.getElementById(id + "-stage");
+  const track = camZoomTrack_(stream);
+  const hw = camZoomHardwareRange_(track);
+  const min = hw ? hw.min : 1;
+  const max = hw ? hw.max : CAM_ZOOM_DIGITAL_MAX;
+  const step = hw ? hw.step : 0.1;
+  const value = camZoomClamp_(hw ? hw.current : 1, min, max);
+  const state = { id, track, video, wrap, range, label, hw: !!hw, min, max, step, value, digital: 1, canvas: null };
+  camZoomState_[id] = state;
+  if (range) {
+    range.min = String(min);
+    range.max = String(max);
+    range.step = String(step);
+    range.value = String(value);
+    range.oninput = () => applyCamZoom_(state, Number(range.value));
+  }
+  if (wrap && !wrap.dataset.camZoomUiBound) {
+    wrap.dataset.camZoomUiBound = "1";
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-zoom-nudge]");
+      if (!btn) return;
+      e.preventDefault();
+      const current = camZoomState_[id];
+      if (!current) return;
+      const span = Math.max(current.max - current.min, 0.1);
+      const nudge = Math.max(current.step, span / 10) * Number(btn.getAttribute("data-zoom-nudge"));
+      applyCamZoom_(current, current.value + nudge);
+    });
+    wrap.addEventListener("pointerdown", (e) => e.stopPropagation());
+  }
+  if (wrap) wrap.hidden = false;
+  bindCamZoomPinch_(stage, id);
+  applyCamZoom_(state, value);
+}
+
+function resetCamZoom_(id) {
+  const state = camZoomState_[id];
+  if (state && state.video) state.video.style.transform = "";
+  if (state && state.wrap) state.wrap.hidden = true;
+  if (state && state.range) {
+    state.range.min = "1";
+    state.range.max = String(CAM_ZOOM_DIGITAL_MAX);
+    state.range.step = "0.1";
+    state.range.value = "1";
+  }
+  if (state && state.label) state.label.textContent = "1×";
+  camZoomState_[id] = null;
 }
 
 async function openQrScanner_() {
@@ -2725,6 +2959,7 @@ async function openQrScanner_() {
     qrScanState_.stream = stream;
     video.srcObject = stream;
     await video.play();
+    initCamZoom_("qr-scan", stream, video);
     setQrScanStatus_("Rikta kameran mot en QR-kod med lednummer.");
     qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
   } catch (err) {
@@ -2766,6 +3001,7 @@ function stopQuickInfoLoop_() {
 }
 
 function stopQuickInfoStream_() {
+  resetCamZoom_("quickinfo");
   const stream = quickInfoState_.stream;
   if (stream) {
     stream.getTracks().forEach((track) => {
@@ -2963,7 +3199,7 @@ function quickInfoTick_(timestamp) {
   }
   quickInfoState_.detectBusy = true;
   quickInfoState_.lastDetectAt = timestamp;
-  quickInfoState_.detector.detect(video)
+  quickInfoState_.detector.detect(camZoomDetectSource_("quickinfo", video))
     .then((codes) => {
       const first = Array.isArray(codes) && codes.length ? codes[0] : null;
       const value = first && first.rawValue ? String(first.rawValue).trim() : "";
@@ -3049,6 +3285,7 @@ async function openQuickInfo_() {
       video.srcObject = stream;
       await video.play();
     }
+    initCamZoom_("quickinfo", stream, video);
     setQuickInfoStatus_("Skannar löpande — håll QR-koden i ramen.");
     quickInfoState_.rafId = requestAnimationFrame(quickInfoTick_);
   } catch (err) {
