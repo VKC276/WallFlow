@@ -9,6 +9,8 @@
     "deploy": "wrangler deploy",
     "db:schema:local": "wrangler d1 execute wallflow --local --file=schema.sql",
     "db:schema:remote": "wrangler d1 execute wallflow --remote --file=schema.sql",
+    "db:migrate:local": "wrangler d1 execute wallflow --local --file=migrations/0001_time_reporting.sql",
+    "db:migrate:remote": "wrangler d1 execute wallflow --remote --file=migrations/0001_time_reporting.sql",
     "test:api": "node scripts/smoke-api.mjs"
   },
   "devDependencies": {

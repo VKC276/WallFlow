@@ -536,13 +536,14 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
+    #login-panel, #app-admin, #app-time { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show { display: flex; }
+    #app-admin { z-index: 85; }
     .account-chip {
       position: relative;
       z-index: 2;
@@ -569,6 +570,55 @@
       color: var(--text); font-weight: 700; max-width: 88px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       user-select: none; -webkit-user-select: none;
+    }
+    .account-menu-wrap { position: relative; z-index: 3; }
+    .account-menu-btn {
+      width: 40px; height: 40px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+      display: grid; place-items: center; cursor: pointer; padding: 0;
+      font-family: inherit;
+    }
+    .account-menu-btn:hover { background: var(--surface-3); }
+    .account-menu-btn[aria-expanded="true"] { background: var(--surface-3); }
+    .account-menu {
+      position: absolute; right: 0; top: calc(100% + 6px);
+      min-width: 168px; padding: 6px;
+      border-radius: 12px; border: 1px solid var(--line); background: var(--panel-bg);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22); display: none; z-index: 50;
+    }
+    .account-menu-wrap.open .account-menu { display: grid; gap: 4px; }
+    .account-menu button {
+      border: 0; border-radius: 8px; background: transparent; color: var(--text);
+      text-align: left; font-size: 0.88rem; font-weight: 600; padding: 10px 12px;
+      cursor: pointer; font-family: inherit;
+    }
+    .account-menu button:hover { background: var(--surface-2); }
+    .time-banner {
+      border-radius: 12px; padding: 10px 12px; font-size: 0.88rem; font-weight: 600; margin-bottom: 12px;
+    }
+    .time-banner.warn {
+      background: color-mix(in srgb, #e6b325 18%, transparent);
+      border: 1px solid color-mix(in srgb, #e6b325 40%, transparent);
+    }
+    .time-banner.max {
+      background: color-mix(in srgb, #c45c5c 18%, transparent);
+      border: 1px solid color-mix(in srgb, #c45c5c 40%, transparent);
+    }
+    .time-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .time-table th, .time-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .time-table th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
+    .time-table .num, .time-total .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .time-table tr.is-neg td { color: #c45c5c; }
+    .time-total { margin-top: 12px; padding-top: 10px; border-top: 2px solid var(--line); }
+    .time-total-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 0.9rem; }
+    .time-total-row.grand { font-weight: 800; font-size: 1rem; }
+    .time-kind { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .admin-shell.wide { max-width: 960px; }
+    @media print {
+      #loading-screen, #app-public, #login-panel, #app-admin, .toast-wrap, .time-no-print { display: none !important; }
+      #app-time { display: flex !important; position: static; background: #fff; color: #111; }
+      #app-time .admin-shell { max-width: none; padding: 0; }
+      .time-print-only { display: block !important; }
     }
     .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .login-card { width: min(360px, 100%); transition: opacity .25s ease; }
@@ -1114,10 +1164,15 @@
         <button class="icon-btn search-toggle" id="search-toggle" type="button" aria-label="Sök" aria-expanded="false" aria-controls="search-wrap" title="Sök" onclick="toggleSearchPanel_()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         </button>
-        <button class="account-chip" id="account-chip" type="button" aria-label="Inställningar" title="Inställningar">
-          <span class="account-name" id="account-name">—</span>
-          <span class="icon-btn" aria-hidden="true">⚙</span>
-        </button>
+        <div class="account-menu-wrap" id="account-menu-wrap">
+          <button class="account-menu-btn" id="account-menu-btn" type="button" aria-label="Meny" aria-haspopup="true" aria-expanded="false" title="Meny">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
+          <div class="account-menu" id="account-menu" role="menu">
+            <button type="button" role="menuitem" onclick="openSettingsFromMenu_()">Konto</button>
+            <button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>
+          </div>
+        </div>
       </div>
       <div class="search-wrap" id="search-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -1246,7 +1301,7 @@
     <div class="login-inner">
       <div class="login-card">
         <h2>WallFlow</h2>
-        <p class="login-lead">Logga in för att se och uppdatera ledbyggnationen.</p>
+        <p class="login-lead">Logga in för att se ledbyggnationen eller rapportera tid.</p>
         <div class="mb-3"><input id="admin-user" class="form-control form-control-lg" placeholder="Användarnamn" autocomplete="username"></div>
         <div class="mb-3"><input id="admin-pw" class="form-control form-control-lg" type="password" placeholder="Lösenord" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkLogin()"></div>
         <label class="login-remember d-flex align-items-center gap-2 mb-3">
@@ -1276,6 +1331,14 @@
     <div class="admin-shell" id="admin-main"></div>
   </div>
 
+  <div id="app-time">
+    <div class="p-3 d-flex justify-content-between align-items-center border-bottom time-no-print" style="border-color: var(--line) !important;">
+      <div class="small text-uppercase" style="color:var(--muted); letter-spacing:.08em;">Rapportering</div>
+      <div class="d-flex gap-2 flex-wrap justify-content-end" id="time-header-actions"></div>
+    </div>
+    <div class="admin-shell wide" id="time-main"></div>
+  </div>
+
   <div class="toast-wrap"><div id="toast" class="toast-msg"></div></div>
 
   <script>
@@ -1289,7 +1352,7 @@
  *********************************************************************/
 const GAS_API_URL = "https://wallflow.muddy-rice-38d4.workers.dev/";
 const USE_DEMO = !GAS_API_URL || GAS_API_URL.includes("PASTE_");
-const DEMO_STORAGE_KEY = "wallflow_demo_db_v3";
+const DEMO_STORAGE_KEY = "wallflow_demo_db_v4";
 const SESSION_STORAGE_KEY = "wallflow_session_v1";
 const REMEMBER_COOKIE = "wallflow_admin_remember_username";
 const THEME_STORAGE_KEY = "wallflow_theme_v1";
@@ -1309,7 +1372,7 @@ const WILDCARD_NAMES = ["wildcard", "wildcards"];
 const EJ_UPPSATT_GRADE = "Ej uppsatt";
 
 let __sessionToken = null;
-let currentUser = { authorized: false, role: null, username: null, firstLogin: false };
+let currentUser = { authorized: false, role: null, extraRoles: [], username: null, firstLogin: false };
 let db = { routes: [], grades: DEFAULT_GRADES.slice(), routeLifetimeDays: 30, baseUrlQr: "" };
 let currentView = "colors";
 let rebuildFilter = "ALL"; // default: visa alla leder
@@ -1367,7 +1430,10 @@ function seedDemoDb_() {
       { Nr: "W1", Gradering: "Wildcard", DagsAttByggaOm: "Nej", Ledbyggare: "Patric", Byggdatum: "2026-06-01", Slutdatum: "2026-07-01", Anteckningar: "Mixade grepp", Bild: "" },
       { Nr: "W2", Gradering: "Wildcard", DagsAttByggaOm: "Ja", Ledbyggare: "Jesper", Byggdatum: "2026-05-10", Slutdatum: "2026-06-10", Anteckningar: "", Bild: "" }
     ],
-    users: [{ username: "admin", name: "Admin", role: "superadmin", password: "wallflow", FirstLogin: false }]
+    users: [{ username: "admin", name: "Admin", role: "superadmin", extraRoles: [], password: "wallflow", FirstLogin: false }],
+    timeSettings: { ledbyggHourlyRate: 150, minPayout: 500, hallvardShiftAmount: 200, maxYearAmount: 5000, warningYearAmount: 4000 },
+    timeEntries: [],
+    timeEntrySeq: 1
   };
 }
 function loadDemoDb_() {
@@ -1375,7 +1441,13 @@ function loadDemoDb_() {
     const raw = localStorage.getItem(DEMO_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.routes)) return parsed;
+      if (parsed && Array.isArray(parsed.routes)) {
+        if (!parsed.timeSettings) parsed.timeSettings = seedDemoDb_().timeSettings;
+        if (!parsed.timeEntries) parsed.timeEntries = [];
+        if (!parsed.timeEntrySeq) parsed.timeEntrySeq = 1;
+        (parsed.users || []).forEach((u) => { if (!u.extraRoles) u.extraRoles = []; });
+        return parsed;
+      }
     }
   } catch (_) {}
   const seeded = seedDemoDb_();
@@ -1383,6 +1455,161 @@ function loadDemoDb_() {
   return seeded;
 }
 function saveDemoDb_(data) { localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(data)); }
+
+function demoTimeSettings_(store) {
+  return Object.assign({
+    ledbyggHourlyRate: 0,
+    minPayout: 0,
+    hallvardShiftAmount: 0,
+    maxYearAmount: 0,
+    warningYearAmount: 0
+  }, store.timeSettings || {});
+}
+
+function demoRowAmount_(e) {
+  return Math.round((Number(e.hours) || 0) * (Number(e.unitAmount) || 0) * 100) / 100;
+}
+
+function demoSummarize_(entries, settings) {
+  const rows = entries || [];
+  let ledbyggHours = 0, ledbyggAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
+  const byUser = {};
+  rows.forEach((e) => {
+    const amt = demoRowAmount_(e);
+    if (e.kind === "hallvard") { hallvardShifts += Number(e.hours) || 0; hallvardAmount += amt; }
+    else { ledbyggHours += Number(e.hours) || 0; ledbyggAmount += amt; }
+    const key = String(e.username || "").toLowerCase();
+    if (!byUser[key]) byUser[key] = { username: e.username, name: e.name || e.username, ledbyggHours: 0, ledbyggAmount: 0, hallvardShifts: 0, hallvardAmount: 0, amount: 0 };
+    const u = byUser[key];
+    if (e.kind === "hallvard") { u.hallvardShifts += Number(e.hours) || 0; u.hallvardAmount += amt; }
+    else { u.ledbyggHours += Number(e.hours) || 0; u.ledbyggAmount += amt; }
+    u.amount += amt;
+  });
+  const people = Object.keys(byUser).map((k) => {
+    const u = byUser[k];
+    const amount = Math.round(u.amount * 100) / 100;
+    return Object.assign(u, {
+      ledbyggHours: Math.round(u.ledbyggHours * 100) / 100,
+      ledbyggAmount: Math.round(u.ledbyggAmount * 100) / 100,
+      hallvardShifts: Math.round(u.hallvardShifts * 100) / 100,
+      hallvardAmount: Math.round(u.hallvardAmount * 100) / 100,
+      amount,
+      belowMinPayout: settings.minPayout > 0 && amount > 0 && amount < settings.minPayout
+    });
+  });
+  return {
+    ledbyggHours: Math.round(ledbyggHours * 100) / 100,
+    ledbyggAmount: Math.round(ledbyggAmount * 100) / 100,
+    hallvardShifts: Math.round(hallvardShifts * 100) / 100,
+    hallvardAmount: Math.round(hallvardAmount * 100) / 100,
+    totalAmount: Math.round((ledbyggAmount + hallvardAmount) * 100) / 100,
+    minPayout: settings.minPayout,
+    people
+  };
+}
+
+function demoMonthFilter_(entries, yearMonth) {
+  const ym = String(yearMonth || "").slice(0, 7);
+  return (entries || []).filter((e) => String(e.workDate || "").slice(0, 7) === ym);
+}
+
+function demoCap_(store, username, settings) {
+  const year = new Date().getFullYear();
+  const total = (store.timeEntries || []).filter((e) => e.username === username && String(e.workDate).slice(0, 4) === String(year))
+    .reduce((s, e) => s + demoRowAmount_(e), 0);
+  const max = Number(settings.maxYearAmount) || 0;
+  const warn = Number(settings.warningYearAmount) || 0;
+  let level = "ok";
+  if (max > 0 && total >= max) level = "max";
+  else if (warn > 0 && total >= warn) level = "warn";
+  return { yearTotal: Math.round(total * 100) / 100, maxYearAmount: max, warningYearAmount: warn, remaining: max > 0 ? Math.round(Math.max(0, max - total) * 100) / 100 : null, level };
+}
+
+function demoHasRole_(roleName) {
+  const primary = String(currentUser.role || "").toLowerCase();
+  const extras = currentUser.extraRoles || [];
+  return primary === roleName || extras.indexOf(roleName) >= 0;
+}
+
+function demoTimeApi_(store, action, args) {
+  if (!store.timeEntries) store.timeEntries = [];
+  if (!store.timeEntrySeq) store.timeEntrySeq = 1;
+  const settings = demoTimeSettings_(store);
+  const payload = args[0] || {};
+  const yearMonth = String(payload.yearMonth || new Date().toISOString().slice(0, 7));
+  const wallflow = ["superadmin", "admin", "scout"].indexOf(String(currentUser.role || "").toLowerCase()) >= 0;
+  if (action === "getTimeApp") {
+    const entries = demoMonthFilter_(store.timeEntries, yearMonth).filter((e) => e.username === currentUser.username);
+    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings), cap: demoCap_(store, currentUser.username, settings), flags: { wallflow, reportLedbygg: wallflow, reportHallvard: demoHasRole_("hallvard"), treasurer: String(currentUser.role) === "superadmin" || demoHasRole_("kassor"), timeAdmin: String(currentUser.role) === "superadmin" } };
+  }
+  if (action === "addTimeEntry") {
+    const kind = String(payload.kind || "");
+    if (kind === "ledbygg" && !wallflow) return { ok: false, error: "Saknar behörighet att rapportera ledbyggartid" };
+    if (kind === "hallvard" && !demoHasRole_("hallvard")) return { ok: false, error: "Saknar behörighet att rapportera hallvärdspass" };
+    const workDate = String(payload.workDate || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) return { ok: false, error: "Ogiltigt datum" };
+    let hours, description, unitAmount;
+    if (kind === "hallvard") {
+      hours = payload.correction ? -1 : 1;
+      description = String(payload.description || "").trim() || (payload.correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
+      unitAmount = settings.hallvardShiftAmount;
+    } else {
+      hours = Number(payload.hours);
+      if (!hours) return { ok: false, error: "Ange antal timmar (kan vara negativt som minuspost)" };
+      if (payload.correction && hours > 0) hours = -hours;
+      description = String(payload.description || "").trim();
+      if (!description) return { ok: false, error: "Beskriv vad som gjorts" };
+      unitAmount = settings.ledbyggHourlyRate;
+    }
+    const me = (store.users || []).find((u) => u.username === currentUser.username);
+    const entry = {
+      id: store.timeEntrySeq++,
+      username: currentUser.username,
+      name: (me && me.name) || currentUser.username,
+      kind, workDate, hours, description, unitAmount,
+      amount: Math.round(hours * unitAmount * 100) / 100,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.username
+    };
+    store.timeEntries.push(entry);
+    saveDemoDb_(store);
+    return { ok: true, entry };
+  }
+  if (action === "getTreasurerReport") {
+    if (String(currentUser.role) !== "superadmin" && !demoHasRole_("kassor")) return { ok: false, error: "Saknar behörighet" };
+    const entries = demoMonthFilter_(store.timeEntries, yearMonth).map((e) => {
+      const u = (store.users || []).find((x) => x.username === e.username);
+      return Object.assign({}, e, { name: (u && u.name) || e.name || e.username, amount: demoRowAmount_(e) });
+    });
+    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings) };
+  }
+  if (action === "deleteTimeEntry") {
+    if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ta bort tidrader" };
+    const id = Number(args[0]);
+    const before = store.timeEntries.length;
+    store.timeEntries = store.timeEntries.filter((e) => e.id !== id);
+    if (store.timeEntries.length === before) return { ok: false, error: "Posten hittades inte" };
+    saveDemoDb_(store);
+    return { ok: true };
+  }
+  if (action === "saveTimeSettings") {
+    if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ändra arvode och gränser" };
+    const next = {
+      ledbyggHourlyRate: Math.max(0, Number(payload.ledbyggHourlyRate) || 0),
+      minPayout: Math.max(0, Number(payload.minPayout) || 0),
+      hallvardShiftAmount: Math.max(0, Number(payload.hallvardShiftAmount) || 0),
+      maxYearAmount: Math.max(0, Number(payload.maxYearAmount) || 0),
+      warningYearAmount: Math.max(0, Number(payload.warningYearAmount) || 0)
+    };
+    if (next.warningYearAmount && next.maxYearAmount && next.warningYearAmount > next.maxYearAmount) {
+      return { ok: false, error: "Varningsgränsen kan inte vara högre än maxtaket" };
+    }
+    store.timeSettings = next;
+    saveDemoDb_(store);
+    return { ok: true, settings: next };
+  }
+  return { ok: false, error: "Okänd action: " + action };
+}
 
 function demoApi_(action, args) {
   return new Promise((resolve) => {
@@ -1398,7 +1625,7 @@ function demoApi_(action, args) {
           grades: store.grades || DEFAULT_GRADES.slice(),
           routeLifetimeDays: Number(store.routeLifetimeDays) || 30,
           baseUrlQr: String(store.baseUrlQr || ""),
-          me: meUser ? { username: meUser.username, name: meUser.name || "", role: meUser.role } : null
+          me: meUser ? { username: meUser.username, name: meUser.name || "", role: meUser.role, extraRoles: meUser.extraRoles || [] } : null
         });
       }
       if (action === "verifyAdminPassword") {
@@ -1406,7 +1633,7 @@ function demoApi_(action, args) {
         const u = (store.users || []).find((x) => x.username === String(user || "").trim() && x.password === String(pw || ""));
         if (!u) return ok({ authorized: false });
         __sessionToken = "demo-token-admin";
-        return ok({ authorized: true, token: __sessionToken, role: u.role, username: u.username, name: u.name, firstLogin: !!u.FirstLogin });
+        return ok({ authorized: true, token: __sessionToken, role: u.role, extraRoles: u.extraRoles || [], username: u.username, name: u.name, firstLogin: !!u.FirstLogin });
       }
       if (__sessionToken !== "demo-token-admin" && action !== "getAppData") return fail("Ej inloggad");
 
@@ -1491,7 +1718,7 @@ function demoApi_(action, args) {
       if (action === "getAllAdmins") {
         const role = String(currentUser.role || "").toLowerCase();
         if (role !== "superadmin" && role !== "admin") return ok([]);
-        let list = (store.users || []).map((u) => ({ username: u.username, name: u.name, role: u.role }));
+        let list = (store.users || []).map((u) => ({ username: u.username, name: u.name, role: u.role, extraRoles: u.extraRoles || [] }));
         if (role === "admin") {
           list = list.filter((u) => {
             const r = String(u.role || "").toLowerCase();
@@ -1510,7 +1737,14 @@ function demoApi_(action, args) {
           newRole = "scout";
         }
         if ((store.users || []).some((u) => u.username === payload.username)) return fail("Användaren finns redan");
-        store.users.push({ username: payload.username, name: payload.name || "", role: newRole, password: payload.password || "changeme", FirstLogin: true });
+        const extraRoles = [];
+        if (meRole !== "admin" && Array.isArray(payload.extraRoles)) {
+          payload.extraRoles.forEach((x) => {
+            const n = String(x).trim().toLowerCase().replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o");
+            if ((n === "kassor" || n === "hallvard") && extraRoles.indexOf(n) < 0) extraRoles.push(n);
+          });
+        }
+        store.users.push({ username: payload.username, name: payload.name || "", role: newRole, extraRoles, password: payload.password || "changeme", FirstLogin: true });
         saveDemoDb_(store);
         return ok({ ok: true });
       }
@@ -1535,6 +1769,28 @@ function demoApi_(action, args) {
         u.role = newRole;
         saveDemoDb_(store);
         return ok({ ok: true });
+      }
+      if (action === "updateUserRoles") {
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin") return fail("Saknar behörighet");
+        const payload = args[0] || {};
+        const u = (store.users || []).find((x) => x.username === payload.username);
+        if (!u) return fail("Hittades inte");
+        const oldRole = String(u.role || "").toLowerCase();
+        const newRole = String(payload.role || u.role || "admin").toLowerCase();
+        const supers = (store.users || []).filter((x) => String(x.role || "").toLowerCase() === "superadmin").length;
+        if (oldRole === "superadmin" && newRole !== "superadmin" && supers <= 1) {
+          return fail("Kan inte ta bort sista superadmin");
+        }
+        u.role = newRole;
+        const extras = [];
+        (payload.extraRoles || []).forEach((x) => {
+          const n = String(x).trim().toLowerCase().replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o");
+          if ((n === "kassor" || n === "hallvard") && extras.indexOf(n) < 0) extras.push(n);
+        });
+        u.extraRoles = extras;
+        saveDemoDb_(store);
+        return ok({ ok: true, username: u.username, role: u.role, extraRoles: extras });
       }
       if (action === "deleteUserAction") {
         const meRole = String(currentUser.role || "").toLowerCase();
@@ -1601,6 +1857,10 @@ function demoApi_(action, args) {
           const u = (store.users || []).find((x) => x.username === old);
           if (!u) return fail("Hittades inte");
           u.username = next;
+          (store.timeEntries || []).forEach((e) => {
+            if (e.username === old) e.username = next;
+            if (e.createdBy === old) e.createdBy = next;
+          });
           currentUser.username = next;
           saveDemoDb_(store);
         }
@@ -1622,6 +1882,9 @@ function demoApi_(action, args) {
         u.name = nextName;
         saveDemoDb_(store);
         return ok({ ok: true, username: targetName, name: nextName });
+      }
+      if (action === "getTimeApp" || action === "addTimeEntry" || action === "getTreasurerReport" || action === "deleteTimeEntry" || action === "saveTimeSettings") {
+        return ok(demoTimeApi_(store, action, args));
       }
       return fail("Okänd action: " + action);
     }, 80);
@@ -1675,8 +1938,12 @@ function normalizeRole_(role) {
   if (!r) return "admin";
   if (r === "superadmin" || r === "super" || r === "super-admin" || r === "super_admin") return "superadmin";
   if (r === "scout" || r === "developer" || r === "ledbyggare" || r === "sattare" || r === "setter") return "scout";
+  if (r === "kassor" || r === "treasurer") return "kassor";
+  if (r === "hallvard" || r === "host") return "hallvard";
   if (r === "admin" || r === "administrator" || r === "administratoer") return "admin";
   if (r.includes("super")) return "superadmin";
+  if (r.includes("kassor")) return "kassor";
+  if (r.includes("hallv")) return "hallvard";
   if (r.includes("ledbygg") || r.includes("satt") || r.includes("scout")) return "scout";
   if (r.includes("admin")) return "admin";
   return "admin";
@@ -1697,11 +1964,45 @@ function canEditContentRole() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || r === "scout";
 }
+function parseExtraRoles_(raw) {
+  const parts = Array.isArray(raw) ? raw : String(raw == null ? "" : raw).split(/[,;]+/);
+  const out = [];
+  parts.forEach((part) => {
+    const n = normalizeRole_(part);
+    if ((n === "kassor" || n === "hallvard") && out.indexOf(n) < 0) out.push(n);
+  });
+  return out;
+}
+function extraRolesOf_(user) {
+  const u = user || currentUser;
+  return parseExtraRoles_((u && (u.extraRoles || u.extra_roles)) || []);
+}
+function hasAppRole_(roleName, user) {
+  const u = user || currentUser;
+  const primary = normalizeRole_(u && u.role);
+  if (primary === roleName) return true;
+  return extraRolesOf_(u).indexOf(roleName) >= 0;
+}
+function hasWallflowAccess_() {
+  const r = userRole_();
+  return r === "superadmin" || r === "admin" || r === "scout";
+}
+function canReportLedbygg_() { return hasWallflowAccess_(); }
+function canReportHallvard_() { return hasAppRole_("hallvard"); }
+function canTreasurer_() { return userRole_() === "superadmin" || hasAppRole_("kassor"); }
+function canTimeAdmin_() { return userRole_() === "superadmin"; }
 function adminRoleLabelSv(role) {
   const r = normalizeRole_(role || userRole_());
   if (r === "superadmin") return "Superadmin";
   if (r === "scout") return "Ledbyggare";
+  if (r === "kassor") return "Kassör";
+  if (r === "hallvard") return "Hallvärd";
   return "Admin";
+}
+function extraRolesLabel_(extras) {
+  const list = parseExtraRoles_(extras);
+  if (!list.length) return "";
+  return list.map((r) => adminRoleLabelSv(r)).join(", ");
 }
 
 function isSuperadminRole_(role) {
@@ -1720,9 +2021,11 @@ function countSuperadmins_(users) {
 function adminRoleHelpSv_() {
   return `
     <ul class="small mb-0 ps-3" style="color:var(--muted); line-height:1.45;">
-      <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild).</li>
+      <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild). Kan även kryssas som hallvärd och får då två sätt att rapportera tid.</li>
       <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus lägga till/hantera ledbyggare (inte admin eller superadmin).</li>
-      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, styra livslängd och hantera alla roller. Minst en superadmin måste alltid finnas.</li>
+      <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, styra livslängd, arvoden och hantera alla roller. Minst en superadmin måste alltid finnas.</li>
+      <li><strong style="color:var(--text);">Kassör</strong> — slussas till tidverktyget och kan ta ut rapporter för alla inrapporterade.</li>
+      <li><strong style="color:var(--text);">Hallvärd</strong> — slussas till tidverktyget och rapporterar pass (datum + engångsbelopp). Kan kombineras med kassör.</li>
     </ul>`;
 }
 function showToast(msg) {
@@ -1780,6 +2083,7 @@ function saveSession_(remember) {
     username: currentUser.username,
     name: currentUser.name || "",
     role: currentUser.role,
+    extraRoles: currentUser.extraRoles || [],
     firstLogin: !!currentUser.firstLogin,
     remember: !!remember
   };
@@ -1805,6 +2109,7 @@ function restoreSession_() {
       username: s.username,
       name: s.name || "",
       role: normalizeRole_(s.role || "admin"),
+      extraRoles: parseExtraRoles_(s.extraRoles),
       firstLogin: !!s.firstLogin
     };
     return true;
@@ -1814,6 +2119,8 @@ function restoreSession_() {
 }
 function showLoginGate_() {
   document.getElementById("app-public").classList.remove("ready");
+  document.getElementById("app-time").classList.remove("show");
+  document.getElementById("app-admin").classList.remove("show");
   document.getElementById("login-panel").classList.add("show");
   document.getElementById("login-error").style.display = "none";
   loginInFlight_ = false;
@@ -1839,9 +2146,14 @@ function showAppShell_() {
   clearLoginTimeout_();
   setLoginFormBusy_(false);
   document.getElementById("login-panel").classList.remove("show");
+  if (!hasWallflowAccess_()) {
+    document.getElementById("app-public").classList.remove("ready");
+    if (currentUser.firstLogin) openSettings();
+    else openTimeTool();
+    return;
+  }
+  document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-public").classList.add("ready");
-  const label = currentDisplayName_() || currentUser.username || "Användare";
-  document.getElementById("account-name").textContent = label;
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
 }
@@ -2071,6 +2383,7 @@ function bootAppData_() {
       if (data && data.me && currentUser.authorized) {
         if (data.me.name) currentUser.name = String(data.me.name).trim();
         if (data.me.role) currentUser.role = normalizeRole_(data.me.role);
+        currentUser.extraRoles = parseExtraRoles_(data.me.extraRoles);
         saveSession_(!!(localStorage.getItem(SESSION_STORAGE_KEY)));
       }
       showAppShell_();
@@ -2081,7 +2394,7 @@ function bootAppData_() {
       // Session kan vara ogiltig mot GAS — tvinga ny inloggning om inte demoläge
       if (!USE_DEMO) {
         clearStoredSession_();
-        currentUser = { authorized: false, role: null, username: null, firstLogin: false };
+        currentUser = { authorized: false, role: null, extraRoles: [], username: null, firstLogin: false };
         __sessionToken = null;
         hideLoadingScreen();
         showLoginGate_();
@@ -3410,18 +3723,40 @@ function openSettings() {
   else renderSettingsHome();
 }
 
-(function bindAccountChipSettings_() {
-  const chip = document.getElementById("account-chip");
-  if (!chip) return;
-  chip.addEventListener("click", (e) => {
+(function bindAccountMenu_() {
+  const wrap = document.getElementById("account-menu-wrap");
+  const btn = document.getElementById("account-menu-btn");
+  if (!wrap || !btn) return;
+  btn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    openSettings();
+    const open = !wrap.classList.contains("open");
+    wrap.classList.toggle("open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", () => {
+    wrap.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
   });
 })();
+function closeAccountMenu_() {
+  const wrap = document.getElementById("account-menu-wrap");
+  const btn = document.getElementById("account-menu-btn");
+  if (wrap) wrap.classList.remove("open");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+}
+function openSettingsFromMenu_() {
+  closeAccountMenu_();
+  openSettings();
+}
+function openTimeToolFromMenu_() {
+  closeAccountMenu_();
+  openTimeTool();
+}
 function closeSettings() {
   if (currentUser.firstLogin) return showToast("Byt lösenord först");
   document.getElementById("app-admin").classList.remove("show");
+  if (!hasWallflowAccess_()) openTimeTool();
 }
 
 let loginInFlight_ = false;
@@ -3511,6 +3846,7 @@ function checkLogin() {
       currentUser = {
         authorized: true,
         role: normalizeRole_(res.role || "admin"),
+        extraRoles: parseExtraRoles_(res.extraRoles),
         username: res.username || user,
         name: res.name || "",
         firstLogin: !!res.firstLogin
@@ -3534,10 +3870,11 @@ function checkLogin() {
     .verifyAdminPassword(user, pw);
 }
 function logoutAdmin() {
-  currentUser = { authorized: false, role: null, username: null, firstLogin: false };
+  currentUser = { authorized: false, role: null, extraRoles: [], username: null, firstLogin: false };
   __sessionToken = null;
   clearStoredSession_();
   document.getElementById("app-admin").classList.remove("show");
+  document.getElementById("app-time").classList.remove("show");
   closePanel();
   showLoginGate_();
   showToast("Utloggad");
@@ -3582,6 +3919,7 @@ function renderSettingsHome() {
   } else if (role === "superadmin") {
     roleHint = "Superadmin kan redigera leder, lägga till/ta bort leder, hantera alla användare och livslängd.";
   }
+  const extras = extraRolesLabel_(currentUser.extraRoles);
   const displayName = currentDisplayName_() || "—";
   const loginName = String(currentUser.username || "").trim() || "—";
   const theme = getTheme_();
@@ -3589,7 +3927,7 @@ function renderSettingsHome() {
     <div class="admin-card">
       <h3>Konto</h3>
       <p class="mb-1" style="color:var(--muted); font-size:.9rem;">
-        ${escapeHtml_(displayName)} · ${escapeHtml_(adminRoleLabelSv())}
+        ${escapeHtml_(displayName)} · ${escapeHtml_(adminRoleLabelSv())}${extras ? " · " + escapeHtml_(extras) : ""}
       </p>
       <p class="small mb-3" style="color:var(--muted);">${escapeHtml_(roleHint)}</p>
       <div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
@@ -3605,6 +3943,7 @@ function renderSettingsHome() {
         ${canManageUsersRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</button>` : ""}
         ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderLifetimeSettings()">Livslängd</button>` : ""}
         ${canManageLifetimeRole() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="renderBaseUrlQrSettings()">QR-bas-URL</button>` : ""}
+        ${canTimeAdmin_() ? `<button class="btn btn-ghost btn-sm" type="button" onclick="closeSettings(); openTimeTool('settings')">Arvode &amp; gränser</button>` : ""}
         <button class="btn btn-outline-danger btn-sm" type="button" onclick="logoutAdmin()">Logga ut</button>
       </div>
     </div>
@@ -4499,11 +4838,13 @@ function renderUserManagement() {
     : "Skapa och hantera ledbyggare. Admin och superadmin sköts av superadmin.";
   const roleSelectHtml = isSuper
     ? `<div class="col-6">
-          <label class="form-label" for="nu-role">Roll</label>
+          <label class="form-label" for="nu-role">Huvudroll</label>
           <select id="nu-role" class="form-select form-select-sm">
             <option value="scout">Ledbyggare</option>
             <option value="admin">Admin</option>
             <option value="superadmin">Superadmin</option>
+            <option value="kassor">Kassör</option>
+            <option value="hallvard">Hallvärd</option>
           </select>
         </div>`
     : `<div class="col-6">
@@ -4536,6 +4877,13 @@ function renderUserManagement() {
           <input id="nu-pw" class="form-control form-control-sm" placeholder="Temp-lösenord" value="changeme" autocomplete="new-password">
         </div>
       </div>
+      ${isSuper ? `<div class="mb-3">
+        <div class="small mb-2" style="color:var(--muted);">Tilläggsroller — kan kombineras med huvudrollen (t.ex. ledbyggare som också är hallvärd).</div>
+        <div class="d-flex flex-wrap gap-3">
+          <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="nu-extra-kassor"> Även kassör</label>
+          <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="nu-extra-hallvard"> Även hallvärd</label>
+        </div>
+      </div>` : ""}
       <button class="btn btn-accent btn-sm mb-3" type="button" onclick="createUser()">${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</button>
       <div id="admin-user-list">Laddar…</div>
     </div>`;
@@ -4548,27 +4896,39 @@ function renderUserManagement() {
       host.innerHTML = list.map((u) => {
         const isLastSuper = lastSuper && isSuperadminRole_(u.role);
         const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
+        const extras = parseExtraRoles_(u.extraRoles);
+        const extraNote = extraRolesLabel_(extras);
         const canEditRole = isSuper && !isLastSuper;
         const canDelete = !isSelf && (isSuper ? !isLastSuper : isLedbyggareRole_(u.role));
         const roleControls = isSuper
-          ? `<select class="form-select form-select-sm" style="width:auto;" ${canEditRole ? "" : "disabled title=\"Kan inte ta bort sista superadmin\""} onchange="updateRole('${escapeHtml_(u.username)}', this.value)">
+          ? `<select id="role-sel-${escapeHtml_(u.username)}" class="form-select form-select-sm" style="width:auto;" ${canEditRole ? "" : "disabled title=\"Kan inte ta bort sista superadmin\""} onchange="saveUserRoles_('${escapeHtml_(u.username)}')">
               <option value="scout" ${u.role === "scout" ? "selected" : ""}>Ledbyggare</option>
               <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
               <option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>
+              <option value="kassor" ${u.role === "kassor" ? "selected" : ""}>Kassör</option>
+              <option value="hallvard" ${u.role === "hallvard" ? "selected" : ""}>Hallvärd</option>
             </select>`
           : `<span class="small" style="color:var(--muted);">Ledbyggare</span>`;
+        const extraBoxes = isSuper ? `<div class="mt-2">
+              <div class="small mb-1" style="color:var(--muted);">Tilläggsroller</div>
+              <div class="d-flex flex-wrap gap-3">
+              <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="ex-kassor-${escapeHtml_(u.username)}" ${extras.indexOf("kassor") >= 0 ? "checked" : ""} onchange="saveUserRoles_('${escapeHtml_(u.username)}')"> Kassör</label>
+              <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="ex-hallvard-${escapeHtml_(u.username)}" ${extras.indexOf("hallvard") >= 0 ? "checked" : ""} onchange="saveUserRoles_('${escapeHtml_(u.username)}')"> Hallvärd</label>
+              </div>
+            </div>` : "";
         return `
         <div class="py-2 border-bottom" style="border-color:var(--line)!important;">
           <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
             <div>
               <strong>${escapeHtml_(u.username)}</strong>
-              <div class="small" style="color:var(--muted);">${escapeHtml_(adminRoleLabelSv(u.role))}${isLastSuper ? " · sista superadmin" : ""}</div>
+              <div class="small" style="color:var(--muted);">${escapeHtml_(adminRoleLabelSv(u.role))}${extraNote ? " · " + escapeHtml_(extraNote) : ""}${isLastSuper ? " · sista superadmin" : ""}</div>
             </div>
             <div class="d-flex gap-2 align-items-center">
               ${roleControls}
               <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
             </div>
           </div>
+          ${extraBoxes}
           <div class="d-flex gap-2 align-items-end">
             <div class="flex-grow-1">
               <label class="form-label small mb-1" for="dn-${escapeHtml_(u.username)}" style="color:var(--muted);">Visningsnamn</label>
@@ -4589,6 +4949,10 @@ function createUser() {
     username: document.getElementById("nu-user").value.trim(),
     name: document.getElementById("nu-name").value.trim(),
     role: userRole_() === "admin" ? "scout" : (roleEl && roleEl.value) || "scout",
+    extraRoles: userRole_() === "admin" ? [] : [
+      document.getElementById("nu-extra-kassor") && document.getElementById("nu-extra-kassor").checked ? "kassor" : "",
+      document.getElementById("nu-extra-hallvard") && document.getElementById("nu-extra-hallvard").checked ? "hallvard" : ""
+    ].filter(Boolean),
     password: document.getElementById("nu-pw").value
   };
   if (!payload.username) return showToast("Användarnamn saknas");
@@ -4630,12 +4994,15 @@ function saveUserDisplayName(username) {
     })
     .updateUserDisplayName(username, name);
 }
-function updateRole(username, role) {
-  if (!canManageUsersRole()) return showToast("Saknar behörighet");
-  if (userRole_() === "admin") {
-    showToast("Admin kan bara hantera ledbyggare");
-    return renderUserManagement();
-  }
+function saveUserRoles_(username) {
+  if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
+  const sel = document.getElementById("role-sel-" + username);
+  const role = sel ? sel.value : "scout";
+  const extraRoles = [];
+  const k = document.getElementById("ex-kassor-" + username);
+  const h = document.getElementById("ex-hallvard-" + username);
+  if (k && k.checked) extraRoles.push("kassor");
+  if (h && h.checked) extraRoles.push("hallvard");
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
@@ -4643,10 +5010,18 @@ function updateRole(username, role) {
         renderUserManagement();
         return;
       }
-      showToast("Roll uppdaterad");
+      if (String(username).toLowerCase() === String(currentUser.username || "").toLowerCase()) {
+        currentUser.role = normalizeRole_(res.role || role);
+        currentUser.extraRoles = parseExtraRoles_(res.extraRoles || extraRoles);
+        saveSession_(!!localStorage.getItem(SESSION_STORAGE_KEY));
+      }
+      showToast("Roller uppdaterade");
       renderUserManagement();
     })
-    .updateUserRole(username, role);
+    .updateUserRoles({ username, role, extraRoles });
+}
+function updateRole(username, role) {
+  saveUserRoles_(username);
 }
 function deleteUser(username) {
   if (!canManageUsersRole()) return showToast("Saknar behörighet");
@@ -4658,6 +5033,348 @@ function deleteUser(username) {
       renderUserManagement();
     })
     .deleteUserAction(username);
+}
+
+/* ---------- Tidrapportering ---------- */
+let timeToolState_ = { yearMonth: "", view: "mine" };
+
+function currentYearMonth_() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
+}
+function currentYmd_() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+function formatSek_(n) {
+  return new Intl.NumberFormat("sv-SE", { style: "currency", currency: "SEK", maximumFractionDigits: 2 }).format(Number(n) || 0);
+}
+function formatHours_(n) {
+  return new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 2 }).format(Number(n) || 0);
+}
+function monthLabel_(ym) {
+  const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
+  if (!m) return ym;
+  const names = ["januari","februari","mars","april","maj","juni","juli","augusti","september","oktober","november","december"];
+  return names[Number(m[2]) - 1] + " " + m[1];
+}
+function closeTimeTool() {
+  document.getElementById("app-time").classList.remove("show");
+  if (hasWallflowAccess_()) document.getElementById("app-public").classList.add("ready");
+}
+function openTimeTool(view) {
+  if (!currentUser.authorized) return showLoginGate_();
+  if (!timeToolState_.yearMonth) timeToolState_.yearMonth = currentYearMonth_();
+  if (view) timeToolState_.view = view;
+  else if (!canReportLedbygg_() && !canReportHallvard_() && canTreasurer_()) timeToolState_.view = "treasurer";
+  else if (timeToolState_.view === "treasurer" && !canTreasurer_()) timeToolState_.view = "mine";
+  else if (timeToolState_.view === "settings" && !canTimeAdmin_()) timeToolState_.view = "mine";
+  document.getElementById("app-admin").classList.remove("show");
+  if (!hasWallflowAccess_()) document.getElementById("app-public").classList.remove("ready");
+  document.getElementById("app-time").classList.add("show");
+  renderTimeHeader_();
+  if (timeToolState_.view === "treasurer") loadTreasurerReport_();
+  else if (timeToolState_.view === "settings") loadTimeSettingsView_();
+  else loadMyTime_();
+}
+function renderTimeHeader_() {
+  const host = document.getElementById("time-header-actions");
+  if (!host) return;
+  const btns = [];
+  if (hasWallflowAccess_()) btns.push(`<button class="btn btn-sm btn-ghost" type="button" onclick="closeTimeTool()">Till leder</button>`);
+  if (canTreasurer_()) btns.push(`<button class="btn btn-sm ${timeToolState_.view === "treasurer" ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('treasurer')">Kassörsrapport</button>`);
+  if (canTimeAdmin_()) btns.push(`<button class="btn btn-sm ${timeToolState_.view === "settings" ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('settings')">Arvode</button>`);
+  if (canReportLedbygg_() || canReportHallvard_()) btns.push(`<button class="btn btn-sm ${timeToolState_.view === "mine" ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('mine')">Min tid</button>`);
+  btns.push(`<button class="btn btn-sm btn-ghost" type="button" onclick="openSettings()">Konto</button>`);
+  btns.push(`<button class="btn btn-sm btn-outline-danger" type="button" onclick="logoutAdmin()">Logga ut</button>`);
+  host.innerHTML = btns.join("");
+}
+function timeMonthPickerHtml_() {
+  return `<label class="form-label" for="time-month">Period</label>
+    <input id="time-month" type="month" class="form-control mb-3" value="${escapeHtml_(timeToolState_.yearMonth)}" onchange="onTimeMonthChange_()">`;
+}
+function onTimeMonthChange_() {
+  const el = document.getElementById("time-month");
+  const v = String(el && el.value || "").slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(v)) return;
+  timeToolState_.yearMonth = v;
+  openTimeTool(timeToolState_.view);
+}
+function capBannerHtml_(cap) {
+  if (!cap) return "";
+  if (cap.level === "max") {
+    return `<div class="time-banner max">Du har nått maxtaket ${formatSek_(cap.maxYearAmount)} i år (${formatSek_(cap.yearTotal)} rapporterat). Nya poster bokförs fortfarande för spårbarhet.</div>`;
+  }
+  if (cap.level === "warn") {
+    return `<div class="time-banner warn">Varning: du närmar dig maxtaket. Rapporterat i år: ${formatSek_(cap.yearTotal)} av ${formatSek_(cap.maxYearAmount)} (varning från ${formatSek_(cap.warningYearAmount)}).</div>`;
+  }
+  if (cap.maxYearAmount > 0) {
+    return `<p class="small mb-3" style="color:var(--muted);">Årssumma: ${formatSek_(cap.yearTotal)}${cap.remaining != null ? " · kvar till tak: " + formatSek_(cap.remaining) : ""}.</p>`;
+  }
+  return "";
+}
+function timeKindLabel_(kind) {
+  return kind === "hallvard" ? "Hallvärd" : "Ledbygg";
+}
+function timeEntriesTableHtml_(entries, opts) {
+  const showUser = !!(opts && opts.showUser);
+  const canDelete = !!(opts && opts.canDelete);
+  const rows = (entries || []).map((e) => {
+    const neg = Number(e.amount) < 0 || Number(e.hours) < 0;
+    return `<tr class="${neg ? "is-neg" : ""}">
+      <td>${escapeHtml_(e.workDate || "")}</td>
+      ${showUser ? `<td>${escapeHtml_(e.name || e.username || "")}</td>` : ""}
+      <td><span class="time-kind">${escapeHtml_(timeKindLabel_(e.kind))}</span></td>
+      <td>${escapeHtml_(e.description || "")}</td>
+      <td class="num">${e.kind === "hallvard" ? formatHours_(e.hours) + " pass" : formatHours_(e.hours) + " t"}</td>
+      <td class="num">${formatSek_(e.amount)}</td>
+      ${canDelete ? `<td class="time-no-print"><button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteTimeEntryRow_(${Number(e.id)})">Ta bort</button></td>` : ""}
+    </tr>`;
+  }).join("");
+  return `<div class="table-responsive"><table class="time-table">
+    <thead><tr>
+      <th>Datum</th>${showUser ? "<th>Namn</th>" : ""}<th>Typ</th><th>Vad som gjorts</th><th class="num">Omfattning</th><th class="num">Summa</th>${canDelete ? "<th class=\"time-no-print\"></th>" : ""}
+    </tr></thead>
+    <tbody>${rows || `<tr><td colspan="${3 + (showUser ? 1 : 0) + (canDelete ? 1 : 0) + 2}" style="color:var(--muted);">Inga poster i vald period.</td></tr>`}</tbody>
+  </table></div>`;
+}
+function timeTotalsHtml_(summary, title) {
+  const s = summary || {};
+  return `<div class="time-total">
+    <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">${escapeHtml_(title || "Preliminärt belopp")}</div>
+    <div class="time-total-row"><span>Ledbygg (${formatHours_(s.ledbyggHours)} t)</span><span class="num">${formatSek_(s.ledbyggAmount)}</span></div>
+    <div class="time-total-row"><span>Hallvärd (${formatHours_(s.hallvardShifts)} pass)</span><span class="num">${formatSek_(s.hallvardAmount)}</span></div>
+    <div class="time-total-row grand"><span>Totalt</span><span class="num">${formatSek_(s.totalAmount)}</span></div>
+  </div>`;
+}
+function loadMyTime_() {
+  const main = document.getElementById("time-main");
+  main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        main.innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte hämta tid")}</p></div>`;
+        return;
+      }
+      renderMyTime_(res);
+    })
+    .withFailureHandler(() => {
+      main.innerHTML = `<div class="admin-card"><p>Kunde inte hämta tid.</p></div>`;
+    })
+    .getTimeApp({ yearMonth: timeToolState_.yearMonth });
+}
+function renderMyTime_(data) {
+  const canLed = canReportLedbygg_();
+  const canHall = canReportHallvard_();
+  const both = canLed && canHall;
+  const today = escapeHtml_(currentYmd_());
+  const ledForm = `<form onsubmit="submitTimeEntry_(event, 'ledbygg')">
+        <div class="mb-3"><label class="form-label" for="te-led-date">Datum</label>
+          <input id="te-led-date" type="date" class="form-control" value="${today}" required></div>
+        <div class="mb-3">
+          <label class="form-label" for="te-led-hours">Timmar</label>
+          <input id="te-led-hours" type="number" class="form-control" step="0.25" min="-24" max="24" placeholder="t.ex. 3" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="te-led-desc">Vad har gjorts</label>
+          <textarea id="te-led-desc" class="form-control" rows="3" maxlength="500" placeholder="Kort beskrivning" required></textarea>
+        </div>
+        <label class="d-flex align-items-center gap-2 mb-3">
+          <input type="checkbox" id="te-led-correction"> Minuspost (korrigering)
+        </label>
+        <button class="btn btn-accent w-100" type="submit" id="te-led-submit">Rapportera ledbyggartid</button>
+      </form>`;
+  const hallForm = `<form onsubmit="submitTimeEntry_(event, 'hallvard')">
+        <p class="small mb-3" style="color:var(--muted);">Ett pass på valt datum ger det engångsbelopp som superadmin satt.</p>
+        <div class="mb-3"><label class="form-label" for="te-hall-date">Datum</label>
+          <input id="te-hall-date" type="date" class="form-control" value="${today}" required></div>
+        <div class="mb-3">
+          <label class="form-label" for="te-hall-desc">Anteckning (valfritt)</label>
+          <input id="te-hall-desc" type="text" class="form-control" maxlength="500" placeholder="t.ex. kvällspass">
+        </div>
+        <label class="d-flex align-items-center gap-2 mb-3">
+          <input type="checkbox" id="te-hall-correction"> Minuspost (korrigering av pass)
+        </label>
+        <button class="btn btn-accent w-100" type="submit" id="te-hall-submit">Rapportera hallvärdspass</button>
+      </form>`;
+  let formsHtml = "";
+  if (!canLed && !canHall) {
+    formsHtml = `<div class="admin-card time-no-print"><p class="small mb-0" style="color:var(--muted);">Du har kassörsbehörighet. Använd kassörsrapporten för utdrag.</p></div>`;
+  } else if (both) {
+    formsHtml = `<div class="admin-card time-no-print">
+      <h3>Två rapporteringssätt</h3>
+      <p class="small mb-0" style="color:var(--muted);">Du är både ledbyggare och hallvärd. Använd kortet som stämmer med det du gjort.</p>
+    </div>
+    <div class="admin-card time-no-print">
+      <h3>Ledbyggartid</h3>
+      <p class="small mb-3" style="color:var(--muted);">Timmar och vad som gjorts. Felaktig rad rättas med minuspost.</p>
+      ${ledForm}
+    </div>
+    <div class="admin-card time-no-print">
+      <h3>Hallvärdspass</h3>
+      ${hallForm}
+    </div>`;
+  } else if (canLed) {
+    formsHtml = `<div class="admin-card time-no-print">
+      <h3>Rapportera ledbyggartid</h3>
+      <p class="small mb-3" style="color:var(--muted);">Poster kan inte raderas. Felaktig rad rättas med en minuspost så historiken finns kvar.</p>
+      ${ledForm}
+    </div>`;
+  } else {
+    formsHtml = `<div class="admin-card time-no-print">
+      <h3>Rapportera hallvärdspass</h3>
+      <p class="small mb-3" style="color:var(--muted);">Poster kan inte raderas. Felaktigt pass rättas med en minuspost.</p>
+      ${hallForm}
+    </div>`;
+  }
+  document.getElementById("time-main").innerHTML = `
+    <div class="admin-card time-no-print">
+      ${timeMonthPickerHtml_()}
+      ${capBannerHtml_(data.cap)}
+    </div>
+    ${formsHtml}
+    <div class="admin-card">
+      <h3>${escapeHtml_(monthLabel_(data.yearMonth))}</h3>
+      ${timeEntriesTableHtml_(data.entries, { showUser: false, canDelete: false })}
+      ${timeTotalsHtml_(data.summary, "Preliminärt belopp för vald period")}
+    </div>`;
+}
+function submitTimeEntry_(ev, kind) {
+  ev.preventDefault();
+  const isHall = kind === "hallvard";
+  const dateEl = document.getElementById(isHall ? "te-hall-date" : "te-led-date");
+  const descEl = document.getElementById(isHall ? "te-hall-desc" : "te-led-desc");
+  const corrEl = document.getElementById(isHall ? "te-hall-correction" : "te-led-correction");
+  const btn = document.getElementById(isHall ? "te-hall-submit" : "te-led-submit");
+  const workDate = dateEl ? dateEl.value : "";
+  const payload = {
+    kind,
+    workDate,
+    correction: !!(corrEl && corrEl.checked),
+    description: descEl ? descEl.value : ""
+  };
+  if (!isHall) payload.hours = document.getElementById("te-led-hours") ? document.getElementById("te-led-hours").value : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = isHall ? "Rapportera hallvärdspass" : "Rapportera ledbyggartid"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+      showToast("Sparat");
+      const date = String(workDate || "").slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(date)) timeToolState_.yearMonth = date;
+      loadMyTime_();
+    })
+    .withFailureHandler(() => {
+      if (btn) { btn.disabled = false; btn.textContent = isHall ? "Rapportera hallvärdspass" : "Rapportera ledbyggartid"; }
+      showToast("Kunde inte spara");
+    })
+    .addTimeEntry(payload);
+}
+function loadTreasurerReport_() {
+  const main = document.getElementById("time-main");
+  main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar rapport…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        main.innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte hämta rapport")}</p></div>`;
+        return;
+      }
+      renderTreasurerReport_(res);
+    })
+    .withFailureHandler(() => {
+      main.innerHTML = `<div class="admin-card"><p>Kunde inte hämta rapport.</p></div>`;
+    })
+    .getTreasurerReport({ yearMonth: timeToolState_.yearMonth });
+}
+function renderTreasurerReport_(data) {
+  const people = (data.summary && data.summary.people) || [];
+  const peopleHtml = people.map((p) => `
+    <tr>
+      <td>${escapeHtml_(p.name || p.username)}</td>
+      <td class="num">${formatHours_(p.ledbyggHours)} t</td>
+      <td class="num">${formatHours_(p.hallvardShifts)} pass</td>
+      <td class="num">${formatSek_(p.amount)}${p.belowMinPayout ? ` <span class="small" style="color:var(--muted);">(under lägsta ${formatSek_(data.summary.minPayout)})</span>` : ""}</td>
+    </tr>`).join("") || `<tr><td colspan="4" style="color:var(--muted);">Ingen inrapporterad tid.</td></tr>`;
+  document.getElementById("time-main").innerHTML = `
+    <div class="admin-card time-no-print">
+      <h3>Kassörsrapport</h3>
+      ${timeMonthPickerHtml_()}
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Skriv ut / PDF</button>
+      </div>
+    </div>
+    <div class="admin-card">
+      <h3>Utdrag · ${escapeHtml_(monthLabel_(data.yearMonth))}</h3>
+      ${timeEntriesTableHtml_(data.entries, { showUser: true, canDelete: canTimeAdmin_() })}
+      ${timeTotalsHtml_(data.summary, "Summering")}
+    </div>
+    <div class="admin-card">
+      <h4>Per person</h4>
+      <div class="table-responsive"><table class="time-table">
+        <thead><tr><th>Namn</th><th class="num">Timmar</th><th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
+        <tbody>${peopleHtml}</tbody>
+      </table></div>
+      ${data.summary && data.summary.minPayout > 0 ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Lägsta utbetalning: ${formatSek_(data.summary.minPayout)}. Personer under gränsen markeras.</p>` : ""}
+    </div>`;
+}
+function deleteTimeEntryRow_(id) {
+  if (!canTimeAdmin_()) return showToast("Bara superadmin kan ta bort rader");
+  if (!confirm("Ta bort den här tidrapporten? Detta går inte att ångra.")) return;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ta bort");
+      showToast("Rad borttagen");
+      loadTreasurerReport_();
+    })
+    .deleteTimeEntry(id);
+}
+function loadTimeSettingsView_() {
+  const main = document.getElementById("time-main");
+  main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        main.innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte hämta inställningar")}</p></div>`;
+        return;
+      }
+      renderTimeSettings_(res.settings || {});
+    })
+    .getTimeApp({ yearMonth: timeToolState_.yearMonth });
+}
+function renderTimeSettings_(s) {
+  document.getElementById("time-main").innerHTML = `
+    <div class="admin-card">
+      <h3>Arvode och gränser</h3>
+      <p class="small mb-3" style="color:var(--muted);">Gäller nya poster. Befintliga rader behåller beloppet de sparades med.</p>
+      <label class="form-label" for="ts-hour">Arvode per timme, ledbyggare (kr)</label>
+      <input id="ts-hour" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.ledbyggHourlyRate) || 0}">
+      <label class="form-label" for="ts-min">Lägsta utbetalning (kr)</label>
+      <input id="ts-min" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.minPayout) || 0}">
+      <label class="form-label" for="ts-shift">Arvode per hallvärdspass (kr)</label>
+      <input id="ts-shift" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.hallvardShiftAmount) || 0}">
+      <label class="form-label" for="ts-max">Maxtak per person och kalenderår (kr)</label>
+      <input id="ts-max" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.maxYearAmount) || 0}">
+      <label class="form-label" for="ts-warn">Varningsgräns (kr)</label>
+      <input id="ts-warn" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.warningYearAmount) || 0}">
+      <button class="btn btn-accent w-100" type="button" id="ts-save" onclick="saveTimeSettings_()">Spara</button>
+    </div>`;
+}
+function saveTimeSettings_() {
+  const payload = {
+    ledbyggHourlyRate: document.getElementById("ts-hour").value,
+    minPayout: document.getElementById("ts-min").value,
+    hallvardShiftAmount: document.getElementById("ts-shift").value,
+    maxYearAmount: document.getElementById("ts-max").value,
+    warningYearAmount: document.getElementById("ts-warn").value
+  };
+  const btn = document.getElementById("ts-save");
+  if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+      showToast("Inställningar sparade");
+      renderTimeSettings_(res.settings || payload);
+    })
+    .saveTimeSettings(payload);
 }
 
 if (document.readyState === "loading") {

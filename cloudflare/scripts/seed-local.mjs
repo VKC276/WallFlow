@@ -27,6 +27,7 @@ const adminHash = hashPassword("wallflow", salt);
 
 const lines = [];
 lines.push("PRAGMA foreign_keys = ON;");
+lines.push("DELETE FROM time_entries;");
 lines.push("DELETE FROM routes;");
 lines.push("DELETE FROM grades;");
 lines.push("DELETE FROM users;");
@@ -60,6 +61,11 @@ lines.push(
 
 lines.push(`INSERT INTO settings (key, value) VALUES ('routeLifetimeDays', '${esc(snap.routeLifetimeDays || 30)}');`);
 lines.push(`INSERT INTO settings (key, value) VALUES ('baseUrlQr', '${esc(snap.baseUrlQr || "")}');`);
+lines.push(`INSERT INTO settings (key, value) VALUES ('timeLedbyggHourlyRate', '150');`);
+lines.push(`INSERT INTO settings (key, value) VALUES ('timeMinPayout', '500');`);
+lines.push(`INSERT INTO settings (key, value) VALUES ('timeHallvardShiftAmount', '200');`);
+lines.push(`INSERT INTO settings (key, value) VALUES ('timeMaxYearAmount', '5000');`);
+lines.push(`INSERT INTO settings (key, value) VALUES ('timeWarningYearAmount', '4000');`);
 
 const dir = mkdtempSync(join(tmpdir(), "wallflow-seed-"));
 const sqlPath = join(dir, "seed.sql");

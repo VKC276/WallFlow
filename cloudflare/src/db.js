@@ -1,6 +1,6 @@
 /** D1 helpers — routes, grades, users, settings + omräknade fält. */
 
-import { normalizeRole, isFirstLogin } from "./auth.js";
+import { normalizeRole, isFirstLogin, parseExtraRoles, serializeExtraRoles } from "./auth.js";
 
 export const DEFAULT_ROUTE_LIFETIME_DAYS = 30;
 
@@ -146,6 +146,8 @@ export async function readUsers(env) {
     passwordHash: String(u.password_hash || ""),
     salt: String(u.salt || ""),
     role: normalizeRole(u.role || "admin"),
+    extraRoles: parseExtraRoles(u.extra_roles),
+    extra_roles: serializeExtraRoles(u.extra_roles),
     name: String(u.name || "").trim(),
     FirstLogin: u.first_login ? "TRUE" : "FALSE",
     first_login: !!u.first_login
@@ -161,12 +163,13 @@ export async function findUser(env, username) {
 
 export async function upsertUser(env, user) {
   await env.DB.prepare(
-    `INSERT INTO users (username, password_hash, salt, role, name, first_login)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO users (username, password_hash, salt, role, extra_roles, name, first_login)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(username) DO UPDATE SET
        password_hash = excluded.password_hash,
        salt = excluded.salt,
        role = excluded.role,
+       extra_roles = excluded.extra_roles,
        name = excluded.name,
        first_login = excluded.first_login`
   ).bind(
@@ -174,6 +177,7 @@ export async function upsertUser(env, user) {
     user.passwordHash,
     user.salt,
     normalizeRole(user.role),
+    serializeExtraRoles(user.extraRoles != null ? user.extraRoles : user.extra_roles),
     user.name || "",
     isFirstLogin(user.FirstLogin) || user.first_login ? 1 : 0
   ).run();
@@ -199,7 +203,12 @@ export async function countSuperadmins(env) {
 export async function refreshSessionRole(env, session) {
   if (!session || !session.username) return session;
   const u = await findUser(env, session.username);
-  if (u) session.role = u.role;
-  else session.role = normalizeRole(session.role);
+  if (u) {
+    session.role = u.role;
+    session.extraRoles = u.extraRoles || [];
+  } else {
+    session.role = normalizeRole(session.role);
+    session.extraRoles = parseExtraRoles(session.extraRoles);
+  }
   return session;
 }

@@ -15,6 +15,7 @@ import {
   isLedbyggareRole,
   isSuperadminRole,
   normalizeRole,
+  parseExtraRoles,
   randomSalt,
   roleOf,
   saveSession,
@@ -38,6 +39,25 @@ import {
   setSetting,
   upsertUser
 } from "./db.js";
+import {
+  addTimeEntry,
+  canDeleteTimeEntry,
+  canManageTimeSettings,
+  canTreasurerReport,
+  canUseTimeTool,
+  capStatus,
+  deleteTimeEntryById,
+  listEntriesForReport,
+  listEntriesForUser,
+  publicSessionFlags,
+  readTimeSettings,
+  retargetTimeEntriesUsername,
+  saveTimeSettings,
+  stockholmYearMonthNow,
+  stockholmYearNow,
+  summarizeEntries,
+  yearTotalForUser
+} from "./time.js";
 import {
   deleteBilderByRouteNr,
   deleteBilderKey,
@@ -94,16 +114,28 @@ export async function dispatch(env, action, token, args) {
     case "changeOwnUsername": {
       const renameRes = await changeOwnUsername(env, args[0], session);
       if (renameRes && renameRes.ok && token) {
-        await saveSession(env, token, renameRes.username, roleOf(session));
+        await saveSession(env, token, renameRes.username, roleOf(session), session.extraRoles);
       }
       return renameRes;
     }
     case "updateUserDisplayName":
       return updateUserDisplayName(env, args[0], args[1], session);
+    case "updateUserRoles":
+      return updateUserRoles(env, args[0], session);
     case "setRouteLifetimeDays":
       return setRouteLifetimeDays(env, args[0], session);
     case "setBaseUrlQr":
       return setBaseUrlQr(env, args[0], session);
+    case "getTimeApp":
+      return getTimeApp(env, args[0], session);
+    case "addTimeEntry":
+      return addTimeEntryAction(env, args[0], session);
+    case "getTreasurerReport":
+      return getTreasurerReport(env, args[0], session);
+    case "deleteTimeEntry":
+      return deleteTimeEntryAction(env, args[0], session);
+    case "saveTimeSettings":
+      return saveTimeSettingsAction(env, args[0], session);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }
@@ -124,7 +156,9 @@ async function getAppData(env, token) {
         appData.me = {
           username: me.username,
           name: me.name || "",
-          role: me.role
+          role: me.role,
+          extraRoles: me.extraRoles || [],
+          flags: publicSessionFlags({ ...me, extraRoles: me.extraRoles })
         };
       }
     }
@@ -141,14 +175,16 @@ async function verifyAdminPassword(env, username, password) {
   if (hash !== u.passwordHash) return { authorized: false };
 
   const token = crypto.randomUUID();
-  await saveSession(env, token, u.username, u.role);
+  await saveSession(env, token, u.username, u.role, u.extraRoles);
   return {
     authorized: true,
     token,
     role: u.role,
+    extraRoles: u.extraRoles || [],
     username: u.username,
     name: u.name,
-    firstLogin: isFirstLogin(u.FirstLogin)
+    firstLogin: isFirstLogin(u.FirstLogin),
+    flags: publicSessionFlags(u)
   };
 }
 
@@ -209,6 +245,11 @@ async function changeOwnUsername(env, newUsername, session) {
   const u = await findUser(env, old);
   if (!u) return { ok: false, error: "Användaren hittades inte" };
   await renameUser(env, old, next);
+  try {
+    await retargetTimeEntriesUsername(env, old, next);
+  } catch {
+    /* tidtabell kanske inte finns ännu */
+  }
   return { ok: true, username: next };
 }
 
@@ -232,7 +273,8 @@ async function getAllAdmins(env, session) {
   let users = (await readUsers(env)).map((u) => ({
     username: u.username,
     name: u.name,
-    role: u.role
+    role: u.role,
+    extraRoles: u.extraRoles || []
   }));
   if (isAdminActor(session)) {
     users = users.filter((u) => isLedbyggareRole(u.role));
@@ -248,6 +290,7 @@ async function createNewAdmin(env, payload, session) {
   let username = String(obj.username || "").trim();
   const name = String(obj.name || "").trim();
   let role = normalizeRole(obj.role || "admin");
+  const extraRoles = isAdminActor(session) ? [] : parseExtraRoles(obj.extraRoles || obj.extra_roles);
   const password = String(obj.password || "");
 
   if (!username || !password) return { ok: false, error: "Användarnamn och lösenord krävs" };
@@ -263,6 +306,10 @@ async function createNewAdmin(env, payload, session) {
     role = "scout";
   }
 
+  if ((role === "kassor" || role === "hallvard") && !isSuperadminRole(roleOf(session))) {
+    return { ok: false, error: "Bara superadmin kan lägga till kassör och hallvärd" };
+  }
+
   if (await findUser(env, username)) {
     return { ok: false, error: "Användaren finns redan" };
   }
@@ -273,6 +320,7 @@ async function createNewAdmin(env, payload, session) {
     passwordHash: await hashPassword(password, salt),
     salt,
     role,
+    extraRoles,
     name,
     FirstLogin: "TRUE",
     first_login: true
@@ -298,8 +346,27 @@ async function updateUserRole(env, username, role, session) {
     return { ok: false, error: "Kan inte ta bort sista superadmin" };
   }
 
-  await upsertUser(env, { ...u, role: newRole });
+  await upsertUser(env, { ...u, role: newRole, extraRoles: u.extraRoles });
   return { ok: true };
+}
+
+async function updateUserRoles(env, payload, session) {
+  if (!canManageUsers(session)) return { ok: false, error: "Saknar behörighet" };
+  if (isAdminActor(session)) {
+    return { ok: false, error: "Admin kan bara hantera ledbyggare" };
+  }
+  const obj = payload && typeof payload === "object" ? payload : {};
+  const username = String(obj.username || "").trim();
+  if (!username) return { ok: false, error: "Användarnamn saknas" };
+  const u = await findUser(env, username);
+  if (!u) return { ok: false, error: "Hittades inte" };
+  const newRole = normalizeRole(obj.role || u.role);
+  const extraRoles = parseExtraRoles(obj.extraRoles);
+  if (isSuperadminRole(u.role) && !isSuperadminRole(newRole) && (await countSuperadmins(env)) <= 1) {
+    return { ok: false, error: "Kan inte ta bort sista superadmin" };
+  }
+  await upsertUser(env, { ...u, role: newRole, extraRoles });
+  return { ok: true, username, role: newRole, extraRoles };
 }
 
 async function deleteUserAction(env, username, session) {
@@ -425,4 +492,58 @@ async function deleteRoute(env, nr, session) {
   }
   await env.DB.prepare("DELETE FROM routes WHERE nr = ?").bind(String(nr).trim()).run();
   return { ok: true };
+}
+
+function yearMonthFromPayload(payload) {
+  const raw = payload && typeof payload === "object" ? payload.yearMonth : payload;
+  const s = String(raw || "").trim();
+  return /^\d{4}-\d{2}$/.test(s) ? s : stockholmYearMonthNow();
+}
+
+async function getTimeApp(env, payload, session) {
+  if (!canUseTimeTool(session)) return { ok: false, error: "Ej inloggad" };
+  const yearMonth = yearMonthFromPayload(payload);
+  const settings = await readTimeSettings(env);
+  const entries = await listEntriesForUser(env, session.username, yearMonth);
+  const yearTotal = await yearTotalForUser(env, session.username, stockholmYearNow());
+  return {
+    ok: true,
+    yearMonth,
+    settings,
+    entries,
+    summary: summarizeEntries(entries, settings),
+    cap: capStatus(yearTotal, settings),
+    flags: publicSessionFlags(session)
+  };
+}
+
+async function addTimeEntryAction(env, payload, session) {
+  if (!canUseTimeTool(session)) return { ok: false, error: "Ej inloggad" };
+  return addTimeEntry(env, session, payload || {});
+}
+
+async function getTreasurerReport(env, payload, session) {
+  if (!canTreasurerReport(session)) return { ok: false, error: "Saknar behörighet" };
+  const yearMonth = yearMonthFromPayload(payload);
+  const settings = await readTimeSettings(env);
+  const entries = await listEntriesForReport(env, yearMonth);
+  return {
+    ok: true,
+    yearMonth,
+    settings,
+    entries,
+    summary: summarizeEntries(entries, settings)
+  };
+}
+
+async function deleteTimeEntryAction(env, id, session) {
+  if (!canDeleteTimeEntry(session)) return { ok: false, error: "Bara superadmin kan ta bort tidrader" };
+  return deleteTimeEntryById(env, id);
+}
+
+async function saveTimeSettingsAction(env, payload, session) {
+  if (!canManageTimeSettings(session)) {
+    return { ok: false, error: "Bara superadmin kan ändra arvode och gränser" };
+  }
+  return saveTimeSettings(env, payload || {});
 }
