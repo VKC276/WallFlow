@@ -143,7 +143,13 @@ export function stockholmYearMonthNow() {
 }
 
 export function rowAmount(entry) {
-  return roundMoney(Number(entry.hours || 0) * Number(entry.unit_amount || 0));
+  if (!entry) return 0;
+  if (entry.amount != null && entry.amount !== "") {
+    const direct = Number(entry.amount);
+    if (Number.isFinite(direct)) return roundMoney(direct);
+  }
+  const unit = entry.unitAmount != null ? entry.unitAmount : entry.unit_amount;
+  return roundMoney(Number(entry.hours || 0) * Number(unit || 0));
 }
 
 export async function readTimeSettings(env) {
