@@ -67,6 +67,48 @@ export function normalizeHours(n) {
   return rounded;
 }
 
+/** HH:MM → minuter från midnatt, eller null. */
+export function parseClockMinutes(raw) {
+  const m = String(raw == null ? "" : raw).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+export function formatClockHm(minutes) {
+  const total = ((Number(minutes) % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const h = Math.floor(total / 60);
+  const min = total % 60;
+  return String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0");
+}
+
+/**
+ * Timmar från start–slut samma kalenderdag.
+ * Om slut är före start räknas passet över midnatt.
+ */
+export function hoursFromClockTimes(startRaw, endRaw) {
+  const startMin = parseClockMinutes(startRaw);
+  const endMin = parseClockMinutes(endRaw);
+  if (startMin == null || endMin == null) {
+    return { ok: false, error: "Ange start- och sluttid" };
+  }
+  let diff = endMin - startMin;
+  if (diff === 0) return { ok: false, error: "Start och slut kan inte vara samma tid" };
+  const overnight = diff < 0;
+  if (overnight) diff += 24 * 60;
+  const hours = Math.round((diff / 60) * 100) / 100;
+  if (hours > 24) return { ok: false, error: "Passet kan inte vara längre än 24 timmar" };
+  return {
+    ok: true,
+    hours,
+    startTime: formatClockHm(startMin),
+    endTime: formatClockHm(endMin),
+    overnight
+  };
+}
+
 export function isValidYmd(ymd) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ""));
 }
@@ -156,6 +198,8 @@ function mapEntryRow(row) {
     kind: String(row.kind || ""),
     workDate: String(row.work_date || ""),
     hours,
+    startTime: String(row.start_time || ""),
+    endTime: String(row.end_time || ""),
     description: String(row.description || ""),
     unitAmount: unit,
     amount: roundMoney(hours * unit),
@@ -301,6 +345,8 @@ export async function addTimeEntry(env, session, payload) {
   let hours;
   let description;
   let unitAmount;
+  let startTime = "";
+  let endTime = "";
 
   if (kind === "hallvard") {
     const correction = !!(payload && payload.correction);
@@ -308,9 +354,12 @@ export async function addTimeEntry(env, session, payload) {
     description = String(payload && payload.description || "").trim() || (correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
     unitAmount = settings.hallvardShiftAmount;
   } else {
-    hours = normalizeHours(payload && payload.hours);
-    if (hours == null) return { ok: false, error: "Ange antal timmar (kan vara negativt som minuspost)" };
-    if (payload && payload.correction && hours > 0) hours = -hours;
+    const clock = hoursFromClockTimes(payload && payload.startTime, payload && payload.endTime);
+    if (!clock.ok) return { ok: false, error: clock.error };
+    hours = clock.hours;
+    startTime = clock.startTime;
+    endTime = clock.endTime;
+    if (payload && payload.correction) hours = -Math.abs(hours);
     description = String(payload && payload.description || "").trim();
     if (!description) return { ok: false, error: "Beskriv vad som gjorts" };
     if (description.length > 500) return { ok: false, error: "Beskrivningen är för lång (max 500 tecken)" };
@@ -319,13 +368,15 @@ export async function addTimeEntry(env, session, payload) {
 
   const createdAt = new Date().toISOString();
   const result = await env.DB.prepare(
-    `INSERT INTO time_entries (username, kind, work_date, hours, description, unit_amount, created_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO time_entries (username, kind, work_date, hours, start_time, end_time, description, unit_amount, created_at, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     session.username,
     kind,
     workDate,
     hours,
+    startTime,
+    endTime,
     description,
     unitAmount,
     createdAt,
@@ -341,6 +392,8 @@ export async function addTimeEntry(env, session, payload) {
       kind,
       workDate,
       hours,
+      startTime,
+      endTime,
       description,
       unitAmount,
       amount: roundMoney(hours * unitAmount),

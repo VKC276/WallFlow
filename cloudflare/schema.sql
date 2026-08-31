@@ -41,6 +41,8 @@ CREATE TABLE time_entries (
   kind TEXT NOT NULL CHECK (kind IN ('ledbygg', 'hallvard')),
   work_date TEXT NOT NULL,
   hours REAL NOT NULL DEFAULT 0,
+  start_time TEXT NOT NULL DEFAULT '',
+  end_time TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   unit_amount REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
