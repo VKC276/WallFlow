@@ -2029,6 +2029,61 @@ function extraRolesLabel_(extras) {
   if (!list.length) return "";
   return list.map((r) => adminRoleLabelSv(r)).join(", ");
 }
+function allRolesOfUser_(u) {
+  const out = [];
+  const primary = normalizeRole_(u && u.role);
+  if (primary) out.push(primary);
+  parseExtraRoles_(u && (u.extraRoles || u.extra_roles)).forEach((r) => {
+    if (out.indexOf(r) < 0) out.push(r);
+  });
+  return out;
+}
+function packRolesFromChecks_(checked) {
+  const set = {};
+  (checked || []).forEach((r) => { set[normalizeRole_(r)] = true; });
+  let primary = "";
+  if (set.superadmin) primary = "superadmin";
+  else if (set.admin) primary = "admin";
+  else if (set.scout) primary = "scout";
+  else if (set.kassor) primary = "kassor";
+  else if (set.hallvard) primary = "hallvard";
+  if (!primary) return { ok: false, error: "Minst en roll måste vara ikryssad" };
+  const extraRoles = [];
+  if (set.kassor && primary !== "kassor") extraRoles.push("kassor");
+  if (set.hallvard && primary !== "hallvard") extraRoles.push("hallvard");
+  return { ok: true, role: primary, extraRoles };
+}
+function collectCheckedRoles_(idPrefix) {
+  return ["scout", "admin", "superadmin", "kassor", "hallvard"].filter((id) => {
+    const el = document.getElementById(idPrefix + id);
+    return !!(el && el.checked);
+  });
+}
+function roleCheckboxesHtml_(idPrefix, checkedRoles, opts) {
+  opts = opts || {};
+  const checked = checkedRoles || [];
+  const lockSuper = !!opts.lockSuper;
+  const onchange = opts.onchange ? ` onchange="${opts.onchange}"` : "";
+  const items = [
+    { id: "scout", label: "Ledbyggare" },
+    { id: "admin", label: "Admin" },
+    { id: "superadmin", label: "Superadmin" },
+    { id: "kassor", label: "Kassör" },
+    { id: "hallvard", label: "Hallvärd" }
+  ];
+  return `<div class="small mb-1" style="color:var(--muted);">Roller — kryssa alla som ska gälla</div>
+    <div class="d-flex flex-wrap gap-3">
+      ${items.map((it) => {
+        const on = checked.indexOf(it.id) >= 0;
+        const lock = lockSuper && it.id === "superadmin";
+        return `<label class="small d-flex align-items-center gap-2 mb-0">
+          <input type="checkbox" id="${escapeHtml_(idPrefix + it.id)}" ${on ? "checked" : ""} ${lock ? "disabled title=\"Kan inte ta bort sista superadmin\"" : ""}${onchange}>
+          ${it.label}
+        </label>`;
+      }).join("")}
+    </div>
+    ${lockSuper ? `<p class="small mt-1 mb-0" style="color:var(--muted);">Sista superadmin måste behålla Superadmin.</p>` : ""}`;
+}
 
 function isSuperadminRole_(role) {
   return normalizeRole_(role) === "superadmin";
@@ -3994,11 +4049,13 @@ function renderAdminHome() {
       <h3>${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</h3>
       <p class="small mb-3" style="color:var(--muted);">
         ${userRole_() === "superadmin"
-          ? "Skapa nya konton, eller ändra roller och tillägg på befintliga användare."
+          ? "Skapa WallFlow-konto, ren hallvärd eller kassör. Hantera befintliga konton separat."
           : "Skapa nya ledbyggare, eller hantera de som redan finns."}
       </p>
       <div class="admin-actions">
         <button class="btn btn-accent" type="button" onclick="renderCreateUser()">${userRole_() === "superadmin" ? "Skapa användare" : "Skapa ledbyggare"}</button>
+        ${userRole_() === "superadmin" ? `<button class="btn btn-ghost" type="button" onclick="renderCreateUser('hallvard')">Skapa hallvärd</button>
+        <button class="btn btn-ghost" type="button" onclick="renderCreateUser('kassor')">Skapa kassör</button>` : ""}
         <button class="btn btn-ghost" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Hantera användare" : "Hantera ledbyggare"}</button>
       </div>
     </div>` : ""}
@@ -4903,42 +4960,23 @@ function changeUsername() {
     .changeOwnUsername(next);
 }
 
-function renderCreateUser() {
+function renderCreateUser(preset) {
   if (!canManageUsersRole()) return;
   const isSuper = userRole_() === "superadmin";
-  const roleSelectHtml = isSuper
-    ? `<div class="col-6">
-          <label class="form-label" for="nu-role">Huvudroll</label>
-          <select id="nu-role" class="form-select form-select-sm" onchange="onNuRoleChange_()">
-            <option value="scout">Ledbyggare</option>
-            <option value="admin">Admin</option>
-            <option value="superadmin">Superadmin</option>
-            <option value="kassor">Kassör</option>
-            <option value="hallvard">Hallvärd</option>
-          </select>
-          <p class="small mt-1 mb-0" id="nu-role-hint" style="color:var(--muted); display:none;"></p>
-        </div>`
-    : `<div class="col-6">
-          <label class="form-label" for="nu-role">Roll</label>
-          <input id="nu-role" type="hidden" value="scout">
-          <input class="form-control form-control-sm" value="Ledbyggare" readonly>
-        </div>`;
+  const kind = isSuper ? String(preset || "staff") : "staff";
+  const presetRoles = kind === "hallvard" ? ["hallvard"] : (kind === "kassor" ? ["kassor"] : ["scout"]);
+  const title = kind === "hallvard" ? "Skapa hallvärd" : (kind === "kassor" ? "Skapa kassör" : (isSuper ? "Skapa användare" : "Skapa ledbyggare"));
+  const blurb = isSuper
+    ? "Kryssa de roller kontot ska ha. Du kan lägga till eller ta bort roller senare under Hantera användare, utan att skapa om kontot."
+    : "Ny ledbyggare. Admin och superadmin sköts av superadmin.";
   document.getElementById("app-admin").classList.add("show");
   setAdminChrome_("Administration");
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
       <p class="admin-kicker">Administration · Användare</p>
-      <h3>${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</h3>
-      <p class="small mb-3" style="color:var(--muted);">
-        ${isSuper
-          ? "Nytt konto. Vid första inloggning uppmanas personen att byta lösenord."
-          : "Ny ledbyggare. Admin och superadmin sköts av superadmin."}
-      </p>
-      ${isSuper ? `<div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
-        <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">Roller</div>
-        ${adminRoleHelpSv_()}
-      </div>` : ""}
+      <h3>${escapeHtml_(title)}</h3>
+      <p class="small mb-3" style="color:var(--muted);">${escapeHtml_(blurb)}</p>
       <div class="row g-2 mb-3">
         <div class="col-6">
           <label class="form-label" for="nu-user">Användarnamn</label>
@@ -4948,20 +4986,15 @@ function renderCreateUser() {
           <label class="form-label" for="nu-name">Namn</label>
           <input id="nu-name" class="form-control form-control-sm" placeholder="För- och efternamn" autocomplete="off">
         </div>
-        ${roleSelectHtml}
         <div class="col-6">
           <label class="form-label" for="nu-pw">Tillfälligt lösenord</label>
           <input id="nu-pw" class="form-control form-control-sm" placeholder="Temp-lösenord" value="changeme" autocomplete="new-password">
         </div>
       </div>
-      ${isSuper ? `<div class="mb-3">
-        <div class="small mb-2" style="color:var(--muted);">Tilläggsroller — kan kombineras med huvudrollen (t.ex. ledbyggare som också är hallvärd).</div>
-        <div class="d-flex flex-wrap gap-3">
-          <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="nu-extra-kassor"> Även kassör</label>
-          <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="nu-extra-hallvard"> Även hallvärd</label>
-        </div>
-      </div>` : ""}
-      <button class="btn btn-accent w-100" type="button" onclick="createUser()">${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</button>
+      ${isSuper ? `<div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
+        ${roleCheckboxesHtml_("nu-role-", presetRoles)}
+      </div>` : `<input type="hidden" id="nu-role" value="scout">`}
+      <button class="btn btn-accent w-100" type="button" onclick="createUser()">${escapeHtml_(title)}</button>
     </div>`;
 }
 
@@ -4975,7 +5008,7 @@ function renderUserManagement() {
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
       <p class="admin-kicker">Administration · Användare</p>
       <h3>${isSuper ? "Hantera användare" : "Hantera ledbyggare"}</h3>
-      <p class="small mb-3" style="color:var(--muted);">Ändra roller, namn och tilläggsroller för konton som redan finns.</p>
+      <p class="small mb-3" style="color:var(--muted);">Ändra namn och kryssa roller på befintliga konton. Du behöver inte skapa om användaren för att lägga till t.ex. hallvärd.</p>
       <div id="admin-user-list">Laddar…</div>
     </div>`;
   google.script.run
@@ -4987,39 +5020,23 @@ function renderUserManagement() {
       host.innerHTML = list.map((u) => {
         const isLastSuper = lastSuper && isSuperadminRole_(u.role);
         const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
-        const extras = parseExtraRoles_(u.extraRoles);
-        const extraNote = extraRolesLabel_(extras);
-        const canEditRole = isSuper && !isLastSuper;
+        const roles = allRolesOfUser_(u);
         const canDelete = !isSelf && (isSuper ? !isLastSuper : isLedbyggareRole_(u.role));
         const roleControls = isSuper
-          ? `<select id="role-sel-${escapeHtml_(u.username)}" class="form-select form-select-sm" style="width:auto;" ${canEditRole ? "" : "disabled title=\"Kan inte ta bort sista superadmin\""} onchange="saveUserRoles_('${escapeHtml_(u.username)}')">
-              <option value="scout" ${u.role === "scout" ? "selected" : ""}>Ledbyggare</option>
-              <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
-              <option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>
-              <option value="kassor" ${u.role === "kassor" ? "selected" : ""}>Kassör</option>
-              <option value="hallvard" ${u.role === "hallvard" ? "selected" : ""}>Hallvärd</option>
-            </select>`
+          ? `<div class="mt-2 p-2" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
+              ${roleCheckboxesHtml_("ur-" + u.username + "-", roles, { lockSuper: isLastSuper, onchange: "saveUserRoles_('" + escapeHtml_(u.username) + "')" })}
+            </div>`
           : `<span class="small" style="color:var(--muted);">Ledbyggare</span>`;
-        const extraBoxes = isSuper ? `<div class="mt-2">
-              <div class="small mb-1" style="color:var(--muted);">Tilläggsroller</div>
-              <div class="d-flex flex-wrap gap-3">
-              <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="ex-kassor-${escapeHtml_(u.username)}" ${extras.indexOf("kassor") >= 0 ? "checked" : ""} onchange="saveUserRoles_('${escapeHtml_(u.username)}')"> Kassör</label>
-              <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="ex-hallvard-${escapeHtml_(u.username)}" ${extras.indexOf("hallvard") >= 0 ? "checked" : ""} onchange="saveUserRoles_('${escapeHtml_(u.username)}')"> Hallvärd</label>
-              </div>
-            </div>` : "";
         return `
         <div class="py-2 border-bottom" style="border-color:var(--line)!important;">
           <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
             <div>
               <strong>${escapeHtml_(u.username)}</strong>
-              <div class="small" style="color:var(--muted);">${escapeHtml_(adminRoleLabelSv(u.role))}${extraNote ? " · " + escapeHtml_(extraNote) : ""}${isLastSuper ? " · sista superadmin" : ""}</div>
+              <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}${isLastSuper ? " · sista superadmin" : ""}</div>
             </div>
-            <div class="d-flex gap-2 align-items-center">
-              ${roleControls}
-              <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
-            </div>
+            <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
           </div>
-          ${extraBoxes}
+          ${roleControls}
           <div class="d-flex gap-2 align-items-end">
             <div class="flex-grow-1">
               <label class="form-label small mb-1" for="dn-${escapeHtml_(u.username)}" style="color:var(--muted);">Visningsnamn</label>
@@ -5035,15 +5052,21 @@ function renderUserManagement() {
 
 function createUser() {
   if (!canManageUsersRole()) return showToast("Saknar behörighet");
-  const roleEl = document.getElementById("nu-role");
+  let role = "scout";
+  let extraRoles = [];
+  if (userRole_() === "admin") {
+    role = "scout";
+  } else {
+    const packed = packRolesFromChecks_(collectCheckedRoles_("nu-role-"));
+    if (!packed.ok) return showToast(packed.error);
+    role = packed.role;
+    extraRoles = packed.extraRoles;
+  }
   const payload = {
     username: document.getElementById("nu-user").value.trim(),
     name: document.getElementById("nu-name").value.trim(),
-    role: userRole_() === "admin" ? "scout" : (roleEl && roleEl.value) || "scout",
-    extraRoles: userRole_() === "admin" ? [] : [
-      document.getElementById("nu-extra-kassor") && document.getElementById("nu-extra-kassor").checked ? "kassor" : "",
-      document.getElementById("nu-extra-hallvard") && document.getElementById("nu-extra-hallvard").checked ? "hallvard" : ""
-    ].filter(Boolean),
+    role,
+    extraRoles,
     password: document.getElementById("nu-pw").value
   };
   if (!payload.username) return showToast("Användarnamn saknas");
@@ -5061,7 +5084,11 @@ function createUser() {
         }
         return showToast(err);
       }
-      showToast(userRole_() === "admin" ? "Ledbyggare skapad" : "Användare skapad");
+      showToast(
+        payload.role === "hallvard" ? "Hallvärd skapad"
+          : (payload.role === "kassor" ? "Kassör skapad"
+            : (userRole_() === "admin" ? "Ledbyggare skapad" : "Användare skapad"))
+      );
       renderUserManagement();
     })
     .createNewAdmin(payload);
@@ -5103,13 +5130,12 @@ function saveUserDisplayName(username) {
 }
 function saveUserRoles_(username) {
   if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
-  const sel = document.getElementById("role-sel-" + username);
-  const role = sel ? sel.value : "scout";
-  const extraRoles = [];
-  const k = document.getElementById("ex-kassor-" + username);
-  const h = document.getElementById("ex-hallvard-" + username);
-  if (k && k.checked) extraRoles.push("kassor");
-  if (h && h.checked) extraRoles.push("hallvard");
+  const packed = packRolesFromChecks_(collectCheckedRoles_("ur-" + username + "-"));
+  if (!packed.ok) {
+    showToast(packed.error);
+    renderUserManagement();
+    return;
+  }
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
@@ -5118,14 +5144,15 @@ function saveUserRoles_(username) {
         return;
       }
       if (String(username).toLowerCase() === String(currentUser.username || "").toLowerCase()) {
-        currentUser.role = normalizeRole_(res.role || role);
-        currentUser.extraRoles = parseExtraRoles_(res.extraRoles || extraRoles);
+        currentUser.role = normalizeRole_(res.role || packed.role);
+        currentUser.extraRoles = parseExtraRoles_(res.extraRoles || packed.extraRoles);
         saveSession_(!!localStorage.getItem(SESSION_STORAGE_KEY));
+        renderAccountMenu_();
       }
       showToast("Roller uppdaterade");
       renderUserManagement();
     })
-    .updateUserRoles({ username, role, extraRoles });
+    .updateUserRoles({ username, role: packed.role, extraRoles: packed.extraRoles });
 }
 function updateRole(username, role) {
   saveUserRoles_(username);
