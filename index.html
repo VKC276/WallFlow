@@ -3994,10 +3994,11 @@ function renderAdminHome() {
       <h3>${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</h3>
       <p class="small mb-3" style="color:var(--muted);">
         ${userRole_() === "superadmin"
-          ? "Skapa konton, byt roller och tilläggsroller (kassör, hallvärd)."
-          : "Skapa och hantera ledbyggare. Admin- och superadminkonton sköts av superadmin."}
+          ? "Skapa nya konton, eller ändra roller och tillägg på befintliga användare."
+          : "Skapa nya ledbyggare, eller hantera de som redan finns."}
       </p>
       <div class="admin-actions">
+        <button class="btn btn-accent" type="button" onclick="renderCreateUser()">${userRole_() === "superadmin" ? "Skapa användare" : "Skapa ledbyggare"}</button>
         <button class="btn btn-ghost" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Hantera användare" : "Hantera ledbyggare"}</button>
       </div>
     </div>` : ""}
@@ -4902,12 +4903,9 @@ function changeUsername() {
     .changeOwnUsername(next);
 }
 
-function renderUserManagement() {
+function renderCreateUser() {
   if (!canManageUsersRole()) return;
   const isSuper = userRole_() === "superadmin";
-  const createBlurb = isSuper
-    ? "Skapa nya konton. Vid första inloggning uppmanas användaren att byta lösenord."
-    : "Skapa och hantera ledbyggare. Admin och superadmin sköts av superadmin.";
   const roleSelectHtml = isSuper
     ? `<div class="col-6">
           <label class="form-label" for="nu-role">Huvudroll</label>
@@ -4930,9 +4928,13 @@ function renderUserManagement() {
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
-      <p class="admin-kicker">Administration</p>
-      <h3>${isSuper ? "Användare" : "Ledbyggare"}</h3>
-      <p class="small mb-2" style="color:var(--muted);">${escapeHtml_(createBlurb)}</p>
+      <p class="admin-kicker">Administration · Användare</p>
+      <h3>${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        ${isSuper
+          ? "Nytt konto. Vid första inloggning uppmanas personen att byta lösenord."
+          : "Ny ledbyggare. Admin och superadmin sköts av superadmin."}
+      </p>
       ${isSuper ? `<div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
         <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">Roller</div>
         ${adminRoleHelpSv_()}
@@ -4959,7 +4961,21 @@ function renderUserManagement() {
           <label class="small d-flex align-items-center gap-2 mb-0"><input type="checkbox" id="nu-extra-hallvard"> Även hallvärd</label>
         </div>
       </div>` : ""}
-      <button class="btn btn-accent btn-sm mb-3" type="button" onclick="createUser()">${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</button>
+      <button class="btn btn-accent w-100" type="button" onclick="createUser()">${isSuper ? "Skapa användare" : "Skapa ledbyggare"}</button>
+    </div>`;
+}
+
+function renderUserManagement() {
+  if (!canManageUsersRole()) return;
+  const isSuper = userRole_() === "superadmin";
+  document.getElementById("app-admin").classList.add("show");
+  setAdminChrome_("Administration");
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <p class="admin-kicker">Administration · Användare</p>
+      <h3>${isSuper ? "Hantera användare" : "Hantera ledbyggare"}</h3>
+      <p class="small mb-3" style="color:var(--muted);">Ändra roller, namn och tilläggsroller för konton som redan finns.</p>
       <div id="admin-user-list">Laddar…</div>
     </div>`;
   google.script.run
