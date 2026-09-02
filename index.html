@@ -6045,24 +6045,28 @@ function onTimeMonthChange_() {
 }
 function timeRangePickerHtml_() {
   ensureTimeRange_();
-  return `<p class="small mb-3" style="color:var(--muted);">Välj den utbetalningsperiod ni kör, t.ex. en säsong som inte följer kalendermånaden.</p>
+  return `<p class="small mb-3" style="color:var(--muted);">Välj startdatum och slutdatum för utbetalningsperioden, sedan Visa period.</p>
     <div class="row g-2 mb-3">
       <div class="col-6">
         <label class="form-label" for="time-from">Startdatum</label>
-        <input id="time-from" type="date" class="form-control" value="${escapeHtml_(timeToolState_.fromDate)}" onchange="onTimeRangeChange_()">
+        <input id="time-from" type="date" class="form-control" value="${escapeHtml_(timeToolState_.fromDate)}">
       </div>
       <div class="col-6">
         <label class="form-label" for="time-to">Slutdatum</label>
-        <input id="time-to" type="date" class="form-control" value="${escapeHtml_(timeToolState_.toDate)}" onchange="onTimeRangeChange_()">
+        <input id="time-to" type="date" class="form-control" value="${escapeHtml_(timeToolState_.toDate)}">
       </div>
-    </div>`;
+    </div>
+    <button class="btn btn-accent w-100 mb-3" type="button" onclick="applyTreasurerRange_()">Visa period</button>`;
 }
-function onTimeRangeChange_() {
+function applyTreasurerRange_() {
   const fromEl = document.getElementById("time-from");
   const toEl = document.getElementById("time-to");
   const fromDate = String(fromEl && fromEl.value || "").slice(0, 10);
   const toDate = String(toEl && toEl.value || "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    showToast("Ange start- och slutdatum");
+    return;
+  }
   if (fromDate > toDate) {
     showToast("Startdatum kan inte vara efter slutdatum");
     return;
@@ -6070,7 +6074,19 @@ function onTimeRangeChange_() {
   timeToolState_.fromDate = fromDate;
   timeToolState_.toDate = toDate;
   timeToolState_.yearMonth = fromDate.slice(0, 7);
-  openTimeTool("treasurer");
+  loadTreasurerReport_();
+}
+function workDateYmd_(e) {
+  return String((e && (e.workDate || e.work_date)) || "").trim().slice(0, 10);
+}
+function filterEntriesByRange_(entries, fromDate, toDate) {
+  const from = String(fromDate || "").slice(0, 10);
+  const to = String(toDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return entries || [];
+  return (entries || []).filter((e) => {
+    const d = workDateYmd_(e);
+    return d >= from && d <= to;
+  });
 }
 function capBannerHtml_(cap) {
   if (!cap) return "";
@@ -6429,21 +6445,23 @@ function peopleFromEntries_(entries, minPayout) {
   });
 }
 function renderTreasurerReport_(data) {
-  if (data && data.fromDate) timeToolState_.fromDate = data.fromDate;
-  if (data && data.toDate) timeToolState_.toDate = data.toDate;
-  const minPayout = (data.summary && data.summary.minPayout) || 0;
+  const fromDate = timeToolState_.fromDate;
+  const toDate = timeToolState_.toDate;
+  const entries = filterEntriesByRange_((data && data.entries) || [], fromDate, toDate);
+  const minPayout = (data.summary && data.summary.minPayout) || ((data.settings && data.settings.minPayout) || 0);
   const payMode = demoPayMode_((data && data.summary) || (data && data.settings) || {});
-  const people = (data.summary && data.summary.people && data.summary.people.length)
-    ? data.summary.people
-    : peopleFromEntries_(data.entries, minPayout);
+  const summary = summaryFromEntries_(entries, Object.assign({}, data.summary || {}, data.settings || {}, { minPayout, ledbyggPayMode: payMode }));
+  const people = peopleFromEntries_(entries, minPayout);
   const showProblems = payMode !== "time";
+  const period = periodLabel_(fromDate, toDate);
+  const empty = !entries.length;
   const peopleHtml = people.map((p) => `
     <tr>
       <td>${escapeHtml_(p.name || p.username)}</td>
       <td class="num">${formatHours_(p.ledbyggHours)} t</td>
       ${showProblems ? `<td class="num">${Number(p.problemCount) || 0} st</td>` : ""}
       <td class="num">${formatHours_(p.hallvardShifts)} pass</td>
-      <td class="num">${formatSek_(p.amount)}${p.belowMinPayout ? ` <span class="small" style="color:var(--muted);">(under lägsta ${formatSek_(data.summary.minPayout)})</span>` : ""}</td>
+      <td class="num">${formatSek_(p.amount)}${p.belowMinPayout ? ` <span class="small" style="color:var(--muted);">(under lägsta ${formatSek_(minPayout)})</span>` : ""}</td>
     </tr>`).join("") || `<tr><td colspan="${showProblems ? 5 : 4}" style="color:var(--muted);">Ingen inrapporterad tid.</td></tr>`;
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card time-no-print">
@@ -6453,10 +6471,13 @@ function renderTreasurerReport_(data) {
         <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Skriv ut / PDF</button>
       </div>
     </div>
-    <div class="admin-card">
-      <h3>Utdrag · ${escapeHtml_(periodLabel_(data.fromDate || timeToolState_.fromDate, data.toDate || timeToolState_.toDate))}</h3>
-      ${timeEntriesTableHtml_(data.entries, { showUser: true, canDelete: canTimeAdmin_() })}
-      ${timeTotalsHtml_(summaryFromEntries_(data.entries, data.summary), "Summering")}
+    ${empty ? `<div class="admin-card">
+      <h3>Utdrag · ${escapeHtml_(period)}</h3>
+      <p class="mb-0" style="color:var(--muted);">Ingen inrapporterad tid för vald period.</p>
+    </div>` : `<div class="admin-card">
+      <h3>Utdrag · ${escapeHtml_(period)}</h3>
+      ${timeEntriesTableHtml_(entries, { showUser: true, canDelete: canTimeAdmin_() })}
+      ${timeTotalsHtml_(summary, "Summering")}
     </div>
     <div class="admin-card">
       <h4>Per person</h4>
@@ -6464,8 +6485,8 @@ function renderTreasurerReport_(data) {
         <thead><tr><th>Namn</th><th class="num">Timmar</th>${showProblems ? "<th class=\"num\">Problem</th>" : ""}<th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
         <tbody>${peopleHtml}</tbody>
       </table></div>
-      ${data.summary && data.summary.minPayout > 0 ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Lägsta utbetalning: ${formatSek_(data.summary.minPayout)}. Personer under gränsen markeras.</p>` : ""}
-    </div>`;
+      ${minPayout > 0 ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Lägsta utbetalning: ${formatSek_(minPayout)}. Personer under gränsen markeras.</p>` : ""}
+    </div>`}`;
 }
 function deleteTimeEntryRow_(id) {
   if (!canTimeAdmin_()) return showToast("Bara superadmin kan ta bort rader");
