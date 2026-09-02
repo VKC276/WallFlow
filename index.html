@@ -2308,10 +2308,14 @@ function setAdminChrome_(title) {
 function renderAccountMenu_() {
   const menu = document.getElementById("account-menu");
   if (!menu) return;
-  const items = [
+  const items = [];
+  if (hasWallflowAccess_()) {
+    items.push(`<button type="button" role="menuitem" onclick="openRoutesFromMenu_()">Ledbyggnation</button>`);
+  }
+  items.push(
     `<button type="button" role="menuitem" onclick="openSettingsFromMenu_()">Konto</button>`,
     `<button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>`
-  ];
+  );
   if (canOpenAdministration_()) {
     items.push(`<button type="button" role="menuitem" onclick="openAdministrationFromMenu_()">Administration</button>`);
   }
@@ -4543,6 +4547,14 @@ function closeAccountMenu_() {
   const btn = document.getElementById("account-menu-btn");
   if (wrap) wrap.classList.remove("open");
   if (btn) btn.setAttribute("aria-expanded", "false");
+}
+function openRoutesFromMenu_() {
+  closeAccountMenu_();
+  if (!currentUser.authorized) return showLoginGate_();
+  if (!hasWallflowAccess_()) return;
+  if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  document.getElementById("app-admin").classList.remove("show");
+  closeTimeTool();
 }
 function openSettingsFromMenu_() {
   closeAccountMenu_();
