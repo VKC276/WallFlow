@@ -135,6 +135,25 @@ export function isValidYmd(ymd) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ""));
 }
 
+/** Inkluderande datumintervall för kassörsrapport. */
+export function inclusiveDateRange(fromRaw, toRaw) {
+  const fromDate = String(fromRaw || "").trim().slice(0, 10);
+  const toDate = String(toRaw || "").trim().slice(0, 10);
+  if (!isValidYmd(fromDate) || !isValidYmd(toDate)) {
+    return { ok: false, error: "Ange start- och slutdatum" };
+  }
+  if (fromDate > toDate) {
+    return { ok: false, error: "Startdatum kan inte vara efter slutdatum" };
+  }
+  const fromMs = Date.parse(fromDate + "T00:00:00Z");
+  const toMs = Date.parse(toDate + "T00:00:00Z");
+  const days = Math.round((toMs - fromMs) / 86400000) + 1;
+  if (days > 800) {
+    return { ok: false, error: "Perioden kan vara högst 800 dagar" };
+  }
+  return { ok: true, fromDate, toDate };
+}
+
 export function yearMonthBounds(yearMonth) {
   const s = String(yearMonth || "").trim();
   const m = s.match(/^(\d{4})-(\d{2})$/);
@@ -302,16 +321,17 @@ export async function listEntriesForUser(env, username, yearMonth) {
   return (results || []).map(mapEntryRow);
 }
 
-export async function listEntriesForReport(env, yearMonth) {
-  const bounds = yearMonthBounds(yearMonth) || yearMonthBounds(stockholmYearMonthNow());
+export async function listEntriesForReport(env, fromDate, toDate) {
+  const range = inclusiveDateRange(fromDate, toDate);
+  if (!range.ok) return { ok: false, error: range.error, entries: [] };
   const { results } = await env.DB.prepare(
     `SELECT e.*, u.name AS name
      FROM time_entries e
      LEFT JOIN users u ON u.username = e.username COLLATE NOCASE
-     WHERE e.work_date >= ? AND e.work_date < ?
+     WHERE e.work_date >= ? AND e.work_date <= ?
      ORDER BY e.work_date ASC, e.username ASC, e.id ASC`
-  ).bind(bounds.start, bounds.endExclusive).all();
-  return (results || []).map(mapEntryRow);
+  ).bind(range.fromDate, range.toDate).all();
+  return { ok: true, fromDate: range.fromDate, toDate: range.toDate, entries: (results || []).map(mapEntryRow) };
 }
 
 export function summarizeEntries(entries, settings) {

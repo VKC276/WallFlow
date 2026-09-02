@@ -47,6 +47,7 @@ import {
   canUseTimeTool,
   capStatus,
   deleteTimeEntryById,
+  inclusiveDateRange,
   listEntriesForReport,
   listEntriesForUser,
   publicSessionFlags,
@@ -56,7 +57,8 @@ import {
   stockholmYearMonthNow,
   stockholmYearNow,
   summarizeEntries,
-  yearCompensationForUser
+  yearCompensationForUser,
+  yearMonthBounds
 } from "./time.js";
 import {
   deleteBilderByRouteNr,
@@ -500,6 +502,27 @@ function yearMonthFromPayload(payload) {
   return /^\d{4}-\d{2}$/.test(s) ? s : stockholmYearMonthNow();
 }
 
+function lastYmdBeforeExclusive(endExclusive) {
+  const d = new Date(String(endExclusive) + "T12:00:00Z");
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function treasurerRangeFromPayload(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const fromRaw = p.fromDate || p.startDate || p.from;
+  const toRaw = p.toDate || p.endDate || p.to;
+  if (fromRaw || toRaw) return inclusiveDateRange(fromRaw, toRaw);
+  const bounds = yearMonthBounds(yearMonthFromPayload(p));
+  if (!bounds) return { ok: false, error: "Ogiltig period" };
+  return {
+    ok: true,
+    fromDate: bounds.start,
+    toDate: lastYmdBeforeExclusive(bounds.endExclusive)
+  };
+}
+
 async function getTimeApp(env, payload, session) {
   if (!canUseTimeTool(session)) return { ok: false, error: "Ej inloggad" };
   const yearMonth = yearMonthFromPayload(payload);
@@ -524,15 +547,19 @@ async function addTimeEntryAction(env, payload, session) {
 
 async function getTreasurerReport(env, payload, session) {
   if (!canTreasurerReport(session)) return { ok: false, error: "Saknar behörighet" };
-  const yearMonth = yearMonthFromPayload(payload);
+  const range = treasurerRangeFromPayload(payload);
+  if (!range.ok) return { ok: false, error: range.error };
   const settings = await readTimeSettings(env);
-  const entries = await listEntriesForReport(env, yearMonth);
+  const listed = await listEntriesForReport(env, range.fromDate, range.toDate);
+  if (!listed.ok) return { ok: false, error: listed.error };
   return {
     ok: true,
-    yearMonth,
+    fromDate: listed.fromDate,
+    toDate: listed.toDate,
+    yearMonth: String(listed.fromDate || "").slice(0, 7),
     settings,
-    entries,
-    summary: summarizeEntries(entries, settings)
+    entries: listed.entries,
+    summary: summarizeEntries(listed.entries, settings)
   };
 }
 

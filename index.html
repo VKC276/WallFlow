@@ -1791,6 +1791,15 @@ function demoSummarize_(entries, settings) {
   };
 }
 
+function demoDateRangeFilter_(entries, fromDate, toDate) {
+  const from = String(fromDate || "").slice(0, 10);
+  const to = String(toDate || "").slice(0, 10);
+  return (entries || []).filter((e) => {
+    const d = String(e.workDate || "").slice(0, 10);
+    return d >= from && d <= to;
+  });
+}
+
 function demoMonthFilter_(entries, yearMonth) {
   const ym = String(yearMonth || "").slice(0, 7);
   return (entries || []).filter((e) => String(e.workDate || "").slice(0, 7) === ym);
@@ -1881,11 +1890,19 @@ function demoTimeApi_(store, action, args) {
   }
   if (action === "getTreasurerReport") {
     if (String(currentUser.role) !== "superadmin" && !demoHasRole_("kassor")) return { ok: false, error: "Saknar behörighet" };
-    const entries = demoMonthFilter_(store.timeEntries, yearMonth).map((e) => {
+    let fromDate = String(payload.fromDate || payload.startDate || "").slice(0, 10);
+    let toDate = String(payload.toDate || payload.endDate || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+      const ym = String(payload.yearMonth || yearMonth).slice(0, 7);
+      fromDate = ym + "-01";
+      toDate = lastYmdOfMonth_(ym);
+    }
+    if (fromDate > toDate) return { ok: false, error: "Startdatum kan inte vara efter slutdatum" };
+    const entries = demoDateRangeFilter_(store.timeEntries, fromDate, toDate).map((e) => {
       const u = (store.users || []).find((x) => x.username === e.username);
       return Object.assign({}, e, { name: (u && u.name) || e.name || e.username, amount: demoRowAmount_(e) });
     });
-    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings) };
+    return { ok: true, fromDate, toDate, yearMonth: fromDate.slice(0, 7), settings, entries, summary: demoSummarize_(entries, settings) };
   }
   if (action === "deleteTimeEntry") {
     if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ta bort tidrader" };
@@ -5899,7 +5916,7 @@ function deleteUser(username) {
 }
 
 /* ---------- Tidrapportering ---------- */
-let timeToolState_ = { yearMonth: "", view: "mine" };
+let timeToolState_ = { yearMonth: "", fromDate: "", toDate: "", view: "mine" };
 
 function currentYearMonth_() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
@@ -5936,6 +5953,34 @@ function formatClockRange_(start, end, hours) {
   if (!s || !e) return formatHours_(hours) + " t";
   return s + "–" + e + " · " + formatHours_(hours) + " t";
 }
+function lastYmdOfMonth_(ym) {
+  const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return m[1] + "-" + m[2] + "-" + String(last).padStart(2, "0");
+}
+function ensureTimeRange_() {
+  if (!timeToolState_.yearMonth) timeToolState_.yearMonth = currentYearMonth_();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(timeToolState_.fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(timeToolState_.toDate)) {
+    timeToolState_.fromDate = timeToolState_.yearMonth + "-01";
+    timeToolState_.toDate = lastYmdOfMonth_(timeToolState_.yearMonth);
+  }
+}
+function periodLabel_(fromDate, toDate) {
+  const names = ["januari","februari","mars","april","maj","juni","juli","augusti","september","oktober","november","december"];
+  function one(ymd) {
+    const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return ymd || "";
+    return Number(m[3]) + " " + names[Number(m[2]) - 1] + " " + m[1];
+  }
+  const from = String(fromDate || "").slice(0, 10);
+  const to = String(toDate || "").slice(0, 10);
+  if (!from && !to) return "";
+  if (from === to) return one(from);
+  return one(from) + " – " + one(to);
+}
 function monthLabel_(ym) {
   const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
   if (!m) return ym;
@@ -5957,6 +6002,7 @@ function openTimeTool(view) {
     return;
   }
   if (!timeToolState_.yearMonth) timeToolState_.yearMonth = currentYearMonth_();
+  ensureTimeRange_();
   if (view) timeToolState_.view = view;
   else if (!canReportLedbygg_() && !canReportHallvard_() && canTreasurer_()) timeToolState_.view = "treasurer";
   else if (timeToolState_.view === "treasurer" && !canTreasurer_()) timeToolState_.view = "mine";
@@ -5993,7 +6039,38 @@ function onTimeMonthChange_() {
   const v = String(el && el.value || "").slice(0, 7);
   if (!/^\d{4}-\d{2}$/.test(v)) return;
   timeToolState_.yearMonth = v;
+  timeToolState_.fromDate = v + "-01";
+  timeToolState_.toDate = lastYmdOfMonth_(v);
   openTimeTool(timeToolState_.view);
+}
+function timeRangePickerHtml_() {
+  ensureTimeRange_();
+  return `<p class="small mb-3" style="color:var(--muted);">Välj den utbetalningsperiod ni kör, t.ex. en säsong som inte följer kalendermånaden.</p>
+    <div class="row g-2 mb-3">
+      <div class="col-6">
+        <label class="form-label" for="time-from">Startdatum</label>
+        <input id="time-from" type="date" class="form-control" value="${escapeHtml_(timeToolState_.fromDate)}" onchange="onTimeRangeChange_()">
+      </div>
+      <div class="col-6">
+        <label class="form-label" for="time-to">Slutdatum</label>
+        <input id="time-to" type="date" class="form-control" value="${escapeHtml_(timeToolState_.toDate)}" onchange="onTimeRangeChange_()">
+      </div>
+    </div>`;
+}
+function onTimeRangeChange_() {
+  const fromEl = document.getElementById("time-from");
+  const toEl = document.getElementById("time-to");
+  const fromDate = String(fromEl && fromEl.value || "").slice(0, 10);
+  const toDate = String(toEl && toEl.value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) return;
+  if (fromDate > toDate) {
+    showToast("Startdatum kan inte vara efter slutdatum");
+    return;
+  }
+  timeToolState_.fromDate = fromDate;
+  timeToolState_.toDate = toDate;
+  timeToolState_.yearMonth = fromDate.slice(0, 7);
+  openTimeTool("treasurer");
 }
 function capBannerHtml_(cap) {
   if (!cap) return "";
@@ -6305,6 +6382,7 @@ function submitTimeEntry_(ev, kind) {
     .addTimeEntry(payload);
 }
 function loadTreasurerReport_() {
+  ensureTimeRange_();
   const main = document.getElementById("time-main");
   main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar rapport…</p></div>`;
   google.script.run
@@ -6318,7 +6396,7 @@ function loadTreasurerReport_() {
     .withFailureHandler(() => {
       main.innerHTML = `<div class="admin-card"><p>Kunde inte hämta rapport.</p></div>`;
     })
-    .getTreasurerReport({ yearMonth: timeToolState_.yearMonth });
+    .getTreasurerReport({ fromDate: timeToolState_.fromDate, toDate: timeToolState_.toDate });
 }
 function peopleFromEntries_(entries, minPayout) {
   const byUser = {};
@@ -6351,6 +6429,8 @@ function peopleFromEntries_(entries, minPayout) {
   });
 }
 function renderTreasurerReport_(data) {
+  if (data && data.fromDate) timeToolState_.fromDate = data.fromDate;
+  if (data && data.toDate) timeToolState_.toDate = data.toDate;
   const minPayout = (data.summary && data.summary.minPayout) || 0;
   const payMode = demoPayMode_((data && data.summary) || (data && data.settings) || {});
   const people = (data.summary && data.summary.people && data.summary.people.length)
@@ -6368,13 +6448,13 @@ function renderTreasurerReport_(data) {
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card time-no-print">
       <h3>Kassörsrapport</h3>
-      ${timeMonthPickerHtml_()}
+      ${timeRangePickerHtml_()}
       <div class="d-flex flex-wrap gap-2">
         <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Skriv ut / PDF</button>
       </div>
     </div>
     <div class="admin-card">
-      <h3>Utdrag · ${escapeHtml_(monthLabel_(data.yearMonth))}</h3>
+      <h3>Utdrag · ${escapeHtml_(periodLabel_(data.fromDate || timeToolState_.fromDate, data.toDate || timeToolState_.toDate))}</h3>
       ${timeEntriesTableHtml_(data.entries, { showUser: true, canDelete: canTimeAdmin_() })}
       ${timeTotalsHtml_(summaryFromEntries_(data.entries, data.summary), "Summering")}
     </div>
