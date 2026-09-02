@@ -35,13 +35,6 @@ export function ledbyggPayIncludesProblems(mode) {
   return m === "problems" || m === "both";
 }
 
-export function normalizeProblemCount(n) {
-  const v = Math.round(Number(n));
-  if (!Number.isFinite(v) || v === 0) return null;
-  if (Math.abs(v) > 200) return null;
-  return v;
-}
-
 export function canUseTimeTool(session) {
   return !!(session && session.username);
 }
@@ -229,15 +222,19 @@ export async function saveTimeSettings(env, payload) {
 function mapEntryRow(row) {
   const hours = Number(row.hours) || 0;
   const unit = Number(row.unit_amount) || 0;
+  const kind = String(row.kind || "");
+  const startRaw = String(row.start_time || "");
+  const isProblem = kind === "problem";
   return {
     id: Number(row.id),
     username: String(row.username || ""),
     name: String(row.name || row.username || ""),
-    kind: String(row.kind || ""),
+    kind,
     workDate: String(row.work_date || ""),
     hours,
-    startTime: String(row.start_time || ""),
-    endTime: String(row.end_time || ""),
+    startTime: isProblem ? "" : startRaw,
+    endTime: isProblem ? "" : String(row.end_time || ""),
+    routeNr: isProblem ? startRaw : "",
     description: String(row.description || ""),
     unitAmount: unit,
     amount: roundMoney(hours * unit),
@@ -432,11 +429,11 @@ export async function addTimeEntry(env, session, payload) {
     description = String(payload && payload.description || "").trim() || (correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
     unitAmount = settings.hallvardShiftAmount;
   } else if (kind === "problem") {
-    let count = normalizeProblemCount(payload && payload.count != null ? payload.count : payload.hours);
-    if (count == null) return { ok: false, error: "Ange hur många problem som byggts (1–200)" };
-    if (payload && payload.correction) count = -Math.abs(count);
-    hours = count;
-    description = String(payload && payload.description || "").trim() || (count < 0 ? "Korrigering ombyggda problem" : "Ombyggda problem");
+    const routeNr = String(payload && (payload.routeNr != null ? payload.routeNr : payload.nr) || "").trim();
+    if (!routeNr || routeNr.length > 20) return { ok: false, error: "Ange vilket problem (lednummer) som byggts om" };
+    hours = payload && payload.correction ? -1 : 1;
+    startTime = routeNr;
+    description = String(payload && payload.description || "").trim();
     if (description.length > 500) return { ok: false, error: "Beskrivningen är för lång (max 500 tecken)" };
     unitAmount = settings.ledbyggProblemAmount;
   } else {
@@ -478,8 +475,9 @@ export async function addTimeEntry(env, session, payload) {
       kind,
       workDate,
       hours,
-      startTime,
+      startTime: kind === "problem" ? "" : startTime,
       endTime,
+      routeNr: kind === "problem" ? startTime : "",
       description,
       unitAmount,
       amount: roundMoney(hours * unitAmount),
