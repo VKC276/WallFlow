@@ -968,7 +968,7 @@
     .qr-scan-stage::after {
       content: "";
       position: absolute;
-      inset: 18% 16%;
+      inset: 22% 28%;
       border: 2px dashed rgba(255, 255, 255, 0.45);
       border-radius: 12px;
       pointer-events: none;
@@ -1111,7 +1111,7 @@
     .quickinfo-stage::after {
       content: "";
       position: absolute;
-      inset: 16% 16%;
+      inset: 18% 26%;
       z-index: 1;
       border: 2px dashed rgba(255, 255, 255, 0.45);
       border-radius: 12px;
@@ -1330,7 +1330,7 @@
       <div class="search-wrap" id="search-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input id="mainSearch" type="search" placeholder="Sök nr, färg, byggare, anteckning…" oninput="onMainSearchInput_()" autocomplete="off">
-        <button class="icon-btn" type="button" onclick="openQrScanner_()" aria-label="Skanna QR-kod" title="Skanna QR-kod">
+        <button class="icon-btn" type="button" onclick="openQrScanner_()" aria-label="Skanna lednummer" title="Skanna lednummer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3z"></path>
             <path d="M15 15h2v2h-2zM19 15h2v2h-2zM15 19h2v2h-2z"></path>
@@ -1381,8 +1381,8 @@
   <div id="qr-scan-overlay" class="qr-scan-overlay" aria-hidden="true">
     <div class="qr-scan-card" role="dialog" aria-modal="true" aria-labelledby="qr-scan-title">
       <div class="qr-scan-head">
-        <strong id="qr-scan-title">Skanna routecard-QR</strong>
-        <button class="icon-btn" type="button" onclick="closeQrScanner_()" aria-label="Stäng QR-skanner">✕</button>
+        <strong id="qr-scan-title">Skanna lednummer</strong>
+        <button class="icon-btn" type="button" onclick="closeQrScanner_()" aria-label="Stäng skanner">✕</button>
       </div>
       <div class="qr-scan-stage" id="qr-scan-stage">
         <video id="qr-scan-video" autoplay playsinline muted></video>
@@ -1395,7 +1395,7 @@
       </div>
       <div id="qr-scan-status" class="qr-scan-status">Startar kamera…</div>
       <div class="qr-scan-actions">
-        <button class="btn btn-ghost" type="button" onclick="manualQrInput_()">Mata in kod</button>
+        <button class="btn btn-ghost" type="button" onclick="manualQrInput_()">Mata in nummer</button>
         <button class="btn btn-accent" type="button" onclick="closeQrScanner_()">Avbryt</button>
       </div>
     </div>
@@ -1421,10 +1421,10 @@
       </div>
       <div id="quickinfo-status" class="quickinfo-status">Startar kamera…</div>
       <div id="quickinfo-result" class="quickinfo-result">
-        <div class="empty">Rikta kameran mot en QR-kod med lednummer.</div>
+        <div class="empty">Rikta kameran mot lednumret (1–99).</div>
       </div>
       <div class="quickinfo-actions">
-        <button class="btn btn-ghost" type="button" onclick="manualQuickInfoInput_()">Mata in kod</button>
+        <button class="btn btn-ghost" type="button" onclick="manualQuickInfoInput_()">Mata in nummer</button>
         <button class="btn btn-accent" id="quickinfo-edit-btn" type="button" onclick="editQuickInfoRoute_()" disabled>Redigera</button>
       </div>
     </div>
@@ -1450,7 +1450,7 @@
       </div>
       <div id="inventory-status" class="quickinfo-status">Startar kamera…</div>
       <div id="inventory-result" class="quickinfo-result">
-        <div class="empty">Skanna QR på alla leder som sitter uppe.</div>
+        <div class="empty">Skanna lednummer på alla leder som sitter uppe.</div>
       </div>
       <div class="quickinfo-actions" id="inventory-actions"></div>
     </div>
@@ -3148,33 +3148,194 @@ let quickInfoEditPendingNr_ = "";
 let qrScanState_ = {
   open: false,
   stream: null,
-  detector: null,
+  ocrReady: false,
   rafId: 0,
   detectBusy: false,
-  lastDetectAt: 0
+  lastDetectAt: 0,
+  ocrPending: "",
+  ocrHits: 0
 };
 let quickInfoState_ = {
   open: false,
   stream: null,
-  detector: null,
+  ocrReady: false,
   rafId: 0,
   detectBusy: false,
   lastDetectAt: 0,
   lastRawValue: "",
-  currentRouteNr: ""
+  currentRouteNr: "",
+  ocrPending: "",
+  ocrHits: 0
 };
 
 let inventoryState_ = {
   open: false,
   stream: null,
-  detector: null,
+  ocrReady: false,
   rafId: 0,
   detectBusy: false,
   lastDetectAt: 0,
   lastRawValue: "",
   done: false,
-  scanned: []
+  scanned: [],
+  ocrPending: "",
+  ocrHits: 0
 };
+
+const OCR_CONFIRM_HITS_ = 2;
+const OCR_TICK_MS_ = 240;
+let ocrWorker_ = null;
+let ocrWorkerPromise_ = null;
+const ocrScratch_ = Object.create(null);
+
+function canUseCameraScan_() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+function loadTesseractScript_() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector("script[data-wallflow-ocr]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.Tesseract));
+      existing.addEventListener("error", () => reject(new Error("ocr-script")));
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.async = true;
+    s.dataset.wallflowOcr = "1";
+    s.onload = () => resolve(window.Tesseract);
+    s.onerror = () => reject(new Error("ocr-script"));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureOcrWorker_() {
+  if (ocrWorker_) return ocrWorker_;
+  if (ocrWorkerPromise_) return ocrWorkerPromise_;
+  ocrWorkerPromise_ = (async () => {
+    const Tesseract = await loadTesseractScript_();
+    if (!Tesseract || typeof Tesseract.createWorker !== "function") {
+      throw new Error("ocr-missing");
+    }
+    const worker = await Tesseract.createWorker("eng", 1);
+    await worker.setParameters({
+      tessedit_char_whitelist: "0123456789",
+      tessedit_pageseg_mode: "7"
+    });
+    ocrWorker_ = worker;
+    return worker;
+  })();
+  try {
+    return await ocrWorkerPromise_;
+  } catch (err) {
+    ocrWorkerPromise_ = null;
+    throw err;
+  }
+}
+
+function parseOcrRouteNumber_(text, confidence) {
+  if (confidence != null && Number.isFinite(Number(confidence)) && Number(confidence) < 40) return "";
+  const digits = String(text == null ? "" : text).replace(/\D/g, "");
+  if (!digits || digits.length > 2) return "";
+  const n = Number(digits);
+  if (!Number.isInteger(n) || n < 1 || n > 99) return "";
+  return String(n);
+}
+
+function ocrConfirmValue_(state, value) {
+  if (!state) return "";
+  if (!value) return "";
+  if (state.ocrPending === value) state.ocrHits += 1;
+  else {
+    state.ocrPending = value;
+    state.ocrHits = 1;
+  }
+  return state.ocrHits >= OCR_CONFIRM_HITS_ ? value : "";
+}
+
+function resetOcrPending_(state) {
+  if (!state) return;
+  state.ocrPending = "";
+  state.ocrHits = 0;
+}
+
+function ocrPrepareCanvas_(id, video) {
+  if (!video || !video.videoWidth || !video.videoHeight) return null;
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const elW = Math.max(1, video.clientWidth || video.offsetWidth || vw);
+  const elH = Math.max(1, video.clientHeight || video.offsetHeight || vh);
+  const cover = Math.max(elW / vw, elH / vh);
+  let visW = elW / cover;
+  let visH = elH / cover;
+  let sx = (vw - visW) / 2;
+  let sy = (vh - visH) / 2;
+
+  const zoomState = camZoomState_[id];
+  const digital = zoomState && !zoomState.hw ? Number(zoomState.digital || zoomState.value || 1) : 1;
+  if (digital > 1.02) {
+    const nw = visW / digital;
+    const nh = visH / digital;
+    sx += (visW - nw) / 2;
+    sy += (visH - nh) / 2;
+    visW = nw;
+    visH = nh;
+  }
+
+  const insetX = visW * 0.26;
+  const insetY = visH * 0.22;
+  const cw = Math.max(12, visW - insetX * 2);
+  const ch = Math.max(12, visH - insetY * 2);
+  const ox = sx + insetX;
+  const oy = sy + insetY;
+  const scale = Math.max(1, Math.ceil(200 / Math.min(cw, ch)));
+  const outW = Math.round(cw * scale);
+  const outH = Math.round(ch * scale);
+
+  let canvas = ocrScratch_[id];
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    ocrScratch_[id] = canvas;
+  }
+  if (canvas.width !== outW) canvas.width = outW;
+  if (canvas.height !== outH) canvas.height = outH;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(video, ox, oy, cw, ch, 0, 0, outW, outH);
+
+  const img = ctx.getImageData(0, 0, outW, outH);
+  const d = img.data;
+  let sum = 0;
+  const pixels = outW * outH;
+  for (let i = 0; i < d.length; i += 4) {
+    const y = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+    d[i] = d[i + 1] = d[i + 2] = y;
+    sum += y;
+  }
+  const invert = pixels > 0 && (sum / pixels) < 118;
+  for (let i = 0; i < d.length; i += 4) {
+    let y = d[i];
+    if (invert) y = 255 - y;
+    y = (y - 128) * 1.5 + 140;
+    if (y < 36) y = 0;
+    else if (y > 220) y = 255;
+    d[i] = d[i + 1] = d[i + 2] = y;
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+async function recognizeRouteNumber_(id, video) {
+  const canvas = ocrPrepareCanvas_(id, video);
+  if (!canvas) return "";
+  const worker = await ensureOcrWorker_();
+  const result = await worker.recognize(canvas);
+  const data = result && result.data ? result.data : {};
+  return parseOcrRouteNumber_(data.text, data.confidence);
+}
 
 function isPanelOpen_() {
   const panel = document.getElementById("panel");
@@ -3262,10 +3423,11 @@ function closeQrScanner_(fromPopstate) {
   const overlay = document.getElementById("qr-scan-overlay");
   stopQrScannerLoop_();
   stopQrScannerStream_();
-  qrScanState_.detector = null;
+  qrScanState_.ocrReady = false;
   qrScanState_.open = false;
   qrScanState_.detectBusy = false;
   qrScanState_.lastDetectAt = 0;
+  resetOcrPending_(qrScanState_);
   if (overlay) {
     overlay.classList.remove("open");
     overlay.setAttribute("aria-hidden", "true");
@@ -3280,14 +3442,14 @@ function closeQrScanner_(fromPopstate) {
   }
 }
 
-/** Kort vibration vid QR-träff (Android m.fl.; ignorerar iOS/saknad support). */
+/** Kort vibration vid träff (Android m.fl.; ignorerar iOS/saknad support). */
 function hapticSuccess_() {
   try {
     if (navigator.vibrate) navigator.vibrate(35);
   } catch (_) { /* ignore */ }
 }
 
-/** Dubbelpuls när QR lästes men ingen led matchade. */
+/** Dubbelpuls när numret lästes men ingen led matchade. */
 function hapticError_() {
   try {
     if (navigator.vibrate) navigator.vibrate([40, 45, 40]);
@@ -3298,7 +3460,7 @@ function handleScannedRouteValue_(rawValue) {
   const parsed = parseQrRouteId_(rawValue);
   if (!parsed.ok) {
     hapticError_();
-    showToast("QR-koden var tom");
+    showToast("Inget lednummer kunde läsas");
     return false;
   }
   const route = routeByQrValue_(parsed.value);
@@ -3313,7 +3475,7 @@ function handleScannedRouteValue_(rawValue) {
 }
 
 function manualQrInput_() {
-  const raw = window.prompt("Ange QR-värdet (lednummer):", "");
+  const raw = window.prompt("Ange lednummer (1–99):", "");
   if (raw == null) return;
   const value = String(raw).trim();
   if (!value) return;
@@ -3324,23 +3486,22 @@ function manualQrInput_() {
 function qrScanTick_(timestamp) {
   if (!qrScanState_.open) return;
   const video = document.getElementById("qr-scan-video");
-  if (!video || !qrScanState_.detector || video.readyState < 2) {
+  if (!video || !qrScanState_.ocrReady || video.readyState < 2) {
     qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
     return;
   }
-  if (qrScanState_.detectBusy || (timestamp - qrScanState_.lastDetectAt) < 140) {
+  if (qrScanState_.detectBusy || (timestamp - qrScanState_.lastDetectAt) < OCR_TICK_MS_) {
     qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
     return;
   }
   qrScanState_.detectBusy = true;
   qrScanState_.lastDetectAt = timestamp;
-  qrScanState_.detector.detect(camZoomDetectSource_("qr-scan", video))
-    .then((codes) => {
-      const first = Array.isArray(codes) && codes.length ? codes[0] : null;
-      const value = first && first.rawValue ? String(first.rawValue).trim() : "";
-      if (!value) return;
+  recognizeRouteNumber_("qr-scan", video)
+    .then((value) => {
+      const confirmed = ocrConfirmValue_(qrScanState_, value);
+      if (!confirmed || !qrScanState_.open) return;
       closeQrScanner_();
-      handleScannedRouteValue_(value);
+      handleScannedRouteValue_(confirmed);
     })
     .catch(() => {
       // Ignore detect errors from noisy frames.
@@ -3584,12 +3745,8 @@ async function openQrScanner_() {
   if (isQrScannerOpen_()) return;
   if (isInventoryOpen_()) closeInventory_();
   if (isQuickInfoOpen_()) closeQuickInfo_();
-  if (!window.BarcodeDetector) {
-    showToast("QR-skanning stöds inte här — mata in kod manuellt");
-    return manualQrInput_();
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast("Kamera stöds inte i den här webbläsaren — mata in kod manuellt");
+  if (!canUseCameraScan_()) {
+    showToast("Kamera stöds inte i den här webbläsaren — mata in nummer manuellt");
     return manualQrInput_();
   }
   const overlay = document.getElementById("qr-scan-overlay");
@@ -3600,31 +3757,42 @@ async function openQrScanner_() {
   overlay.setAttribute("aria-hidden", "false");
   document.body.classList.add("qr-scan-open");
   qrScanState_.open = true;
-  setQrScanStatus_("Startar kamera…");
+  qrScanState_.ocrReady = false;
+  resetOcrPending_(qrScanState_);
+  setQrScanStatus_("Laddar sifferläsning…");
   ensureQrScanHistory_();
 
   try {
-    qrScanState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+    await ensureOcrWorker_();
+    if (!isQrScannerOpen_()) return;
+    qrScanState_.ocrReady = true;
   } catch (e) {
     closeQrScanner_();
-    showToast("QR-format stöds inte — mata in kod manuellt");
+    showToast("Sifferläsning kunde inte startas — mata in nummer manuellt");
     return manualQrInput_();
   }
 
   try {
+    setQrScanStatus_("Startar kamera…");
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
       audio: false
     });
+    if (!isQrScannerOpen_()) {
+      stream.getTracks().forEach((track) => {
+        try { track.stop(); } catch (err) { /* ignore */ }
+      });
+      return;
+    }
     qrScanState_.stream = stream;
     video.srcObject = stream;
     await video.play();
     initCamZoom_("qr-scan", stream, video);
-    setQrScanStatus_("Rikta kameran mot en QR-kod med lednummer.");
+    setQrScanStatus_("Håll lednumret (1–99) i ramen.");
     qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
   } catch (err) {
     closeQrScanner_();
-    showToast("Kunde inte starta kameran — mata in kod manuellt");
+    showToast("Kunde inte starta kameran — mata in nummer manuellt");
     return manualQrInput_();
   }
 }
@@ -3680,7 +3848,7 @@ function clearQuickInfoResult_() {
   const overlayEl = document.getElementById("quickinfo-overlay");
   const emptyMsg = overlayEl && overlayEl.classList.contains("manual-mode")
     ? "Mata in ett lednummer för att visa info."
-    : "Rikta kameran mot en QR-kod med lednummer.";
+    : "Rikta kameran mot lednumret (1–99).";
   if (host) host.innerHTML = `<div class="empty">${emptyMsg}</div>`;
   setQuickInfoEditEnabled_(false);
 }
@@ -3704,9 +3872,10 @@ function openQuickInfoShell_(opts) {
 
   stopQuickInfoLoop_();
   stopQuickInfoStream_();
-  quickInfoState_.detector = null;
+  quickInfoState_.ocrReady = false;
   quickInfoState_.detectBusy = false;
   quickInfoState_.lastDetectAt = 0;
+  resetOcrPending_(quickInfoState_);
 
   overlay.classList.add("open");
   overlay.setAttribute("aria-hidden", "false");
@@ -3725,10 +3894,11 @@ function closeQuickInfo_(fromPopstate) {
   const overlay = document.getElementById("quickinfo-overlay");
   stopQuickInfoLoop_();
   stopQuickInfoStream_();
-  quickInfoState_.detector = null;
+  quickInfoState_.ocrReady = false;
   quickInfoState_.open = false;
   quickInfoState_.detectBusy = false;
   quickInfoState_.lastDetectAt = 0;
+  resetOcrPending_(quickInfoState_);
   setQuickInfoManualMode_(false);
   if (overlay) {
     overlay.classList.remove("open");
@@ -3790,7 +3960,7 @@ function renderQuickInfoResult_(rawValue) {
     hapticError_();
     quickInfoState_.currentRouteNr = "";
     setQuickInfoEditEnabled_(false);
-    host.innerHTML = `<div class="empty">QR-koden var tom.</div>`;
+    host.innerHTML = `<div class="empty">Inget lednummer kunde läsas.</div>`;
     return;
   }
   const value = parsed.value;
@@ -3802,7 +3972,7 @@ function renderQuickInfoResult_(rawValue) {
     host.innerHTML = `
       <h4>Läste: ${escapeHtml_(value)}</h4>
       <div class="small" style="color:var(--muted);">Ingen led med detta nummer hittades.</div>
-      ${parsed.raw && parsed.raw !== value ? `<div class="small mt-2" style="color:var(--muted); word-break:break-all;">Rå QR: ${escapeHtml_(parsed.raw)}</div>` : ""}
+      ${parsed.raw && parsed.raw !== value ? `<div class="small mt-2" style="color:var(--muted); word-break:break-all;">Rå avläsning: ${escapeHtml_(parsed.raw)}</div>` : ""}
     `;
     return;
   }
@@ -3836,9 +4006,9 @@ function manualQuickInfoInput_() {
     setQuickInfoManualMode_(true);
     stopQuickInfoLoop_();
     stopQuickInfoStream_();
-    quickInfoState_.detector = null;
+    quickInfoState_.ocrReady = false;
   }
-  const raw = window.prompt("Ange QR-värdet (lednummer):", "");
+  const raw = window.prompt("Ange lednummer (1–99):", "");
   if (raw == null) return;
   const value = String(raw).trim();
   if (!value) return;
@@ -3849,23 +4019,22 @@ function manualQuickInfoInput_() {
 function quickInfoTick_(timestamp) {
   if (!quickInfoState_.open) return;
   const video = document.getElementById("quickinfo-video");
-  if (!video || !quickInfoState_.detector || video.readyState < 2) {
+  if (!video || !quickInfoState_.ocrReady || video.readyState < 2) {
     quickInfoState_.rafId = requestAnimationFrame(quickInfoTick_);
     return;
   }
-  if (quickInfoState_.detectBusy || (timestamp - quickInfoState_.lastDetectAt) < 140) {
+  if (quickInfoState_.detectBusy || (timestamp - quickInfoState_.lastDetectAt) < OCR_TICK_MS_) {
     quickInfoState_.rafId = requestAnimationFrame(quickInfoTick_);
     return;
   }
   quickInfoState_.detectBusy = true;
   quickInfoState_.lastDetectAt = timestamp;
-  quickInfoState_.detector.detect(camZoomDetectSource_("quickinfo", video))
-    .then((codes) => {
-      const first = Array.isArray(codes) && codes.length ? codes[0] : null;
-      const value = first && first.rawValue ? String(first.rawValue).trim() : "";
-      if (value && value !== quickInfoState_.lastRawValue) {
-        quickInfoState_.lastRawValue = value;
-        handleQuickInfoValue_(value);
+  recognizeRouteNumber_("quickinfo", video)
+    .then((value) => {
+      const confirmed = ocrConfirmValue_(quickInfoState_, value);
+      if (confirmed && confirmed !== quickInfoState_.lastRawValue) {
+        quickInfoState_.lastRawValue = confirmed;
+        handleQuickInfoValue_(confirmed);
       }
     })
     .catch(() => {
@@ -3906,31 +4075,31 @@ async function openQuickInfo_() {
   if (isInventoryOpen_()) closeInventory_();
   if (isQrScannerOpen_()) closeQrScanner_();
 
-  const canDetect = !!window.BarcodeDetector;
-  const canCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  if (!canDetect || !canCamera) {
+  const canCamera = canUseCameraScan_();
+  if (!canCamera) {
     openQuickInfoShell_({
       manual: true,
-      status: canDetect
-        ? "Kamera saknas — mata in lednummer."
-        : "QR-skanning stöds inte här — mata in lednummer."
+      status: "Kamera saknas — mata in lednummer."
     });
     return manualQuickInfoInput_();
   }
 
-  if (!openQuickInfoShell_({ manual: false, status: "Startar kamera…" })) return;
+  if (!openQuickInfoShell_({ manual: false, status: "Laddar sifferläsning…" })) return;
 
   try {
-    quickInfoState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+    await ensureOcrWorker_();
+    if (!isQuickInfoOpen_()) return;
+    quickInfoState_.ocrReady = true;
   } catch (e) {
     setQuickInfoManualMode_(true);
-    setQuickInfoStatus_("QR-format stöds inte — mata in lednummer.");
-    showToast("QR-format stöds inte");
+    setQuickInfoStatus_("Sifferläsning kunde inte startas — mata in lednummer.");
+    showToast("Sifferläsning stöds inte");
     return manualQuickInfoInput_();
   }
 
   const video = document.getElementById("quickinfo-video");
   try {
+    setQuickInfoStatus_("Startar kamera…");
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
       audio: false
@@ -3947,7 +4116,7 @@ async function openQuickInfo_() {
       await video.play();
     }
     initCamZoom_("quickinfo", stream, video);
-    setQuickInfoStatus_("Skannar löpande — håll QR-koden i ramen.");
+    setQuickInfoStatus_("Skannar löpande — håll lednumret (1–99) i ramen.");
     quickInfoState_.rafId = requestAnimationFrame(quickInfoTick_);
   } catch (err) {
     stopQuickInfoStream_();
@@ -3995,7 +4164,7 @@ function inventoryActionsHtml_(done) {
     return;
   }
   host.innerHTML = `
-    <button class="btn btn-ghost" type="button" onclick="manualInventoryInput_()">Mata in kod</button>
+    <button class="btn btn-ghost" type="button" onclick="manualInventoryInput_()">Mata in nummer</button>
     <button class="btn btn-accent" type="button" onclick="finishInventory_()">Avsluta inventering</button>`;
 }
 
@@ -4006,7 +4175,7 @@ function renderInventoryLog_() {
   const okCount = inventoryState_.scanned.filter((s) => s.kind === "ok").length;
   const extras = inventoryState_.scanned.filter((s) => s.kind !== "ok");
   if (!inventoryState_.scanned.length) {
-    host.innerHTML = `<div class="empty">Skanna QR på alla leder som sitter uppe. Registret har ${expected.length} ${expected.length === 1 ? "led" : "leder"} som ska vara uppsatta.</div>`;
+    host.innerHTML = `<div class="empty">Skanna lednummer på alla leder som sitter uppe. Registret har ${expected.length} ${expected.length === 1 ? "led" : "leder"} som ska vara uppsatta.</div>`;
     return;
   }
   const pills = inventoryState_.scanned.slice().reverse().map((s) => {
@@ -4062,6 +4231,7 @@ function resetInventorySession_() {
   inventoryState_.lastRawValue = "";
   inventoryState_.detectBusy = false;
   inventoryState_.lastDetectAt = 0;
+  resetOcrPending_(inventoryState_);
   const overlay = document.getElementById("inventory-overlay");
   if (overlay) overlay.classList.remove("inventory-done");
   setInventoryManualMode_(false);
@@ -4076,7 +4246,7 @@ function openInventoryShell_(opts) {
   if (!overlay || !video) return false;
   stopInventoryLoop_();
   stopInventoryStream_();
-  inventoryState_.detector = null;
+  inventoryState_.ocrReady = false;
   overlay.classList.add("open");
   overlay.setAttribute("aria-hidden", "false");
   document.body.classList.add("quickinfo-open");
@@ -4094,11 +4264,12 @@ function closeInventory_(fromPopstate) {
   const overlay = document.getElementById("inventory-overlay");
   stopInventoryLoop_();
   stopInventoryStream_();
-  inventoryState_.detector = null;
+  inventoryState_.ocrReady = false;
   inventoryState_.open = false;
   inventoryState_.done = false;
   inventoryState_.scanned = [];
   inventoryState_.lastRawValue = "";
+  resetOcrPending_(inventoryState_);
   setInventoryManualMode_(false);
   if (overlay) {
     overlay.classList.remove("open", "inventory-done");
@@ -4176,9 +4347,9 @@ function manualInventoryInput_() {
     setInventoryManualMode_(true);
     stopInventoryLoop_();
     stopInventoryStream_();
-    inventoryState_.detector = null;
+    inventoryState_.ocrReady = false;
   }
-  const raw = window.prompt("Ange QR-värdet (lednummer):", "");
+  const raw = window.prompt("Ange lednummer (1–99):", "");
   if (raw == null) return;
   const value = String(raw).trim();
   if (!value) return;
@@ -4189,23 +4360,22 @@ function manualInventoryInput_() {
 function inventoryTick_(timestamp) {
   if (!inventoryState_.open || inventoryState_.done) return;
   const video = document.getElementById("inventory-video");
-  if (!video || !inventoryState_.detector || video.readyState < 2) {
+  if (!video || !inventoryState_.ocrReady || video.readyState < 2) {
     inventoryState_.rafId = requestAnimationFrame(inventoryTick_);
     return;
   }
-  if (inventoryState_.detectBusy || (timestamp - inventoryState_.lastDetectAt) < 140) {
+  if (inventoryState_.detectBusy || (timestamp - inventoryState_.lastDetectAt) < OCR_TICK_MS_) {
     inventoryState_.rafId = requestAnimationFrame(inventoryTick_);
     return;
   }
   inventoryState_.detectBusy = true;
   inventoryState_.lastDetectAt = timestamp;
-  inventoryState_.detector.detect(camZoomDetectSource_("inventory", video))
-    .then((codes) => {
-      const first = Array.isArray(codes) && codes.length ? codes[0] : null;
-      const value = first && first.rawValue ? String(first.rawValue).trim() : "";
-      if (value && value !== inventoryState_.lastRawValue) {
-        inventoryState_.lastRawValue = value;
-        handleInventoryValue_(value);
+  recognizeRouteNumber_("inventory", video)
+    .then((value) => {
+      const confirmed = ocrConfirmValue_(inventoryState_, value);
+      if (confirmed && confirmed !== inventoryState_.lastRawValue) {
+        inventoryState_.lastRawValue = confirmed;
+        handleInventoryValue_(confirmed);
       }
     })
     .catch(() => {})
@@ -4249,7 +4419,7 @@ function finishInventory_() {
   if (!isInventoryOpen_()) return;
   stopInventoryLoop_();
   stopInventoryStream_();
-  inventoryState_.detector = null;
+  inventoryState_.ocrReady = false;
   inventoryState_.done = true;
   const overlay = document.getElementById("inventory-overlay");
   if (overlay) {
@@ -4273,37 +4443,39 @@ async function openInventory_() {
   if (isQuickInfoOpen_()) closeQuickInfo_();
   if (isQrScannerOpen_()) closeQrScanner_();
 
-  const canDetect = !!window.BarcodeDetector;
-  const canCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const canCamera = canUseCameraScan_();
   if (isInventoryOpen_()) {
     stopInventoryLoop_();
     stopInventoryStream_();
     resetInventorySession_();
-    setInventoryStatus_((!canDetect || !canCamera)
-      ? (canDetect ? "Kamera saknas — mata in lednummer." : "QR-skanning stöds inte här — mata in lednummer.")
-      : "Startar kamera…");
+    setInventoryStatus_(canCamera
+      ? "Laddar sifferläsning…"
+      : "Kamera saknas — mata in lednummer.");
   } else if (!openInventoryShell_({
-    manual: !canDetect || !canCamera,
-    status: (!canDetect || !canCamera)
-      ? (canDetect ? "Kamera saknas — mata in lednummer." : "QR-skanning stöds inte här — mata in lednummer.")
-      : "Startar kamera…"
+    manual: !canCamera,
+    status: canCamera
+      ? "Laddar sifferläsning…"
+      : "Kamera saknas — mata in lednummer."
   })) return;
 
-  if (!canDetect || !canCamera) {
+  if (!canCamera) {
     return manualInventoryInput_();
   }
 
   try {
-    inventoryState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+    await ensureOcrWorker_();
+    if (!isInventoryOpen_()) return;
+    inventoryState_.ocrReady = true;
   } catch (e) {
     setInventoryManualMode_(true);
-    setInventoryStatus_("QR-format stöds inte — mata in lednummer.");
-    showToast("QR-format stöds inte");
+    setInventoryStatus_("Sifferläsning kunde inte startas — mata in lednummer.");
+    showToast("Sifferläsning stöds inte");
     return manualInventoryInput_();
   }
 
   const video = document.getElementById("inventory-video");
   try {
+    setInventoryStatus_("Startar kamera…");
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
       audio: false
