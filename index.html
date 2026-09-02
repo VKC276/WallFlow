@@ -1724,8 +1724,6 @@ function demoRowAmount_(e) {
 function demoSummarize_(entries, settings) {
   const rows = entries || [];
   const mode = demoPayMode_(settings);
-  const includeTime = mode === "time" || mode === "both";
-  const includeProblems = mode === "problems" || mode === "both";
   let ledbyggHours = 0, ledbyggTimeAmount = 0, ledbyggProblemCount = 0, ledbyggProblemAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
   const byUser = {};
   function ensure(username, name) {
@@ -1749,17 +1747,13 @@ function demoSummarize_(entries, settings) {
       const count = Number(e.hours) || 0;
       ledbyggProblemCount += count;
       u.problemCount += count;
-      if (includeProblems) {
-        ledbyggProblemAmount += amt;
-        u.problemAmount += amt; u.ledbyggAmount += amt; u.amount += amt;
-      }
+      ledbyggProblemAmount += amt;
+      u.problemAmount += amt; u.ledbyggAmount += amt; u.amount += amt;
     } else {
       ledbyggHours += Number(e.hours) || 0;
       u.ledbyggHours += Number(e.hours) || 0;
-      if (includeTime) {
-        ledbyggTimeAmount += amt;
-        u.ledbyggTimeAmount += amt; u.ledbyggAmount += amt; u.amount += amt;
-      }
+      ledbyggTimeAmount += amt;
+      u.ledbyggTimeAmount += amt; u.ledbyggAmount += amt; u.amount += amt;
     }
   });
   const people = Object.keys(byUser).map((k) => {
@@ -1807,15 +1801,8 @@ function demoMonthFilter_(entries, yearMonth) {
 
 function demoCap_(store, username, settings) {
   const year = new Date().getFullYear();
-  const mode = demoPayMode_(settings);
-  const includeTime = mode === "time" || mode === "both";
-  const includeProblems = mode === "problems" || mode === "both";
   let total = (store.timeEntries || []).filter((e) => e.username === username && String(e.workDate).slice(0, 4) === String(year))
-    .reduce((s, e) => {
-      if (e.kind === "hallvard") return s + demoRowAmount_(e);
-      if (e.kind === "problem") return includeProblems ? s + demoRowAmount_(e) : s;
-      return includeTime ? s + demoRowAmount_(e) : s;
-    }, 0);
+    .reduce((s, e) => s + demoRowAmount_(e), 0);
   const max = Number(settings.maxYearAmount) || 0;
   const warn = Number(settings.warningYearAmount) || 0;
   let level = "ok";
@@ -6175,8 +6162,6 @@ function summaryFromEntries_(entries, base) {
     ledbyggPayMode: "time"
   }, base || {});
   const mode = demoPayMode_(s);
-  const includeTime = mode === "time" || mode === "both";
-  const includeProblems = mode === "problems" || mode === "both";
   const rows = entries || [];
   let ledbyggHours = 0, ledbyggTimeAmount = 0, ledbyggProblemCount = 0, ledbyggProblemAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
   rows.forEach((e) => {
@@ -6186,10 +6171,10 @@ function summaryFromEntries_(entries, base) {
       hallvardAmount += money;
     } else if (e.kind === "problem") {
       ledbyggProblemCount += Number(e.hours) || 0;
-      if (includeProblems) ledbyggProblemAmount += money;
+      ledbyggProblemAmount += money;
     } else {
       ledbyggHours += Number(e.hours) || 0;
-      if (includeTime) ledbyggTimeAmount += money;
+      ledbyggTimeAmount += money;
     }
   });
   const ledbyggAmount = ledbyggTimeAmount + ledbyggProblemAmount;
@@ -6207,12 +6192,10 @@ function summaryFromEntries_(entries, base) {
 }
 function timeTotalsHtml_(summary, title) {
   const s = summary || {};
-  const mode = demoPayMode_(s);
-  const showProblems = mode === "problems" || mode === "both";
   return `<div class="time-total">
     <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">${escapeHtml_(title || "Preliminärt belopp")}</div>
     <div class="time-total-row"><span>Ledbygg (${formatHours_(s.ledbyggHours)} t)</span><span class="num">${formatSek_(s.ledbyggTimeAmount != null ? s.ledbyggTimeAmount : 0)}</span></div>
-    ${showProblems ? `<div class="time-total-row"><span>Ombyggda problem (${Number(s.ledbyggProblemCount) || 0} st)</span><span class="num">${formatSek_(s.ledbyggProblemAmount)}</span></div>` : ""}
+    <div class="time-total-row"><span>Ombyggda problem (${Number(s.ledbyggProblemCount) || 0} st)</span><span class="num">${formatSek_(s.ledbyggProblemAmount)}</span></div>
     <div class="time-total-row"><span>Hallvärd (${formatHours_(s.hallvardShifts)} pass)</span><span class="num">${formatSek_(s.hallvardAmount)}</span></div>
     <div class="time-total-row grand"><span>Totalt</span><span class="num">${formatSek_(s.totalAmount)}</span></div>
   </div>`;
@@ -6451,17 +6434,16 @@ function renderTreasurerReport_(data) {
   const payMode = demoPayMode_((data && data.summary) || (data && data.settings) || {});
   const summary = summaryFromEntries_(entries, Object.assign({}, data.summary || {}, data.settings || {}, { minPayout, ledbyggPayMode: payMode }));
   const people = peopleFromEntries_(entries, minPayout);
-  const showProblems = payMode !== "time";
   const period = periodLabel_(fromDate, toDate);
   const empty = !entries.length;
   const peopleHtml = people.map((p) => `
     <tr>
       <td>${escapeHtml_(p.name || p.username)}</td>
       <td class="num">${formatHours_(p.ledbyggHours)} t</td>
-      ${showProblems ? `<td class="num">${Number(p.problemCount) || 0} st</td>` : ""}
+      <td class="num">${Number(p.problemCount) || 0} st</td>
       <td class="num">${formatHours_(p.hallvardShifts)} pass</td>
       <td class="num">${formatSek_(p.amount)}${p.belowMinPayout ? ` <span class="small" style="color:var(--muted);">(under lägsta ${formatSek_(minPayout)})</span>` : ""}</td>
-    </tr>`).join("") || `<tr><td colspan="${showProblems ? 5 : 4}" style="color:var(--muted);">Ingen inrapporterad tid.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="5" style="color:var(--muted);">Ingen inrapporterad tid.</td></tr>`;
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card time-no-print">
       <h3>Kassörsrapport</h3>
@@ -6481,7 +6463,7 @@ function renderTreasurerReport_(data) {
     <div class="admin-card">
       <h4>Per person</h4>
       <div class="table-responsive"><table class="time-table">
-        <thead><tr><th>Namn</th><th class="num">Ledbygg</th>${showProblems ? "<th class=\"num\">Problem</th>" : ""}<th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
+        <thead><tr><th>Namn</th><th class="num">Ledbygg</th><th class="num">Problem</th><th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
         <tbody>${peopleHtml}</tbody>
       </table></div>
       ${minPayout > 0 ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Lägsta utbetalning: ${formatSek_(minPayout)}. Personer under gränsen markeras.</p>` : ""}

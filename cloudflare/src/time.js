@@ -273,7 +273,6 @@ function mapEntryRow(row) {
 export async function yearCompensationForUser(env, username, year, settings) {
   const bounds = calendarYearBounds(year || stockholmYearNow());
   if (!bounds) return 0;
-  const mode = normalizeLedbyggPayMode(settings && settings.ledbyggPayMode);
   const { results } = await env.DB.prepare(
     `SELECT kind, hours, unit_amount
      FROM time_entries
@@ -282,11 +281,7 @@ export async function yearCompensationForUser(env, username, year, settings) {
   ).bind(username, bounds.start, bounds.endExclusive).all();
   let total = 0;
   for (const row of results || []) {
-    const amt = roundMoney(Number(row.hours || 0) * Number(row.unit_amount || 0));
-    if (row.kind === "hallvard") total += amt;
-    else if (row.kind === "problem") {
-      if (ledbyggPayIncludesProblems(mode)) total += amt;
-    } else if (ledbyggPayIncludesTime(mode)) total += amt;
+    total += roundMoney(Number(row.hours || 0) * Number(row.unit_amount || 0));
   }
   return roundMoney(total);
 }
@@ -337,8 +332,6 @@ export async function listEntriesForReport(env, fromDate, toDate) {
 export function summarizeEntries(entries, settings) {
   const rows = entries || [];
   const mode = normalizeLedbyggPayMode(settings && settings.ledbyggPayMode);
-  const includeTime = ledbyggPayIncludesTime(mode);
-  const includeProblems = ledbyggPayIncludesProblems(mode);
   let ledbyggHours = 0;
   let ledbyggTimeAmount = 0;
   let ledbyggProblemCount = 0;
@@ -379,21 +372,17 @@ export function summarizeEntries(entries, settings) {
       const count = Number(e.hours) || 0;
       ledbyggProblemCount += count;
       u.problemCount += count;
-      if (includeProblems) {
-        ledbyggProblemAmount += amt;
-        u.problemAmount += amt;
-        u.ledbyggAmount += amt;
-        u.amount += amt;
-      }
+      ledbyggProblemAmount += amt;
+      u.problemAmount += amt;
+      u.ledbyggAmount += amt;
+      u.amount += amt;
     } else {
       ledbyggHours += Number(e.hours) || 0;
       u.ledbyggHours += Number(e.hours) || 0;
-      if (includeTime) {
-        ledbyggTimeAmount += amt;
-        u.ledbyggTimeAmount += amt;
-        u.ledbyggAmount += amt;
-        u.amount += amt;
-      }
+      ledbyggTimeAmount += amt;
+      u.ledbyggTimeAmount += amt;
+      u.ledbyggAmount += amt;
+      u.amount += amt;
     }
   }
 
