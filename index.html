@@ -6208,11 +6208,10 @@ function summaryFromEntries_(entries, base) {
 function timeTotalsHtml_(summary, title) {
   const s = summary || {};
   const mode = demoPayMode_(s);
-  const showTime = mode === "time" || mode === "both";
   const showProblems = mode === "problems" || mode === "both";
   return `<div class="time-total">
     <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">${escapeHtml_(title || "Preliminärt belopp")}</div>
-    ${showTime ? `<div class="time-total-row"><span>Ledbygg tid (${formatHours_(s.ledbyggHours)} t)</span><span class="num">${formatSek_(s.ledbyggTimeAmount != null ? s.ledbyggTimeAmount : s.ledbyggAmount)}</span></div>` : ""}
+    <div class="time-total-row"><span>Ledbygg (${formatHours_(s.ledbyggHours)} t)</span><span class="num">${formatSek_(s.ledbyggTimeAmount != null ? s.ledbyggTimeAmount : 0)}</span></div>
     ${showProblems ? `<div class="time-total-row"><span>Ombyggda problem (${Number(s.ledbyggProblemCount) || 0} st)</span><span class="num">${formatSek_(s.ledbyggProblemAmount)}</span></div>` : ""}
     <div class="time-total-row"><span>Hallvärd (${formatHours_(s.hallvardShifts)} pass)</span><span class="num">${formatSek_(s.hallvardAmount)}</span></div>
     <div class="time-total-row grand"><span>Totalt</span><span class="num">${formatSek_(s.totalAmount)}</span></div>
@@ -6482,7 +6481,7 @@ function renderTreasurerReport_(data) {
     <div class="admin-card">
       <h4>Per person</h4>
       <div class="table-responsive"><table class="time-table">
-        <thead><tr><th>Namn</th><th class="num">Timmar</th>${showProblems ? "<th class=\"num\">Problem</th>" : ""}<th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
+        <thead><tr><th>Namn</th><th class="num">Ledbygg</th>${showProblems ? "<th class=\"num\">Problem</th>" : ""}<th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
         <tbody>${peopleHtml}</tbody>
       </table></div>
       ${minPayout > 0 ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Lägsta utbetalning: ${formatSek_(minPayout)}. Personer under gränsen markeras.</p>` : ""}
