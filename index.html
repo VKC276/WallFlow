@@ -1684,57 +1684,6 @@ function demoPayMode_(settings) {
   return "time";
 }
 
-function demoSplitLedbyggare_(raw) {
-  return String(raw || "").split(/\s*(?:,|;|\/|&|\+| och | and )\s*/i).map((x) => x.trim()).filter(Boolean);
-}
-
-function demoUserMatchesLedbyggare_(user, field) {
-  const names = demoSplitLedbyggare_(field).map((n) => n.toLowerCase());
-  const candidates = [user && user.name, user && user.username].map((s) => String(s || "").trim().toLowerCase()).filter(Boolean);
-  return candidates.some((c) => names.indexOf(c) >= 0);
-}
-
-function demoCountProblems_(store, yearMonthOrYear, usernameFilter) {
-  const settings = demoTimeSettings_(store);
-  const rate = Math.max(0, Number(settings.ledbyggProblemAmount) || 0);
-  const key = String(yearMonthOrYear || "");
-  const start = key.length === 4 ? key + "-01-01" : key.slice(0, 7) + "-01";
-  const end = key.length === 4 ? String(Number(key) + 1) + "-01-01" : (function () {
-    const y = Number(key.slice(0, 4));
-    const m = Number(key.slice(5, 7));
-    const nm = m === 12 ? 1 : m + 1;
-    const ny = m === 12 ? y + 1 : y;
-    return ny + "-" + String(nm).padStart(2, "0") + "-01";
-  })();
-  const filter = usernameFilter ? String(usernameFilter).toLowerCase() : "";
-  const byUser = {};
-  (store.users || []).forEach((u) => {
-    if (filter && String(u.username).toLowerCase() !== filter) return;
-    byUser[String(u.username).toLowerCase()] = { username: u.username, name: u.name || u.username, problemCount: 0, problemAmount: 0, routes: [] };
-  });
-  (store.routes || []).forEach((r) => {
-    if (isEjUppsattGrade_(r.Gradering)) return;
-    const d = String(r.Byggdatum || "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < start || d >= end) return;
-    (store.users || []).forEach((u) => {
-      if (filter && String(u.username).toLowerCase() !== filter) return;
-      if (!demoUserMatchesLedbyggare_(u, r.Ledbyggare)) return;
-      const bucket = byUser[String(u.username).toLowerCase()];
-      if (!bucket) return;
-      bucket.problemCount += 1;
-      bucket.problemAmount = Math.round(bucket.problemCount * rate * 100) / 100;
-      bucket.routes.push({ nr: r.Nr, workDate: d, ledbyggare: r.Ledbyggare });
-    });
-  });
-  const people = Object.keys(byUser).map((k) => byUser[k]).filter((p) => p.problemCount > 0);
-  return {
-    count: people.reduce((s, p) => s + p.problemCount, 0),
-    amount: Math.round(people.reduce((s, p) => s + p.problemAmount, 0) * 100) / 100,
-    people,
-    routes: filter ? ((people[0] && people[0].routes) || []) : people.reduce((acc, p) => acc.concat(p.routes || []), [])
-  };
-}
-
 function demoRowAmount_(e) {
   const direct = Number(e && e.amount);
   if (Number.isFinite(direct) && e && e.amount != null && e.amount !== "") {
@@ -1744,12 +1693,12 @@ function demoRowAmount_(e) {
   return Math.round((Number(e && e.hours) || 0) * unit * 100) / 100;
 }
 
-function demoSummarize_(entries, settings, problemStats) {
+function demoSummarize_(entries, settings) {
   const rows = entries || [];
   const mode = demoPayMode_(settings);
   const includeTime = mode === "time" || mode === "both";
   const includeProblems = mode === "problems" || mode === "both";
-  let ledbyggHours = 0, ledbyggTimeAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
+  let ledbyggHours = 0, ledbyggTimeAmount = 0, ledbyggProblemCount = 0, ledbyggProblemAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
   const byUser = {};
   function ensure(username, name) {
     const key = String(username || "").toLowerCase();
@@ -1768,6 +1717,14 @@ function demoSummarize_(entries, settings, problemStats) {
     if (e.kind === "hallvard") {
       hallvardShifts += Number(e.hours) || 0; hallvardAmount += amt;
       u.hallvardShifts += Number(e.hours) || 0; u.hallvardAmount += amt; u.amount += amt;
+    } else if (e.kind === "problem") {
+      const count = Number(e.hours) || 0;
+      ledbyggProblemCount += count;
+      u.problemCount += count;
+      if (includeProblems) {
+        ledbyggProblemAmount += amt;
+        u.problemAmount += amt; u.ledbyggAmount += amt; u.amount += amt;
+      }
     } else {
       ledbyggHours += Number(e.hours) || 0;
       u.ledbyggHours += Number(e.hours) || 0;
@@ -1777,18 +1734,6 @@ function demoSummarize_(entries, settings, problemStats) {
       }
     }
   });
-  let ledbyggProblemCount = 0, ledbyggProblemAmount = 0;
-  if (includeProblems && problemStats) {
-    ledbyggProblemCount = Number(problemStats.count) || 0;
-    ledbyggProblemAmount = Number(problemStats.amount) || 0;
-    (problemStats.people || []).forEach((p) => {
-      const u = ensure(p.username, p.name);
-      u.problemCount = Number(p.problemCount) || 0;
-      u.problemAmount = Number(p.problemAmount) || 0;
-      u.ledbyggAmount = Math.round((u.ledbyggAmount + u.problemAmount) * 100) / 100;
-      u.amount = Math.round((u.amount + u.problemAmount) * 100) / 100;
-    });
-  }
   const people = Object.keys(byUser).map((k) => {
     const u = byUser[k];
     const amount = Math.round(u.amount * 100) / 100;
@@ -1827,14 +1772,13 @@ function demoCap_(store, username, settings) {
   const year = new Date().getFullYear();
   const mode = demoPayMode_(settings);
   const includeTime = mode === "time" || mode === "both";
+  const includeProblems = mode === "problems" || mode === "both";
   let total = (store.timeEntries || []).filter((e) => e.username === username && String(e.workDate).slice(0, 4) === String(year))
     .reduce((s, e) => {
       if (e.kind === "hallvard") return s + demoRowAmount_(e);
+      if (e.kind === "problem") return includeProblems ? s + demoRowAmount_(e) : s;
       return includeTime ? s + demoRowAmount_(e) : s;
     }, 0);
-  if (mode === "problems" || mode === "both") {
-    total += demoCountProblems_(store, String(year), username).amount;
-  }
   const max = Number(settings.maxYearAmount) || 0;
   const warn = Number(settings.warningYearAmount) || 0;
   let level = "ok";
@@ -1858,12 +1802,12 @@ function demoTimeApi_(store, action, args) {
   const wallflow = ["superadmin", "admin", "scout"].indexOf(String(currentUser.role || "").toLowerCase()) >= 0;
   if (action === "getTimeApp") {
     const entries = demoMonthFilter_(store.timeEntries, yearMonth).filter((e) => e.username === currentUser.username);
-    const problems = demoCountProblems_(store, yearMonth, currentUser.username);
-    return { ok: true, yearMonth, settings, entries, problems: problems.routes, summary: demoSummarize_(entries, settings, problems), cap: demoCap_(store, currentUser.username, settings), flags: { wallflow, reportLedbygg: wallflow, reportHallvard: demoHasRole_("hallvard"), treasurer: String(currentUser.role) === "superadmin" || demoHasRole_("kassor"), timeAdmin: String(currentUser.role) === "superadmin" } };
+    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings), cap: demoCap_(store, currentUser.username, settings), flags: { wallflow, reportLedbygg: wallflow, reportHallvard: demoHasRole_("hallvard"), treasurer: String(currentUser.role) === "superadmin" || demoHasRole_("kassor"), timeAdmin: String(currentUser.role) === "superadmin" } };
   }
   if (action === "addTimeEntry") {
     const kind = String(payload.kind || "");
     if (kind === "ledbygg" && !wallflow) return { ok: false, error: "Saknar behörighet att rapportera ledbyggartid" };
+    if (kind === "problem" && !wallflow) return { ok: false, error: "Saknar behörighet att rapportera ombyggda problem" };
     if (kind === "hallvard" && !demoHasRole_("hallvard")) return { ok: false, error: "Saknar behörighet att rapportera hallvärdspass" };
     const workDate = String(payload.workDate || "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) return { ok: false, error: "Ogiltigt datum" };
@@ -1872,6 +1816,12 @@ function demoTimeApi_(store, action, args) {
       hours = payload.correction ? -1 : 1;
       description = String(payload.description || "").trim() || (payload.correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
       unitAmount = settings.hallvardShiftAmount;
+    } else if (kind === "problem") {
+      const routeNr = String(payload.routeNr != null ? payload.routeNr : payload.nr || "").trim();
+      if (!routeNr || routeNr.length > 20) return { ok: false, error: "Ange vilket problem (lednummer) som byggts om" };
+      hours = payload.correction ? -1 : 1;
+      description = String(payload.description || "").trim();
+      unitAmount = settings.ledbyggProblemAmount;
     } else {
       const clockHours = hoursFromClockTimes_(payload.startTime, payload.endTime);
       if (clockHours == null) return { ok: false, error: "Ange start- och sluttid" };
@@ -1888,6 +1838,7 @@ function demoTimeApi_(store, action, args) {
       kind, workDate, hours,
       startTime: kind === "ledbygg" ? String(payload.startTime || "").slice(0, 5) : "",
       endTime: kind === "ledbygg" ? String(payload.endTime || "").slice(0, 5) : "",
+      routeNr: kind === "problem" ? String(payload.routeNr || payload.nr || "").trim() : "",
       description, unitAmount,
       amount: Math.round(hours * unitAmount * 100) / 100,
       createdAt: new Date().toISOString(),
@@ -1903,8 +1854,7 @@ function demoTimeApi_(store, action, args) {
       const u = (store.users || []).find((x) => x.username === e.username);
       return Object.assign({}, e, { name: (u && u.name) || e.name || e.username, amount: demoRowAmount_(e) });
     });
-    const problems = demoCountProblems_(store, yearMonth);
-    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings, problems) };
+    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings) };
   }
   if (action === "deleteTimeEntry") {
     if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ta bort tidrader" };
@@ -2463,38 +2413,6 @@ function setTheme_(theme) {
   applyTheme_(t);
 }
 
-function isStandaloneDisplay_() {
-  try {
-    return window.matchMedia("(display-mode: standalone)").matches
-      || window.matchMedia("(display-mode: fullscreen)").matches
-      || window.navigator.standalone === true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function requestAppFullscreen_() {
-  if (isStandaloneDisplay_()) return;
-  const root = document.documentElement;
-  const fn = root.requestFullscreen || root.webkitRequestFullscreen;
-  if (!fn) return;
-  const opts = { navigationUI: "hide" };
-  try {
-    const p = fn.call(root, opts);
-    if (p && typeof p.catch === "function") p.catch(() => {});
-  } catch (_) { /* ignore */ }
-}
-
-function bindAppFullscreenRequest_() {
-  if (bindAppFullscreenRequest_._bound) return;
-  bindAppFullscreenRequest_._bound = true;
-  const once = () => {
-    document.removeEventListener("pointerdown", once, true);
-    requestAppFullscreen_();
-  };
-  document.addEventListener("pointerdown", once, true);
-}
-
 applyTheme_(getTheme_());
 function getCookie_(name) {
   const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()[\]\\/+^])/g, "\\$1") + "=([^;]*)"));
@@ -2788,7 +2706,6 @@ function normalizeRoute_(r) {
 function startAppBoot_() {
   if (startAppBoot_._started) return;
   startAppBoot_._started = true;
-  bindAppFullscreenRequest_();
   if (USE_DEMO) {
     var banner = document.getElementById("demo-banner");
     if (banner) banner.style.display = "block";
@@ -4693,7 +4610,6 @@ function checkLogin() {
       clearLoginTimeout_();
       // Håll kvar login-vyn i godkänd/laddar-läge tills appen visas
       setLoginFormBusy_(true, "accepted");
-      requestAppFullscreen_();
       bootAppData_();
     })
     .withFailureHandler(() => {
@@ -4817,7 +4733,7 @@ function renderAdminHome() {
     ${canPay ? `
     <div class="admin-card">
       <h3>Tid och arvode</h3>
-      <p class="small mb-3" style="color:var(--muted);">Timarvode, ersättning per ombyggt problem, hallvärdspass, lägsta utbetalning och tak.</p>
+      <p class="small mb-3" style="color:var(--muted);">Timarvode, självrapporterade ombyggda problem, hallvärdspass, lägsta utbetalning och tak.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="closeSettings(); openTimeTool('settings')">Arvode och gränser</button>
       </div>
@@ -6020,7 +5936,24 @@ function capBannerHtml_(cap) {
   return "";
 }
 function timeKindLabel_(kind) {
-  return kind === "hallvard" ? "Hallvärd" : "Ledbygg";
+  if (kind === "hallvard") return "Hallvärd";
+  if (kind === "problem") return "Ombyggt problem";
+  return "Ledbygg";
+}
+function timeProblemNr_(e) {
+  return String((e && (e.routeNr || (e.kind === "problem" ? e.startTime : ""))) || "").trim();
+}
+function timeProblemLabel_(e) {
+  const nr = timeProblemNr_(e);
+  const note = String((e && e.description) || "").trim();
+  const lead = nr ? ("Led " + nr) : "Ombyggt problem";
+  if (note && note.toLowerCase() !== lead.toLowerCase()) return lead + " · " + note;
+  return lead;
+}
+function timeExtentLabel_(e) {
+  if (e.kind === "hallvard") return formatHours_(e.hours) + " pass";
+  if (e.kind === "problem") return (Number(e.hours) || 0) + " st";
+  return formatClockRange_(e.startTime, e.endTime, e.hours);
 }
 function timeEntriesTableHtml_(entries, opts) {
   const showUser = !!(opts && opts.showUser);
@@ -6031,8 +5964,8 @@ function timeEntriesTableHtml_(entries, opts) {
       <td>${escapeHtml_(e.workDate || "")}</td>
       ${showUser ? `<td>${escapeHtml_(e.name || e.username || "")}</td>` : ""}
       <td><span class="time-kind">${escapeHtml_(timeKindLabel_(e.kind))}</span></td>
-      <td>${escapeHtml_(e.description || "")}</td>
-      <td class="num">${e.kind === "hallvard" ? formatHours_(e.hours) + " pass" : formatClockRange_(e.startTime, e.endTime, e.hours)}</td>
+      <td>${escapeHtml_(e.kind === "problem" ? timeProblemLabel_(e) : (e.description || ""))}</td>
+      <td class="num">${timeExtentLabel_(e)}</td>
       <td class="num">${formatSek_(e.amount)}</td>
       ${canDelete ? `<td class="time-no-print"><button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteTimeEntryRow_(${Number(e.id)})">Ta bort</button></td>` : ""}
     </tr>`;
@@ -6066,26 +5999,27 @@ function summaryFromEntries_(entries, base) {
   const includeTime = mode === "time" || mode === "both";
   const includeProblems = mode === "problems" || mode === "both";
   const rows = entries || [];
-  let ledbyggHours = 0, ledbyggTimeAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
+  let ledbyggHours = 0, ledbyggTimeAmount = 0, ledbyggProblemCount = 0, ledbyggProblemAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
   rows.forEach((e) => {
     const money = entryMoney_(e);
     if (e.kind === "hallvard") {
       hallvardShifts += Number(e.hours) || 0;
       hallvardAmount += money;
+    } else if (e.kind === "problem") {
+      ledbyggProblemCount += Number(e.hours) || 0;
+      if (includeProblems) ledbyggProblemAmount += money;
     } else {
       ledbyggHours += Number(e.hours) || 0;
       if (includeTime) ledbyggTimeAmount += money;
     }
   });
-  const problemCount = includeProblems ? (Number(s.ledbyggProblemCount) || 0) : 0;
-  const problemAmount = includeProblems ? (Number(s.ledbyggProblemAmount) || 0) : 0;
-  const ledbyggAmount = ledbyggTimeAmount + problemAmount;
+  const ledbyggAmount = ledbyggTimeAmount + ledbyggProblemAmount;
   return Object.assign({}, s, {
     ledbyggPayMode: mode,
     ledbyggHours,
     ledbyggTimeAmount,
-    ledbyggProblemCount: problemCount,
-    ledbyggProblemAmount: problemAmount,
+    ledbyggProblemCount,
+    ledbyggProblemAmount,
     ledbyggAmount,
     hallvardShifts,
     hallvardAmount,
@@ -6126,7 +6060,7 @@ function renderMyTime_(data) {
   const canHall = canReportHallvard_();
   const payMode = demoPayMode_((data && data.summary) || (data && data.settings) || {});
   const showLedTime = canLed && payMode !== "problems";
-  const both = showLedTime && canHall;
+  const showLedProblems = canLed && payMode !== "time";
   const today = escapeHtml_(currentYmd_());
   const ledForm = `<form onsubmit="submitTimeEntry_(event, 'ledbygg')">
         <div class="mb-3"><label class="form-label" for="te-led-date">Datum</label>
@@ -6164,49 +6098,52 @@ function renderMyTime_(data) {
         </label>
         <button class="btn btn-accent w-100" type="submit" id="te-hall-submit">Rapportera hallvärdspass</button>
       </form>`;
-  const problemNote = canLed && payMode !== "time"
-    ? `<div class="admin-card time-no-print">
-        <h3>Ersättning per ombyggt problem</h3>
-        <p class="small mb-0" style="color:var(--muted);">Ledbyggararvode räknas från leder du är angiven som ledbyggare på, med byggdatum i vald period. Ej uppsatta leder räknas inte. ${payMode === "both" ? "Tidrapportering räknas också." : "Tid rapporteras inte för arvode i den här modellen."}</p>
-      </div>`
-    : "";
-  let formsHtml = "";
+  const routeOptions = sortRoutes_((db.routes || []).filter((r) => String(r.Nr || "").trim())).map((r) =>
+    `<option value="${escapeHtml_(r.Nr)}">Led ${escapeHtml_(r.Nr)}${r.Gradering ? " · " + escapeHtml_(r.Gradering) : ""}</option>`
+  ).join("");
+  const problemForm = `<form onsubmit="submitTimeEntry_(event, 'problem')">
+        <p class="small mb-3" style="color:var(--muted);">Ange vilket problem du byggt om och vilket datum. En rad per led — kassör kan stämma av mot registret efteråt.</p>
+        <div class="mb-3"><label class="form-label" for="te-prob-date">Datum</label>
+          <input id="te-prob-date" type="date" class="form-control" value="${today}" required></div>
+        <div class="mb-3"><label class="form-label" for="te-prob-nr">Vilket problem</label>
+          <input id="te-prob-nr" class="form-control" list="te-prob-nrs" maxlength="20" placeholder="Lednummer, t.ex. 13 eller W1" required autocomplete="off">
+          <datalist id="te-prob-nrs">${routeOptions}</datalist>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="te-prob-desc">Anteckning (valfritt)</label>
+          <input id="te-prob-desc" type="text" class="form-control" maxlength="500" placeholder="t.ex. ny linje på samma nummer">
+        </div>
+        <label class="d-flex align-items-center gap-2 mb-3">
+          <input type="checkbox" id="te-prob-correction"> Minuspost (korrigering)
+        </label>
+        <button class="btn btn-accent w-100" type="submit" id="te-prob-submit">Rapportera ombyggt problem</button>
+      </form>`;
+  const cards = [];
   if (!canLed && !canHall) {
-    formsHtml = `<div class="admin-card time-no-print"><p class="small mb-0" style="color:var(--muted);">Du har kassörsbehörighet. Använd kassörsrapporten för utdrag.</p></div>`;
-  } else if (both) {
-    formsHtml = `${problemNote}<div class="admin-card time-no-print">
-      <h3>Två rapporteringssätt</h3>
-      <p class="small mb-0" style="color:var(--muted);">Du är både ledbyggare och hallvärd. Använd kortet som stämmer med det du gjort.</p>
-    </div>
-    <div class="admin-card time-no-print">
-      <h3>Ledbyggartid</h3>
+    cards.push(`<div class="admin-card time-no-print"><p class="small mb-0" style="color:var(--muted);">Du har kassörsbehörighet. Använd kassörsrapporten för utdrag.</p></div>`);
+  }
+  if (showLedTime) {
+    cards.push(`<div class="admin-card time-no-print">
+      <h3>Rapportera ledbyggartid</h3>
       <p class="small mb-3" style="color:var(--muted);">Välj datum samt start- och sluttid. Timmar räknas automatiskt. Felaktig rad rättas med minuspost.</p>
       ${ledForm}
-    </div>
-    <div class="admin-card time-no-print">
-      <h3>Hallvärdspass</h3>
-      ${hallForm}
-    </div>`;
-  } else if (showLedTime) {
-    formsHtml = `${problemNote}<div class="admin-card time-no-print">
-      <h3>Rapportera ledbyggartid</h3>
-      <p class="small mb-3" style="color:var(--muted);">Välj datum samt start- och sluttid. Timmar räknas automatiskt. Poster kan inte raderas — felaktig rad rättas med minuspost.</p>
-      ${ledForm}
-    </div>`;
-  } else if (canHall) {
-    formsHtml = `${problemNote}<div class="admin-card time-no-print">
+    </div>`);
+  }
+  if (showLedProblems) {
+    cards.push(`<div class="admin-card time-no-print">
+      <h3>Rapportera ombyggda problem</h3>
+      <p class="small mb-3" style="color:var(--muted);">Du anger själv vilket problem som byggts om och vilket datum. Felaktig rad rättas med minuspost.</p>
+      ${problemForm}
+    </div>`);
+  }
+  if (canHall) {
+    cards.push(`<div class="admin-card time-no-print">
       <h3>Rapportera hallvärdspass</h3>
       <p class="small mb-3" style="color:var(--muted);">Poster kan inte raderas. Felaktigt pass rättas med en minuspost.</p>
       ${hallForm}
-    </div>`;
-  } else {
-    formsHtml = problemNote;
+    </div>`);
   }
-  const problems = (data.problems || []);
-  const problemList = payMode !== "time"
-    ? `<div class="small mb-2" style="color:var(--muted);">${problems.length ? "Ombyggda problem i perioden:" : "Inga ombyggda problem kopplade till dig i vald period."}</div>
-       ${problems.length ? `<ul class="small mb-3">${problems.map((p) => `<li>Led ${escapeHtml_(p.nr)} · ${escapeHtml_(p.workDate || "")}</li>`).join("")}</ul>` : ""}`
-    : "";
+  const formsHtml = cards.join("");
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card time-no-print">
       ${timeMonthPickerHtml_()}
@@ -6215,7 +6152,6 @@ function renderMyTime_(data) {
     ${formsHtml}
     <div class="admin-card">
       <h3>${escapeHtml_(monthLabel_(data.yearMonth))}</h3>
-      ${problemList}
       ${timeEntriesTableHtml_(data.entries, { showUser: false, canDelete: false })}
       ${timeTotalsHtml_(summaryFromEntries_(data.entries, data.summary), "Preliminärt belopp för vald period")}
     </div>`;
@@ -6236,10 +6172,12 @@ function updateLedHoursPreview_() {
 function submitTimeEntry_(ev, kind) {
   ev.preventDefault();
   const isHall = kind === "hallvard";
-  const dateEl = document.getElementById(isHall ? "te-hall-date" : "te-led-date");
-  const descEl = document.getElementById(isHall ? "te-hall-desc" : "te-led-desc");
-  const corrEl = document.getElementById(isHall ? "te-hall-correction" : "te-led-correction");
-  const btn = document.getElementById(isHall ? "te-hall-submit" : "te-led-submit");
+  const isProblem = kind === "problem";
+  const dateEl = document.getElementById(isHall ? "te-hall-date" : (isProblem ? "te-prob-date" : "te-led-date"));
+  const descEl = document.getElementById(isHall ? "te-hall-desc" : (isProblem ? "te-prob-desc" : "te-led-desc"));
+  const corrEl = document.getElementById(isHall ? "te-hall-correction" : (isProblem ? "te-prob-correction" : "te-led-correction"));
+  const btn = document.getElementById(isHall ? "te-hall-submit" : (isProblem ? "te-prob-submit" : "te-led-submit"));
+  const saveLabel = isHall ? "Rapportera hallvärdspass" : (isProblem ? "Rapportera ombyggt problem" : "Rapportera ledbyggartid");
   const workDate = dateEl ? dateEl.value : "";
   const payload = {
     kind,
@@ -6247,14 +6185,16 @@ function submitTimeEntry_(ev, kind) {
     correction: !!(corrEl && corrEl.checked),
     description: descEl ? descEl.value : ""
   };
-  if (!isHall) {
+  if (isProblem) {
+    payload.routeNr = document.getElementById("te-prob-nr") ? document.getElementById("te-prob-nr").value : "";
+  } else if (!isHall) {
     payload.startTime = document.getElementById("te-led-start") ? document.getElementById("te-led-start").value : "";
     payload.endTime = document.getElementById("te-led-end") ? document.getElementById("te-led-end").value : "";
   }
   if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
   google.script.run
     .withSuccessHandler((res) => {
-      if (btn) { btn.disabled = false; btn.textContent = isHall ? "Rapportera hallvärdspass" : "Rapportera ledbyggartid"; }
+      if (btn) { btn.disabled = false; btn.textContent = saveLabel; }
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
       showToast("Sparat");
       const date = String(workDate || "").slice(0, 7);
@@ -6262,7 +6202,7 @@ function submitTimeEntry_(ev, kind) {
       loadMyTime_();
     })
     .withFailureHandler(() => {
-      if (btn) { btn.disabled = false; btn.textContent = isHall ? "Rapportera hallvärdspass" : "Rapportera ledbyggartid"; }
+      if (btn) { btn.disabled = false; btn.textContent = saveLabel; }
       showToast("Kunde inte spara");
     })
     .addTimeEntry(payload);
@@ -6293,12 +6233,14 @@ function peopleFromEntries_(entries, minPayout) {
         name: e.name || e.username,
         ledbyggHours: 0,
         hallvardShifts: 0,
+        problemCount: 0,
         amount: 0
       };
     }
     const u = byUser[key];
     const money = entryMoney_(e);
     if (e.kind === "hallvard") u.hallvardShifts += Number(e.hours) || 0;
+    else if (e.kind === "problem") u.problemCount += Number(e.hours) || 0;
     else u.ledbyggHours += Number(e.hours) || 0;
     u.amount += money;
   });
@@ -6378,7 +6320,7 @@ function renderTimeSettings_(s) {
     <div class="admin-card">
       <p class="admin-kicker">Administration · Tid och arvode</p>
       <h3>Arvode och gränser</h3>
-      <p class="small mb-3" style="color:var(--muted);">Gäller nya tidposter. Ombyggda problem räknas från leder i registret med byggdatum i perioden.</p>
+      <p class="small mb-3" style="color:var(--muted);">Gäller nya tidposter. Ombyggda problem rapporteras per led och datum så kassör kan stämma av mot registret efteråt.</p>
       <label class="form-label">Ledbyggarens ersättning bygger på</label>
       <div class="theme-toggle pay-mode-toggle mb-3">
         <button type="button" class="btn btn-ghost${mode === "time" ? " is-active" : ""}" data-pay-mode="time" onclick="setTimePayModeUi_('time')">Tid</button>
