@@ -1,6 +1,6 @@
 /** Tidrapportering: inställningar, rader, kassörsrapport. */
 
-import { todayStockholm, isEjUppsattGrade, readRoutes, readUsers } from "./db.js";
+import { todayStockholm } from "./db.js";
 import {
   allRolesOf,
   hasRole,
@@ -35,70 +35,11 @@ export function ledbyggPayIncludesProblems(mode) {
   return m === "problems" || m === "both";
 }
 
-export function splitLedbyggareNames(raw) {
-  return String(raw == null ? "" : raw)
-    .split(/\s*(?:,|;|\/|&|\+| och | and )\s*/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-export function userMatchesLedbyggare(user, ledbyggareField) {
-  const names = splitLedbyggareNames(ledbyggareField).map((n) => n.toLowerCase());
-  if (!names.length) return false;
-  const candidates = [user && user.name, user && user.username]
-    .map((s) => String(s || "").trim().toLowerCase())
-    .filter(Boolean);
-  return candidates.some((c) => names.includes(c));
-}
-
-export function countLedbyggProblems(routes, users, bounds, settings, usernameFilter) {
-  const rate = normalizeMoneyAmount(settings && settings.ledbyggProblemAmount);
-  const start = bounds && bounds.start;
-  const end = bounds && bounds.endExclusive;
-  const filter = usernameFilter ? String(usernameFilter).trim().toLowerCase() : "";
-  const byUser = new Map();
-  const ensure = (u) => {
-    const key = String(u.username || "").toLowerCase();
-    if (!byUser.has(key)) {
-      byUser.set(key, {
-        username: u.username,
-        name: u.name || u.username,
-        problemCount: 0,
-        problemAmount: 0,
-        routes: []
-      });
-    }
-    return byUser.get(key);
-  };
-  for (const r of routes || []) {
-    if (isEjUppsattGrade(r && r.Gradering)) continue;
-    const d = String(r && r.Byggdatum || "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-    if (start && d < start) continue;
-    if (end && d >= end) continue;
-    for (const u of users || []) {
-      if (filter && String(u.username || "").toLowerCase() !== filter) continue;
-      if (!userMatchesLedbyggare(u, r.Ledbyggare)) continue;
-      const bucket = ensure(u);
-      bucket.problemCount += 1;
-      bucket.problemAmount = roundMoney(bucket.problemCount * rate);
-      bucket.routes.push({
-        nr: String(r.Nr || ""),
-        workDate: d,
-        ledbyggare: String(r.Ledbyggare || "")
-      });
-    }
-  }
-  const people = [...byUser.values()];
-  return {
-    count: people.reduce((s, p) => s + p.problemCount, 0),
-    amount: roundMoney(people.reduce((s, p) => s + p.problemAmount, 0)),
-    people,
-    unitAmount: rate,
-    routes: filter
-      ? ((people[0] && people[0].routes) || [])
-      : people.flatMap((p) => p.routes || [])
-  };
+export function normalizeProblemCount(n) {
+  const v = Math.round(Number(n));
+  if (!Number.isFinite(v) || v === 0) return null;
+  if (Math.abs(v) > 200) return null;
+  return v;
 }
 
 export function canUseTimeTool(session) {
@@ -319,12 +260,9 @@ export async function yearCompensationForUser(env, username, year, settings) {
   for (const row of results || []) {
     const amt = roundMoney(Number(row.hours || 0) * Number(row.unit_amount || 0));
     if (row.kind === "hallvard") total += amt;
-    else if (ledbyggPayIncludesTime(mode)) total += amt;
-  }
-  if (ledbyggPayIncludesProblems(mode)) {
-    const [routes, users] = await Promise.all([readRoutes(env), readUsers(env)]);
-    const problems = countLedbyggProblems(routes, users, bounds, settings, username);
-    total += problems.amount;
+    else if (row.kind === "problem") {
+      if (ledbyggPayIncludesProblems(mode)) total += amt;
+    } else if (ledbyggPayIncludesTime(mode)) total += amt;
   }
   return roundMoney(total);
 }
@@ -371,13 +309,15 @@ export async function listEntriesForReport(env, yearMonth) {
   return (results || []).map(mapEntryRow);
 }
 
-export function summarizeEntries(entries, settings, problemStats) {
+export function summarizeEntries(entries, settings) {
   const rows = entries || [];
   const mode = normalizeLedbyggPayMode(settings && settings.ledbyggPayMode);
   const includeTime = ledbyggPayIncludesTime(mode);
   const includeProblems = ledbyggPayIncludesProblems(mode);
   let ledbyggHours = 0;
   let ledbyggTimeAmount = 0;
+  let ledbyggProblemCount = 0;
+  let ledbyggProblemAmount = 0;
   let hallvardShifts = 0;
   let hallvardAmount = 0;
   const byUser = new Map();
@@ -403,39 +343,32 @@ export function summarizeEntries(entries, settings, problemStats) {
 
   for (const e of rows) {
     const amt = rowAmount(e);
+    const u = ensureUser(e.username, e.name);
     if (e.kind === "hallvard") {
       hallvardShifts += Number(e.hours) || 0;
       hallvardAmount += amt;
-    } else {
-      ledbyggHours += Number(e.hours) || 0;
-      if (includeTime) ledbyggTimeAmount += amt;
-    }
-    const u = ensureUser(e.username, e.name);
-    if (e.kind === "hallvard") {
       u.hallvardShifts += Number(e.hours) || 0;
       u.hallvardAmount += amt;
       u.amount += amt;
+    } else if (e.kind === "problem") {
+      const count = Number(e.hours) || 0;
+      ledbyggProblemCount += count;
+      u.problemCount += count;
+      if (includeProblems) {
+        ledbyggProblemAmount += amt;
+        u.problemAmount += amt;
+        u.ledbyggAmount += amt;
+        u.amount += amt;
+      }
     } else {
+      ledbyggHours += Number(e.hours) || 0;
       u.ledbyggHours += Number(e.hours) || 0;
       if (includeTime) {
+        ledbyggTimeAmount += amt;
         u.ledbyggTimeAmount += amt;
         u.ledbyggAmount += amt;
         u.amount += amt;
       }
-    }
-  }
-
-  let ledbyggProblemCount = 0;
-  let ledbyggProblemAmount = 0;
-  if (includeProblems && problemStats) {
-    ledbyggProblemCount = Number(problemStats.count) || 0;
-    ledbyggProblemAmount = roundMoney(problemStats.amount);
-    for (const p of problemStats.people || []) {
-      const u = ensureUser(p.username, p.name);
-      u.problemCount = Number(p.problemCount) || 0;
-      u.problemAmount = roundMoney(p.problemAmount);
-      u.ledbyggAmount = roundMoney(u.ledbyggAmount + u.problemAmount);
-      u.amount = roundMoney(u.amount + u.problemAmount);
     }
   }
 
@@ -473,11 +406,11 @@ export function summarizeEntries(entries, settings, problemStats) {
 
 export async function addTimeEntry(env, session, payload) {
   const kind = String(payload && payload.kind || "").trim();
-  if (kind !== "ledbygg" && kind !== "hallvard") {
+  if (kind !== "ledbygg" && kind !== "hallvard" && kind !== "problem") {
     return { ok: false, error: "Ogiltig typ" };
   }
-  if (kind === "ledbygg" && !canReportLedbygg(session)) {
-    return { ok: false, error: "Saknar behörighet att rapportera ledbyggartid" };
+  if ((kind === "ledbygg" || kind === "problem") && !canReportLedbygg(session)) {
+    return { ok: false, error: "Saknar behörighet att rapportera ledbygg" };
   }
   if (kind === "hallvard" && !canReportHallvard(session)) {
     return { ok: false, error: "Saknar behörighet att rapportera hallvärdspass" };
@@ -498,6 +431,14 @@ export async function addTimeEntry(env, session, payload) {
     hours = correction ? -1 : 1;
     description = String(payload && payload.description || "").trim() || (correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
     unitAmount = settings.hallvardShiftAmount;
+  } else if (kind === "problem") {
+    let count = normalizeProblemCount(payload && payload.count != null ? payload.count : payload.hours);
+    if (count == null) return { ok: false, error: "Ange hur många problem som byggts (1–200)" };
+    if (payload && payload.correction) count = -Math.abs(count);
+    hours = count;
+    description = String(payload && payload.description || "").trim() || (count < 0 ? "Korrigering ombyggda problem" : "Ombyggda problem");
+    if (description.length > 500) return { ok: false, error: "Beskrivningen är för lång (max 500 tecken)" };
+    unitAmount = settings.ledbyggProblemAmount;
   } else {
     const clock = hoursFromClockTimes(payload && payload.startTime, payload && payload.endTime);
     if (!clock.ok) return { ok: false, error: clock.error };

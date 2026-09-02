@@ -38,7 +38,7 @@ CREATE TABLE users (
 CREATE TABLE time_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL COLLATE NOCASE,
-  kind TEXT NOT NULL CHECK (kind IN ('ledbygg', 'hallvard')),
+  kind TEXT NOT NULL CHECK (kind IN ('ledbygg', 'hallvard', 'problem')),
   work_date TEXT NOT NULL,
   hours REAL NOT NULL DEFAULT 0,
   start_time TEXT NOT NULL DEFAULT '',

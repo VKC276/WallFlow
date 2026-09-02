@@ -9,8 +9,8 @@
     "deploy": "wrangler deploy",
     "db:schema:local": "wrangler d1 execute wallflow --local --file=schema.sql",
     "db:schema:remote": "wrangler d1 execute wallflow --remote --file=schema.sql",
-    "db:migrate:local": "wrangler d1 execute wallflow --local --file=migrations/0001_time_reporting.sql && wrangler d1 execute wallflow --local --file=migrations/0002_time_clock.sql",
-    "db:migrate:remote": "wrangler d1 execute wallflow --remote --file=migrations/0001_time_reporting.sql && wrangler d1 execute wallflow --remote --file=migrations/0002_time_clock.sql",
+    "db:migrate:local": "wrangler d1 execute wallflow --local --file=migrations/0001_time_reporting.sql && wrangler d1 execute wallflow --local --file=migrations/0002_time_clock.sql && wrangler d1 execute wallflow --local --file=migrations/0003_time_problem_kind.sql",
+    "db:migrate:remote": "wrangler d1 execute wallflow --remote --file=migrations/0001_time_reporting.sql && wrangler d1 execute wallflow --remote --file=migrations/0002_time_clock.sql && wrangler d1 execute wallflow --remote --file=migrations/0003_time_problem_kind.sql",
     "test:api": "node scripts/smoke-api.mjs"
   },
   "devDependencies": {
