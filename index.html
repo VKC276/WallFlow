@@ -170,7 +170,9 @@
     @keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
     @keyframes fadeSlide { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 
-    #app-public { display: none; flex-direction: column; height: 100%; min-height: 100dvh; position: relative; }
+    #app-chrome { display: none; flex-direction: column; height: 100%; min-height: 100dvh; position: relative; }
+    #app-chrome.ready { display: flex; }
+    #app-public { display: none; flex-direction: column; flex: 1; min-height: 0; position: relative; }
     .topbar {
       position: sticky; top: 0; z-index: 30;
       padding: calc(12px + var(--safe-top)) 16px 10px;
@@ -192,6 +194,8 @@
     }
     .top-brand {
       grid-area: brand;
+      border: 0; background: transparent; color: inherit; padding: 0; margin: 0;
+      text-align: left; cursor: pointer;
       font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.03em;
     }
     .top-brand span { color: var(--accent); }
@@ -541,13 +545,29 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #login-panel, #app-admin, #app-time { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
+    #app-time { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
     #login-panel.show, #app-admin.show, #app-time.show { display: flex; }
+    body.time-open .filters-block,
+    body.time-open .search-toggle,
+    body.time-open .search-wrap,
+    body.no-routes .filters-block,
+    body.no-routes .search-toggle,
+    body.no-routes .search-wrap { display: none !important; }
+    body.time-open .topbar,
+    body.no-routes .topbar {
+      grid-template-areas: "brand actions";
+    }
+    .time-view-tabs {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      padding: 12px 16px 0;
+    }
+    .time-view-tabs:empty { display: none; }
     #app-admin { z-index: 85; }
     .account-chip {
       position: relative;
@@ -620,8 +640,8 @@
     .time-kind { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
     .admin-shell.wide { max-width: 960px; }
     @media print {
-      #loading-screen, #app-public, #login-panel, #app-admin, .toast-wrap, .time-no-print { display: none !important; }
-      #app-time { display: flex !important; position: static; background: #fff; color: #111; }
+      #loading-screen, #app-public, #login-panel, #app-admin, .toast-wrap, .time-no-print, #app-chrome .topbar { display: none !important; }
+      #app-chrome, #app-time { display: flex !important; position: static; background: #fff; color: #111; }
       #app-time .admin-shell { max-width: none; padding: 0; }
       .time-print-only { display: block !important; }
     }
@@ -1344,9 +1364,9 @@
     <div class="loader-dot" aria-hidden="true"></div>
   </div>
 
-  <div id="app-public">
+  <div id="app-chrome">
     <div class="topbar" id="topbar">
-      <div class="top-brand">Wall<span>Flow</span></div>
+      <button class="top-brand" id="top-brand-btn" type="button" onclick="onTopBrandClick_()">Wall<span>Flow</span></button>
       <div class="top-actions">
         <button class="icon-btn search-toggle" id="search-toggle" type="button" aria-label="Sök" aria-expanded="false" aria-controls="search-wrap" title="Sök" onclick="toggleSearchPanel_()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -1378,6 +1398,7 @@
       </div>
     </div>
 
+    <div id="app-public">
     <div id="demo-banner" class="demo-banner" style="display:none;">
       Demoläge — koppla GAS_API_URL för live-data från Google Sheet.
     </div>
@@ -1397,6 +1418,12 @@
         <span>Lista</span>
       </div>
     </nav>
+    </div>
+
+    <div id="app-time">
+      <div class="time-view-tabs time-no-print" id="time-view-tabs"></div>
+      <div class="admin-shell wide" id="time-main"></div>
+    </div>
   </div>
 
   <div id="panel-backdrop" class="panel-backdrop" aria-hidden="true" onclick="onPanelBackdropClick_(event)"></div>
@@ -1539,14 +1566,6 @@
       </div>
     </div>
     <div class="admin-shell" id="admin-main"></div>
-  </div>
-
-  <div id="app-time">
-    <div class="p-3 d-flex justify-content-between align-items-center border-bottom time-no-print" style="border-color: var(--line) !important;">
-      <div class="small text-uppercase" style="color:var(--muted); letter-spacing:.08em;">Rapportering</div>
-      <div class="d-flex gap-2 flex-wrap justify-content-end" id="time-header-actions"></div>
-    </div>
-    <div class="admin-shell wide" id="time-main"></div>
   </div>
 
   <div class="toast-wrap"><div id="toast" class="toast-msg"></div></div>
@@ -2472,6 +2491,7 @@ function restoreSession_() {
   }
 }
 function showLoginGate_() {
+  hideAppChrome_();
   document.getElementById("app-public").classList.remove("ready");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-admin").classList.remove("show");
@@ -2495,11 +2515,29 @@ function currentDisplayName_() {
   return String(currentUser && currentUser.name || "").trim();
 }
 
+function hideAppChrome_() {
+  const chrome = document.getElementById("app-chrome");
+  if (chrome) chrome.classList.remove("ready");
+  document.body.classList.remove("time-open", "no-routes");
+}
+function showAppChrome_() {
+  const chrome = document.getElementById("app-chrome");
+  if (chrome) chrome.classList.add("ready");
+  document.body.classList.toggle("no-routes", !hasWallflowAccess_());
+  document.body.classList.toggle("time-open", document.getElementById("app-time").classList.contains("show"));
+  renderAccountMenu_();
+}
+function onTopBrandClick_() {
+  closeAccountMenu_();
+  if (!currentUser.authorized) return;
+  if (hasWallflowAccess_()) closeTimeTool();
+}
 function showAppShell_() {
   loginInFlight_ = false;
   clearLoginTimeout_();
   setLoginFormBusy_(false);
   document.getElementById("login-panel").classList.remove("show");
+  showAppChrome_();
   if (!hasWallflowAccess_()) {
     document.getElementById("app-public").classList.remove("ready");
     if (currentUser.firstLogin) openSettings();
@@ -2507,8 +2545,8 @@ function showAppShell_() {
     return;
   }
   document.getElementById("app-time").classList.remove("show");
+  document.body.classList.remove("time-open");
   document.getElementById("app-public").classList.add("ready");
-  renderAccountMenu_();
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
 }
@@ -4740,7 +4778,7 @@ function renderAdminHome() {
       <h3>Tid och arvode</h3>
       <p class="small mb-3" style="color:var(--muted);">Timarvode, självrapporterade ombyggda problem, hallvärdspass, lägsta utbetalning och tak.</p>
       <div class="admin-actions">
-        <button class="btn btn-ghost" type="button" onclick="closeSettings(); openTimeTool('settings')">Arvode och gränser</button>
+        <button class="btn btn-ghost" type="button" onclick="renderTimeSettingsFromAdmin_()">Arvode och gränser</button>
       </div>
     </div>` : ""}`;
 }
@@ -5886,35 +5924,45 @@ function monthLabel_(ym) {
 }
 function closeTimeTool() {
   document.getElementById("app-time").classList.remove("show");
-  if (hasWallflowAccess_()) document.getElementById("app-public").classList.add("ready");
+  document.body.classList.remove("time-open");
+  if (hasWallflowAccess_()) {
+    document.getElementById("app-public").classList.add("ready");
+    showAppChrome_();
+  }
 }
 function openTimeTool(view) {
   if (!currentUser.authorized) return showLoginGate_();
+  if (view === "settings") {
+    renderTimeSettingsFromAdmin_();
+    return;
+  }
   if (!timeToolState_.yearMonth) timeToolState_.yearMonth = currentYearMonth_();
   if (view) timeToolState_.view = view;
   else if (!canReportLedbygg_() && !canReportHallvard_() && canTreasurer_()) timeToolState_.view = "treasurer";
   else if (timeToolState_.view === "treasurer" && !canTreasurer_()) timeToolState_.view = "mine";
-  else if (timeToolState_.view === "settings" && !canTimeAdmin_()) timeToolState_.view = "mine";
+  else if (timeToolState_.view === "settings") timeToolState_.view = "mine";
   document.getElementById("app-admin").classList.remove("show");
-  if (!hasWallflowAccess_()) document.getElementById("app-public").classList.remove("ready");
+  document.getElementById("app-public").classList.remove("ready");
+  if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
-  renderTimeHeader_();
+  showAppChrome_();
+  renderTimeViewTabs_();
   if (timeToolState_.view === "treasurer") loadTreasurerReport_();
-  else if (timeToolState_.view === "settings") loadTimeSettingsView_();
   else loadMyTime_();
 }
-function renderTimeHeader_() {
-  const host = document.getElementById("time-header-actions");
+function renderTimeViewTabs_() {
+  const host = document.getElementById("time-view-tabs");
   if (!host) return;
-  const btns = [];
-  if (hasWallflowAccess_()) btns.push(`<button class="btn btn-sm btn-ghost" type="button" onclick="closeTimeTool()">Till leder</button>`);
-  if (canTreasurer_()) btns.push(`<button class="btn btn-sm ${timeToolState_.view === "treasurer" ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('treasurer')">Kassörsrapport</button>`);
-  if (canTimeAdmin_()) btns.push(`<button class="btn btn-sm ${timeToolState_.view === "settings" ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('settings')">Arvode</button>`);
-  if (canReportLedbygg_() || canReportHallvard_()) btns.push(`<button class="btn btn-sm ${timeToolState_.view === "mine" ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('mine')">Min tid</button>`);
-  if (canOpenAdministration_()) btns.push(`<button class="btn btn-sm btn-ghost" type="button" onclick="openAdministration()">Administration</button>`);
-  btns.push(`<button class="btn btn-sm btn-ghost" type="button" onclick="openSettings()">Konto</button>`);
-  btns.push(`<button class="btn btn-sm btn-outline-danger" type="button" onclick="logoutAdmin()">Logga ut</button>`);
-  host.innerHTML = btns.join("");
+  const tabs = [];
+  if (canReportLedbygg_() || canReportHallvard_()) tabs.push({ id: "mine", label: "Min tid" });
+  if (canTreasurer_()) tabs.push({ id: "treasurer", label: "Kassörsrapport" });
+  if (tabs.length < 2) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = tabs.map((t) =>
+    `<button class="btn btn-sm ${timeToolState_.view === t.id ? "btn-accent" : "btn-ghost"}" type="button" onclick="openTimeTool('${t.id}')">${t.label}</button>`
+  ).join("");
 }
 function timeMonthPickerHtml_() {
   return `<label class="form-label" for="time-month">Period</label>
@@ -6331,7 +6379,13 @@ function deleteTimeEntryRow_(id) {
     .deleteTimeEntry(id);
 }
 function loadTimeSettingsView_() {
-  const main = document.getElementById("time-main");
+  renderTimeSettingsFromAdmin_();
+}
+function renderTimeSettingsFromAdmin_() {
+  if (!canTimeAdmin_()) return showToast("Saknar behörighet");
+  setAdminChrome_("Administration");
+  document.getElementById("app-admin").classList.add("show");
+  const main = document.getElementById("admin-main");
   main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
   google.script.run
     .withSuccessHandler((res) => {
@@ -6341,12 +6395,13 @@ function loadTimeSettingsView_() {
       }
       renderTimeSettings_(res.settings || {});
     })
-    .getTimeApp({ yearMonth: timeToolState_.yearMonth });
+    .getTimeApp({ yearMonth: timeToolState_.yearMonth || currentYearMonth_() });
 }
 function renderTimeSettings_(s) {
   const mode = demoPayMode_(s);
-  document.getElementById("time-main").innerHTML = `
+  document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
       <p class="admin-kicker">Administration · Tid och arvode</p>
       <h3>Arvode och gränser</h3>
       <p class="small mb-3" style="color:var(--muted);">Gäller nya tidposter. Ombyggda problem rapporteras per led och datum så kassör kan stämma av mot registret efteråt.</p>
