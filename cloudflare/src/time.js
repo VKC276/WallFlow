@@ -14,9 +14,12 @@ export const TIME_SETTING_KEYS = {
   ledbyggProblemAmount: "timeLedbyggProblemAmount",
   minPayout: "timeMinPayout",
   hallvardShiftAmount: "timeHallvardShiftAmount",
+  hallvardExtraAmount: "timeHallvardExtraAmount",
   maxYearAmount: "timeMaxYearAmount",
   warningYearAmount: "timeWarningYearAmount"
 };
+
+export const HALLVARD_EXTRA_FLAG = "tillägg";
 
 export function normalizeLedbyggPayMode(raw) {
   const s = String(raw == null ? "" : raw).trim().toLowerCase();
@@ -184,6 +187,7 @@ export async function readTimeSettings(env) {
     ledbyggProblemAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.ledbyggProblemAmount] || 0),
     minPayout: normalizeMoneyAmount(map[TIME_SETTING_KEYS.minPayout] || 0),
     hallvardShiftAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.hallvardShiftAmount] || 0),
+    hallvardExtraAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.hallvardExtraAmount] || 0),
     maxYearAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.maxYearAmount] || 0),
     warningYearAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.warningYearAmount] || 0)
   };
@@ -196,6 +200,7 @@ export async function saveTimeSettings(env, payload) {
     ledbyggProblemAmount: normalizeMoneyAmount(payload && payload.ledbyggProblemAmount),
     minPayout: normalizeMoneyAmount(payload && payload.minPayout),
     hallvardShiftAmount: normalizeMoneyAmount(payload && payload.hallvardShiftAmount),
+    hallvardExtraAmount: normalizeMoneyAmount(payload && payload.hallvardExtraAmount),
     maxYearAmount: normalizeMoneyAmount(payload && payload.maxYearAmount),
     warningYearAmount: normalizeMoneyAmount(payload && payload.warningYearAmount)
   };
@@ -208,6 +213,7 @@ export async function saveTimeSettings(env, payload) {
     [TIME_SETTING_KEYS.ledbyggProblemAmount, next.ledbyggProblemAmount],
     [TIME_SETTING_KEYS.minPayout, next.minPayout],
     [TIME_SETTING_KEYS.hallvardShiftAmount, next.hallvardShiftAmount],
+    [TIME_SETTING_KEYS.hallvardExtraAmount, next.hallvardExtraAmount],
     [TIME_SETTING_KEYS.maxYearAmount, next.maxYearAmount],
     [TIME_SETTING_KEYS.warningYearAmount, next.warningYearAmount]
   ];
@@ -225,6 +231,7 @@ function mapEntryRow(row) {
   const kind = String(row.kind || "");
   const startRaw = String(row.start_time || "");
   const isProblem = kind === "problem";
+  const extra = kind === "hallvard" && startRaw.toLowerCase() === HALLVARD_EXTRA_FLAG;
   return {
     id: Number(row.id),
     username: String(row.username || ""),
@@ -232,9 +239,10 @@ function mapEntryRow(row) {
     kind,
     workDate: String(row.work_date || ""),
     hours,
-    startTime: isProblem ? "" : startRaw,
+    startTime: isProblem || extra ? "" : startRaw,
     endTime: isProblem ? "" : String(row.end_time || ""),
     routeNr: isProblem ? startRaw : "",
+    extra,
     description: String(row.description || ""),
     unitAmount: unit,
     amount: roundMoney(hours * unit),
@@ -425,9 +433,12 @@ export async function addTimeEntry(env, session, payload) {
 
   if (kind === "hallvard") {
     const correction = !!(payload && payload.correction);
+    const extra = !!(payload && (payload.extra || payload.tillägg || payload.tillagg));
     hours = correction ? -1 : 1;
     description = String(payload && payload.description || "").trim() || (correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
-    unitAmount = settings.hallvardShiftAmount;
+    if (description.length > 500) return { ok: false, error: "Beskrivningen är för lång (max 500 tecken)" };
+    unitAmount = settings.hallvardShiftAmount + (extra ? settings.hallvardExtraAmount : 0);
+    startTime = extra ? HALLVARD_EXTRA_FLAG : "";
   } else if (kind === "problem") {
     const routeNr = String(payload && (payload.routeNr != null ? payload.routeNr : payload.nr) || "").trim();
     if (!routeNr || routeNr.length > 20) return { ok: false, error: "Ange vilket problem (lednummer) som byggts om" };
@@ -475,9 +486,10 @@ export async function addTimeEntry(env, session, payload) {
       kind,
       workDate,
       hours,
-      startTime: kind === "problem" ? "" : startTime,
+      startTime: kind === "problem" || kind === "hallvard" ? "" : startTime,
       endTime,
       routeNr: kind === "problem" ? startTime : "",
+      extra: kind === "hallvard" && startTime === HALLVARD_EXTRA_FLAG,
       description,
       unitAmount,
       amount: roundMoney(hours * unitAmount),

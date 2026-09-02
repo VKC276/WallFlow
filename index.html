@@ -1641,7 +1641,7 @@ function seedDemoDb_() {
       { Nr: "W2", Gradering: "Wildcard", DagsAttByggaOm: "Ja", Ledbyggare: "Jesper", Byggdatum: "2026-05-10", Slutdatum: "2026-06-10", Anteckningar: "", Bild: "" }
     ],
     users: [{ username: "admin", name: "Admin", role: "superadmin", extraRoles: [], password: "wallflow", FirstLogin: false }],
-    timeSettings: { ledbyggHourlyRate: 150, ledbyggPayMode: "time", ledbyggProblemAmount: 80, minPayout: 500, hallvardShiftAmount: 200, maxYearAmount: 5000, warningYearAmount: 4000 },
+    timeSettings: { ledbyggHourlyRate: 150, ledbyggPayMode: "time", ledbyggProblemAmount: 80, minPayout: 500, hallvardShiftAmount: 200, hallvardExtraAmount: 100, maxYearAmount: 5000, warningYearAmount: 4000 },
     timeEntries: [],
     timeEntrySeq: 1
   };
@@ -1673,6 +1673,7 @@ function demoTimeSettings_(store) {
     ledbyggProblemAmount: 0,
     minPayout: 0,
     hallvardShiftAmount: 0,
+    hallvardExtraAmount: 0,
     maxYearAmount: 0,
     warningYearAmount: 0
   }, store.timeSettings || {});
@@ -1811,11 +1812,13 @@ function demoTimeApi_(store, action, args) {
     if (kind === "hallvard" && !demoHasRole_("hallvard")) return { ok: false, error: "Saknar behörighet att rapportera hallvärdspass" };
     const workDate = String(payload.workDate || "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate)) return { ok: false, error: "Ogiltigt datum" };
-    let hours, description, unitAmount;
+    let hours, description, unitAmount, extraFlag = false;
     if (kind === "hallvard") {
+      const extra = !!(payload.extra || payload.tillägg || payload.tillagg);
       hours = payload.correction ? -1 : 1;
       description = String(payload.description || "").trim() || (payload.correction ? "Korrigering hallvärdspass" : "Hallvärdspass");
-      unitAmount = settings.hallvardShiftAmount;
+      unitAmount = (Number(settings.hallvardShiftAmount) || 0) + (extra ? (Number(settings.hallvardExtraAmount) || 0) : 0);
+      extraFlag = extra;
     } else if (kind === "problem") {
       const routeNr = String(payload.routeNr != null ? payload.routeNr : payload.nr || "").trim();
       if (!routeNr || routeNr.length > 20) return { ok: false, error: "Ange vilket problem (lednummer) som byggts om" };
@@ -1839,6 +1842,7 @@ function demoTimeApi_(store, action, args) {
       startTime: kind === "ledbygg" ? String(payload.startTime || "").slice(0, 5) : "",
       endTime: kind === "ledbygg" ? String(payload.endTime || "").slice(0, 5) : "",
       routeNr: kind === "problem" ? String(payload.routeNr || payload.nr || "").trim() : "",
+      extra: kind === "hallvard" ? extraFlag : false,
       description, unitAmount,
       amount: Math.round(hours * unitAmount * 100) / 100,
       createdAt: new Date().toISOString(),
@@ -1873,6 +1877,7 @@ function demoTimeApi_(store, action, args) {
       ledbyggProblemAmount: Math.max(0, Number(payload.ledbyggProblemAmount) || 0),
       minPayout: Math.max(0, Number(payload.minPayout) || 0),
       hallvardShiftAmount: Math.max(0, Number(payload.hallvardShiftAmount) || 0),
+      hallvardExtraAmount: Math.max(0, Number(payload.hallvardExtraAmount) || 0),
       maxYearAmount: Math.max(0, Number(payload.maxYearAmount) || 0),
       warningYearAmount: Math.max(0, Number(payload.warningYearAmount) || 0)
     };
@@ -5940,6 +5945,19 @@ function timeKindLabel_(kind) {
   if (kind === "problem") return "Ombyggt problem";
   return "Ledbygg";
 }
+function hallvardHasExtra_(e) {
+  if (!e || e.kind !== "hallvard") return false;
+  if (e.extra === true) return true;
+  const flag = String(e.startTime || "").trim().toLowerCase();
+  return flag === "tillägg" || flag === "tillagg";
+}
+function timeHallLabel_(e) {
+  const note = String((e && e.description) || "").trim();
+  const extra = hallvardHasExtra_(e);
+  if (extra && note && !/tillägg/i.test(note)) return note + " · Tillägg";
+  if (extra && !note) return "Tillägg";
+  return note;
+}
 function timeProblemNr_(e) {
   return String((e && (e.routeNr || (e.kind === "problem" ? e.startTime : ""))) || "").trim();
 }
@@ -5964,7 +5982,7 @@ function timeEntriesTableHtml_(entries, opts) {
       <td>${escapeHtml_(e.workDate || "")}</td>
       ${showUser ? `<td>${escapeHtml_(e.name || e.username || "")}</td>` : ""}
       <td><span class="time-kind">${escapeHtml_(timeKindLabel_(e.kind))}</span></td>
-      <td>${escapeHtml_(e.kind === "problem" ? timeProblemLabel_(e) : (e.description || ""))}</td>
+      <td>${escapeHtml_(e.kind === "problem" ? timeProblemLabel_(e) : (e.kind === "hallvard" ? timeHallLabel_(e) : (e.description || "")))}</td>
       <td class="num">${timeExtentLabel_(e)}</td>
       <td class="num">${formatSek_(e.amount)}</td>
       ${canDelete ? `<td class="time-no-print"><button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteTimeEntryRow_(${Number(e.id)})">Ta bort</button></td>` : ""}
@@ -6085,14 +6103,23 @@ function renderMyTime_(data) {
         </label>
         <button class="btn btn-accent w-100" type="submit" id="te-led-submit">Rapportera ledbyggartid</button>
       </form>`;
+  const hallShift = Number((data && data.settings && data.settings.hallvardShiftAmount) || 0);
+  const hallExtra = Number((data && data.settings && data.settings.hallvardExtraAmount) || 0);
   const hallForm = `<form onsubmit="submitTimeEntry_(event, 'hallvard')">
-        <p class="small mb-3" style="color:var(--muted);">Ett pass på valt datum ger det engångsbelopp som superadmin satt.</p>
+        <p class="small mb-3" style="color:var(--muted);">Ett pass på valt datum ger ${formatSek_(hallShift)}. Kryssa i tillägg vid helg eller annan extra öppning${hallExtra ? " (+ " + formatSek_(hallExtra) + ")" : ""}.</p>
         <div class="mb-3"><label class="form-label" for="te-hall-date">Datum</label>
           <input id="te-hall-date" type="date" class="form-control" value="${today}" required></div>
         <div class="mb-3">
           <label class="form-label" for="te-hall-desc">Anteckning (valfritt)</label>
           <input id="te-hall-desc" type="text" class="form-control" maxlength="500" placeholder="t.ex. kvällspass">
         </div>
+        <label class="d-flex align-items-start gap-2 mb-3">
+          <input type="checkbox" id="te-hall-extra" style="margin-top:4px;">
+          <span>
+            <strong>Tillägg</strong>
+            <span class="small d-block" style="color:var(--muted); font-weight:400;">Används vid öppethållande på helg eller andra tillfällen som faller utanför normala öppettider.</span>
+          </span>
+        </label>
         <label class="d-flex align-items-center gap-2 mb-3">
           <input type="checkbox" id="te-hall-correction"> Minuspost (korrigering av pass)
         </label>
@@ -6179,10 +6206,12 @@ function submitTimeEntry_(ev, kind) {
   const btn = document.getElementById(isHall ? "te-hall-submit" : (isProblem ? "te-prob-submit" : "te-led-submit"));
   const saveLabel = isHall ? "Rapportera hallvärdspass" : (isProblem ? "Rapportera ombyggt problem" : "Rapportera ledbyggartid");
   const workDate = dateEl ? dateEl.value : "";
+  const extraEl = isHall ? document.getElementById("te-hall-extra") : null;
   const payload = {
     kind,
     workDate,
     correction: !!(corrEl && corrEl.checked),
+    extra: !!(extraEl && extraEl.checked),
     description: descEl ? descEl.value : ""
   };
   if (isProblem) {
@@ -6340,6 +6369,9 @@ function renderTimeSettings_(s) {
       <input id="ts-min" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.minPayout) || 0}">
       <label class="form-label" for="ts-shift">Arvode per hallvärdspass (kr)</label>
       <input id="ts-shift" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.hallvardShiftAmount) || 0}">
+      <label class="form-label" for="ts-extra">Tillägg hallvärd (kr)</label>
+      <p class="small mb-2" style="color:var(--muted);">Läggs på passet när hallvärden kryssar i Tillägg, till exempel vid öppethållande på helg eller andra tillfällen utanför normala öppettider.</p>
+      <input id="ts-extra" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.hallvardExtraAmount) || 0}">
       <label class="form-label" for="ts-max">Maxtak per person och kalenderår (kr)</label>
       <input id="ts-max" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.maxYearAmount) || 0}">
       <label class="form-label" for="ts-warn">Varningsgräns (kr)</label>
@@ -6368,6 +6400,7 @@ function saveTimeSettings_() {
     ledbyggProblemAmount: document.getElementById("ts-problem") ? document.getElementById("ts-problem").value : 0,
     minPayout: document.getElementById("ts-min").value,
     hallvardShiftAmount: document.getElementById("ts-shift").value,
+    hallvardExtraAmount: document.getElementById("ts-extra") ? document.getElementById("ts-extra").value : 0,
     maxYearAmount: document.getElementById("ts-max").value,
     warningYearAmount: document.getElementById("ts-warn").value
   };

@@ -64,5 +64,6 @@ CREATE INDEX idx_time_entries_kind ON time_entries (kind);
 INSERT INTO settings (key, value) VALUES ('timeLedbyggHourlyRate', '0');
 INSERT INTO settings (key, value) VALUES ('timeMinPayout', '0');
 INSERT INTO settings (key, value) VALUES ('timeHallvardShiftAmount', '0');
+INSERT INTO settings (key, value) VALUES ('timeHallvardExtraAmount', '0');
 INSERT INTO settings (key, value) VALUES ('timeMaxYearAmount', '0');
 INSERT INTO settings (key, value) VALUES ('timeWarningYearAmount', '0');
