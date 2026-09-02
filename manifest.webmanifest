@@ -1,0 +1,20 @@
+{
+  "name": "WallFlow",
+  "short_name": "WallFlow",
+  "description": "Ledbyggnation och tidrapportering i klätterhallen.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#12151a",
+  "theme_color": "#12151a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

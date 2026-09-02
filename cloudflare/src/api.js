@@ -46,6 +46,7 @@ import {
   canTreasurerReport,
   canUseTimeTool,
   capStatus,
+  countLedbyggProblems,
   deleteTimeEntryById,
   listEntriesForReport,
   listEntriesForUser,
@@ -56,7 +57,8 @@ import {
   stockholmYearMonthNow,
   stockholmYearNow,
   summarizeEntries,
-  yearTotalForUser
+  yearCompensationForUser,
+  yearMonthBounds
 } from "./time.js";
 import {
   deleteBilderByRouteNr,
@@ -505,13 +507,17 @@ async function getTimeApp(env, payload, session) {
   const yearMonth = yearMonthFromPayload(payload);
   const settings = await readTimeSettings(env);
   const entries = await listEntriesForUser(env, session.username, yearMonth);
-  const yearTotal = await yearTotalForUser(env, session.username, stockholmYearNow());
+  const [users, routes] = await Promise.all([readUsers(env), readRoutes(env)]);
+  const bounds = yearMonthBounds(yearMonth);
+  const problems = countLedbyggProblems(routes, users, bounds, settings, session.username);
+  const yearTotal = await yearCompensationForUser(env, session.username, stockholmYearNow(), settings);
   return {
     ok: true,
     yearMonth,
     settings,
     entries,
-    summary: summarizeEntries(entries, settings),
+    problems: problems.routes || [],
+    summary: summarizeEntries(entries, settings, problems),
     cap: capStatus(yearTotal, settings),
     flags: publicSessionFlags(session)
   };
@@ -527,12 +533,16 @@ async function getTreasurerReport(env, payload, session) {
   const yearMonth = yearMonthFromPayload(payload);
   const settings = await readTimeSettings(env);
   const entries = await listEntriesForReport(env, yearMonth);
+  const [users, routes] = await Promise.all([readUsers(env), readRoutes(env)]);
+  const bounds = yearMonthBounds(yearMonth);
+  const problems = countLedbyggProblems(routes, users, bounds, settings);
   return {
     ok: true,
     yearMonth,
     settings,
     entries,
-    summary: summarizeEntries(entries, settings)
+    problems: problems.routes || [],
+    summary: summarizeEntries(entries, settings, problems)
   };
 }
 

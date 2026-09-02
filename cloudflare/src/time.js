@@ -1,6 +1,6 @@
 /** Tidrapportering: inställningar, rader, kassörsrapport. */
 
-import { todayStockholm } from "./db.js";
+import { todayStockholm, isEjUppsattGrade, readRoutes, readUsers } from "./db.js";
 import {
   allRolesOf,
   hasRole,
@@ -10,11 +10,96 @@ import {
 
 export const TIME_SETTING_KEYS = {
   ledbyggHourlyRate: "timeLedbyggHourlyRate",
+  ledbyggPayMode: "timeLedbyggPayMode",
+  ledbyggProblemAmount: "timeLedbyggProblemAmount",
   minPayout: "timeMinPayout",
   hallvardShiftAmount: "timeHallvardShiftAmount",
   maxYearAmount: "timeMaxYearAmount",
   warningYearAmount: "timeWarningYearAmount"
 };
+
+export function normalizeLedbyggPayMode(raw) {
+  const s = String(raw == null ? "" : raw).trim().toLowerCase();
+  if (s === "problems" || s === "problem" || s === "leder") return "problems";
+  if (s === "both" || s === "bada" || s === "båda") return "both";
+  return "time";
+}
+
+export function ledbyggPayIncludesTime(mode) {
+  const m = normalizeLedbyggPayMode(mode);
+  return m === "time" || m === "both";
+}
+
+export function ledbyggPayIncludesProblems(mode) {
+  const m = normalizeLedbyggPayMode(mode);
+  return m === "problems" || m === "both";
+}
+
+export function splitLedbyggareNames(raw) {
+  return String(raw == null ? "" : raw)
+    .split(/\s*(?:,|;|\/|&|\+| och | and )\s*/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function userMatchesLedbyggare(user, ledbyggareField) {
+  const names = splitLedbyggareNames(ledbyggareField).map((n) => n.toLowerCase());
+  if (!names.length) return false;
+  const candidates = [user && user.name, user && user.username]
+    .map((s) => String(s || "").trim().toLowerCase())
+    .filter(Boolean);
+  return candidates.some((c) => names.includes(c));
+}
+
+export function countLedbyggProblems(routes, users, bounds, settings, usernameFilter) {
+  const rate = normalizeMoneyAmount(settings && settings.ledbyggProblemAmount);
+  const start = bounds && bounds.start;
+  const end = bounds && bounds.endExclusive;
+  const filter = usernameFilter ? String(usernameFilter).trim().toLowerCase() : "";
+  const byUser = new Map();
+  const ensure = (u) => {
+    const key = String(u.username || "").toLowerCase();
+    if (!byUser.has(key)) {
+      byUser.set(key, {
+        username: u.username,
+        name: u.name || u.username,
+        problemCount: 0,
+        problemAmount: 0,
+        routes: []
+      });
+    }
+    return byUser.get(key);
+  };
+  for (const r of routes || []) {
+    if (isEjUppsattGrade(r && r.Gradering)) continue;
+    const d = String(r && r.Byggdatum || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+    if (start && d < start) continue;
+    if (end && d >= end) continue;
+    for (const u of users || []) {
+      if (filter && String(u.username || "").toLowerCase() !== filter) continue;
+      if (!userMatchesLedbyggare(u, r.Ledbyggare)) continue;
+      const bucket = ensure(u);
+      bucket.problemCount += 1;
+      bucket.problemAmount = roundMoney(bucket.problemCount * rate);
+      bucket.routes.push({
+        nr: String(r.Nr || ""),
+        workDate: d,
+        ledbyggare: String(r.Ledbyggare || "")
+      });
+    }
+  }
+  const people = [...byUser.values()];
+  return {
+    count: people.reduce((s, p) => s + p.problemCount, 0),
+    amount: roundMoney(people.reduce((s, p) => s + p.problemAmount, 0)),
+    people,
+    unitAmount: rate,
+    routes: filter
+      ? ((people[0] && people[0].routes) || [])
+      : people.flatMap((p) => p.routes || [])
+  };
+}
 
 export function canUseTimeTool(session) {
   return !!(session && session.username);
@@ -161,6 +246,8 @@ export async function readTimeSettings(env) {
   for (const r of results || []) map[r.key] = r.value;
   return {
     ledbyggHourlyRate: normalizeMoneyAmount(map[TIME_SETTING_KEYS.ledbyggHourlyRate] || 0),
+    ledbyggPayMode: normalizeLedbyggPayMode(map[TIME_SETTING_KEYS.ledbyggPayMode] || "time"),
+    ledbyggProblemAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.ledbyggProblemAmount] || 0),
     minPayout: normalizeMoneyAmount(map[TIME_SETTING_KEYS.minPayout] || 0),
     hallvardShiftAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.hallvardShiftAmount] || 0),
     maxYearAmount: normalizeMoneyAmount(map[TIME_SETTING_KEYS.maxYearAmount] || 0),
@@ -171,6 +258,8 @@ export async function readTimeSettings(env) {
 export async function saveTimeSettings(env, payload) {
   const next = {
     ledbyggHourlyRate: normalizeMoneyAmount(payload && payload.ledbyggHourlyRate),
+    ledbyggPayMode: normalizeLedbyggPayMode(payload && payload.ledbyggPayMode),
+    ledbyggProblemAmount: normalizeMoneyAmount(payload && payload.ledbyggProblemAmount),
     minPayout: normalizeMoneyAmount(payload && payload.minPayout),
     hallvardShiftAmount: normalizeMoneyAmount(payload && payload.hallvardShiftAmount),
     maxYearAmount: normalizeMoneyAmount(payload && payload.maxYearAmount),
@@ -181,6 +270,8 @@ export async function saveTimeSettings(env, payload) {
   }
   const pairs = [
     [TIME_SETTING_KEYS.ledbyggHourlyRate, next.ledbyggHourlyRate],
+    [TIME_SETTING_KEYS.ledbyggPayMode, next.ledbyggPayMode],
+    [TIME_SETTING_KEYS.ledbyggProblemAmount, next.ledbyggProblemAmount],
     [TIME_SETTING_KEYS.minPayout, next.minPayout],
     [TIME_SETTING_KEYS.hallvardShiftAmount, next.hallvardShiftAmount],
     [TIME_SETTING_KEYS.maxYearAmount, next.maxYearAmount],
@@ -214,16 +305,28 @@ function mapEntryRow(row) {
   };
 }
 
-export async function yearTotalForUser(env, username, year) {
+export async function yearCompensationForUser(env, username, year, settings) {
   const bounds = calendarYearBounds(year || stockholmYearNow());
   if (!bounds) return 0;
-  const row = await env.DB.prepare(
-    `SELECT COALESCE(SUM(hours * unit_amount), 0) AS total
+  const mode = normalizeLedbyggPayMode(settings && settings.ledbyggPayMode);
+  const { results } = await env.DB.prepare(
+    `SELECT kind, hours, unit_amount
      FROM time_entries
      WHERE username = ? COLLATE NOCASE
        AND work_date >= ? AND work_date < ?`
-  ).bind(username, bounds.start, bounds.endExclusive).first();
-  return roundMoney(row && row.total);
+  ).bind(username, bounds.start, bounds.endExclusive).all();
+  let total = 0;
+  for (const row of results || []) {
+    const amt = roundMoney(Number(row.hours || 0) * Number(row.unit_amount || 0));
+    if (row.kind === "hallvard") total += amt;
+    else if (ledbyggPayIncludesTime(mode)) total += amt;
+  }
+  if (ledbyggPayIncludesProblems(mode)) {
+    const [routes, users] = await Promise.all([readRoutes(env), readUsers(env)]);
+    const problems = countLedbyggProblems(routes, users, bounds, settings, username);
+    total += problems.amount;
+  }
+  return roundMoney(total);
 }
 
 export function capStatus(yearTotal, settings) {
@@ -268,13 +371,35 @@ export async function listEntriesForReport(env, yearMonth) {
   return (results || []).map(mapEntryRow);
 }
 
-export function summarizeEntries(entries, settings) {
+export function summarizeEntries(entries, settings, problemStats) {
   const rows = entries || [];
+  const mode = normalizeLedbyggPayMode(settings && settings.ledbyggPayMode);
+  const includeTime = ledbyggPayIncludesTime(mode);
+  const includeProblems = ledbyggPayIncludesProblems(mode);
   let ledbyggHours = 0;
-  let ledbyggAmount = 0;
+  let ledbyggTimeAmount = 0;
   let hallvardShifts = 0;
   let hallvardAmount = 0;
   const byUser = new Map();
+
+  const ensureUser = (username, name) => {
+    const key = String(username || "").toLowerCase();
+    if (!byUser.has(key)) {
+      byUser.set(key, {
+        username,
+        name: name || username,
+        ledbyggHours: 0,
+        ledbyggTimeAmount: 0,
+        ledbyggAmount: 0,
+        hallvardShifts: 0,
+        hallvardAmount: 0,
+        problemCount: 0,
+        problemAmount: 0,
+        amount: 0
+      });
+    }
+    return byUser.get(key);
+  };
 
   for (const e of rows) {
     const amt = rowAmount(e);
@@ -283,29 +408,35 @@ export function summarizeEntries(entries, settings) {
       hallvardAmount += amt;
     } else {
       ledbyggHours += Number(e.hours) || 0;
-      ledbyggAmount += amt;
+      if (includeTime) ledbyggTimeAmount += amt;
     }
-    const key = String(e.username || "").toLowerCase();
-    if (!byUser.has(key)) {
-      byUser.set(key, {
-        username: e.username,
-        name: e.name || e.username,
-        ledbyggHours: 0,
-        ledbyggAmount: 0,
-        hallvardShifts: 0,
-        hallvardAmount: 0,
-        amount: 0
-      });
-    }
-    const u = byUser.get(key);
+    const u = ensureUser(e.username, e.name);
     if (e.kind === "hallvard") {
       u.hallvardShifts += Number(e.hours) || 0;
       u.hallvardAmount += amt;
+      u.amount += amt;
     } else {
       u.ledbyggHours += Number(e.hours) || 0;
-      u.ledbyggAmount += amt;
+      if (includeTime) {
+        u.ledbyggTimeAmount += amt;
+        u.ledbyggAmount += amt;
+        u.amount += amt;
+      }
     }
-    u.amount += amt;
+  }
+
+  let ledbyggProblemCount = 0;
+  let ledbyggProblemAmount = 0;
+  if (includeProblems && problemStats) {
+    ledbyggProblemCount = Number(problemStats.count) || 0;
+    ledbyggProblemAmount = roundMoney(problemStats.amount);
+    for (const p of problemStats.people || []) {
+      const u = ensureUser(p.username, p.name);
+      u.problemCount = Number(p.problemCount) || 0;
+      u.problemAmount = roundMoney(p.problemAmount);
+      u.ledbyggAmount = roundMoney(u.ledbyggAmount + u.problemAmount);
+      u.amount = roundMoney(u.amount + u.problemAmount);
+    }
   }
 
   const people = [...byUser.values()].map((u) => {
@@ -313,21 +444,29 @@ export function summarizeEntries(entries, settings) {
     return {
       ...u,
       ledbyggHours: roundMoney(u.ledbyggHours),
+      ledbyggTimeAmount: roundMoney(u.ledbyggTimeAmount),
       ledbyggAmount: roundMoney(u.ledbyggAmount),
       hallvardShifts: roundMoney(u.hallvardShifts),
       hallvardAmount: roundMoney(u.hallvardAmount),
+      problemCount: Number(u.problemCount) || 0,
+      problemAmount: roundMoney(u.problemAmount),
       amount,
-      belowMinPayout: settings.minPayout > 0 && amount > 0 && amount < settings.minPayout
+      belowMinPayout: settings && settings.minPayout > 0 && amount > 0 && amount < settings.minPayout
     };
   }).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "sv"));
 
+  const ledbyggAmount = roundMoney(ledbyggTimeAmount + ledbyggProblemAmount);
   return {
+    ledbyggPayMode: mode,
     ledbyggHours: roundMoney(ledbyggHours),
-    ledbyggAmount: roundMoney(ledbyggAmount),
+    ledbyggTimeAmount: roundMoney(ledbyggTimeAmount),
+    ledbyggProblemCount,
+    ledbyggProblemAmount,
+    ledbyggAmount,
     hallvardShifts: roundMoney(hallvardShifts),
     hallvardAmount: roundMoney(hallvardAmount),
     totalAmount: roundMoney(ledbyggAmount + hallvardAmount),
-    minPayout: settings.minPayout,
+    minPayout: settings && settings.minPayout,
     people
   };
 }

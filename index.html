@@ -5,6 +5,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes, viewport-fit=cover">
   <meta name="theme-color" content="#f2f0eb" id="meta-theme-color">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon.svg">
   <meta name="description" content="WallFlow — följ ledbyggnationen i klätterhallen.">
   <title>WallFlow</title>
   <script>
@@ -781,6 +786,12 @@
     .theme-toggle {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
     }
+    .pay-mode-toggle {
+      display: grid; grid-template-columns: 1fr; gap: 8px;
+    }
+    @media (min-width: 560px) {
+      .pay-mode-toggle { grid-template-columns: 1fr 1fr 1fr; }
+    }
     .theme-toggle .btn {
       min-height: 42px; font-weight: 600;
     }
@@ -1126,33 +1137,53 @@
       border-radius: inherit;
       opacity: 0;
       background: transparent;
-      box-shadow: inset 0 0 0 3px transparent;
+      box-shadow: inset 0 0 0 6px transparent;
     }
     #inventory-stage.flash-ok::before {
-      animation: inventoryFlash 0.9s ease-out;
-      background: color-mix(in srgb, var(--ok) 42%, transparent);
-      box-shadow: inset 0 0 0 3px var(--ok), inset 0 0 48px color-mix(in srgb, var(--ok) 35%, transparent);
+      animation: inventoryFlash 1.15s ease-out;
+      background: color-mix(in srgb, var(--ok) 78%, transparent);
+      box-shadow:
+        inset 0 0 0 6px var(--ok),
+        inset 0 0 72px color-mix(in srgb, var(--ok) 55%, transparent);
     }
     #inventory-stage.flash-warn::before {
-      animation: inventoryFlash 0.9s ease-out;
-      background: color-mix(in srgb, #e8c15a 46%, transparent);
-      box-shadow: inset 0 0 0 3px #e8c15a, inset 0 0 48px color-mix(in srgb, #e8c15a 38%, transparent);
+      animation: inventoryFlash 1.15s ease-out;
+      background: color-mix(in srgb, #f0c44a 82%, transparent);
+      box-shadow:
+        inset 0 0 0 6px #f0c44a,
+        inset 0 0 72px color-mix(in srgb, #f0c44a 58%, transparent);
     }
     #inventory-stage.flash-bad::before {
-      animation: inventoryFlash 0.9s ease-out;
-      background: color-mix(in srgb, #d36b6b 46%, transparent);
-      box-shadow: inset 0 0 0 3px #d36b6b, inset 0 0 48px color-mix(in srgb, #d36b6b 38%, transparent);
+      animation: inventoryFlash 1.15s ease-out;
+      background: color-mix(in srgb, #e25a5a 82%, transparent);
+      box-shadow:
+        inset 0 0 0 6px #e25a5a,
+        inset 0 0 72px color-mix(in srgb, #e25a5a 58%, transparent);
+    }
+    #inventory-stage.flash-ok,
+    #inventory-stage.flash-warn,
+    #inventory-stage.flash-bad {
+      animation: inventoryStagePulse 1.15s ease-out;
     }
     @keyframes inventoryFlash {
       0% { opacity: 0; }
-      16% { opacity: 1; }
+      8% { opacity: 1; }
+      58% { opacity: 1; }
       100% { opacity: 0; }
+    }
+    @keyframes inventoryStagePulse {
+      0%, 100% { transform: scale(1); }
+      12% { transform: scale(1.012); }
+      58% { transform: scale(1.012); }
     }
     @media (prefers-reduced-motion: reduce) {
       #inventory-stage.flash-ok::before,
       #inventory-stage.flash-warn::before,
-      #inventory-stage.flash-bad::before {
-        animation-duration: 0.35s;
+      #inventory-stage.flash-bad::before,
+      #inventory-stage.flash-ok,
+      #inventory-stage.flash-warn,
+      #inventory-stage.flash-bad {
+        animation-duration: 0.4s;
       }
     }
     #quickinfo-video,
@@ -1610,7 +1641,7 @@ function seedDemoDb_() {
       { Nr: "W2", Gradering: "Wildcard", DagsAttByggaOm: "Ja", Ledbyggare: "Jesper", Byggdatum: "2026-05-10", Slutdatum: "2026-06-10", Anteckningar: "", Bild: "" }
     ],
     users: [{ username: "admin", name: "Admin", role: "superadmin", extraRoles: [], password: "wallflow", FirstLogin: false }],
-    timeSettings: { ledbyggHourlyRate: 150, minPayout: 500, hallvardShiftAmount: 200, maxYearAmount: 5000, warningYearAmount: 4000 },
+    timeSettings: { ledbyggHourlyRate: 150, ledbyggPayMode: "time", ledbyggProblemAmount: 80, minPayout: 500, hallvardShiftAmount: 200, maxYearAmount: 5000, warningYearAmount: 4000 },
     timeEntries: [],
     timeEntrySeq: 1
   };
@@ -1638,11 +1669,70 @@ function saveDemoDb_(data) { localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringi
 function demoTimeSettings_(store) {
   return Object.assign({
     ledbyggHourlyRate: 0,
+    ledbyggPayMode: "time",
+    ledbyggProblemAmount: 0,
     minPayout: 0,
     hallvardShiftAmount: 0,
     maxYearAmount: 0,
     warningYearAmount: 0
   }, store.timeSettings || {});
+}
+
+function demoPayMode_(settings) {
+  const s = String(settings && settings.ledbyggPayMode || "time").toLowerCase();
+  if (s === "problems" || s === "both") return s;
+  return "time";
+}
+
+function demoSplitLedbyggare_(raw) {
+  return String(raw || "").split(/\s*(?:,|;|\/|&|\+| och | and )\s*/i).map((x) => x.trim()).filter(Boolean);
+}
+
+function demoUserMatchesLedbyggare_(user, field) {
+  const names = demoSplitLedbyggare_(field).map((n) => n.toLowerCase());
+  const candidates = [user && user.name, user && user.username].map((s) => String(s || "").trim().toLowerCase()).filter(Boolean);
+  return candidates.some((c) => names.indexOf(c) >= 0);
+}
+
+function demoCountProblems_(store, yearMonthOrYear, usernameFilter) {
+  const settings = demoTimeSettings_(store);
+  const rate = Math.max(0, Number(settings.ledbyggProblemAmount) || 0);
+  const key = String(yearMonthOrYear || "");
+  const start = key.length === 4 ? key + "-01-01" : key.slice(0, 7) + "-01";
+  const end = key.length === 4 ? String(Number(key) + 1) + "-01-01" : (function () {
+    const y = Number(key.slice(0, 4));
+    const m = Number(key.slice(5, 7));
+    const nm = m === 12 ? 1 : m + 1;
+    const ny = m === 12 ? y + 1 : y;
+    return ny + "-" + String(nm).padStart(2, "0") + "-01";
+  })();
+  const filter = usernameFilter ? String(usernameFilter).toLowerCase() : "";
+  const byUser = {};
+  (store.users || []).forEach((u) => {
+    if (filter && String(u.username).toLowerCase() !== filter) return;
+    byUser[String(u.username).toLowerCase()] = { username: u.username, name: u.name || u.username, problemCount: 0, problemAmount: 0, routes: [] };
+  });
+  (store.routes || []).forEach((r) => {
+    if (isEjUppsattGrade_(r.Gradering)) return;
+    const d = String(r.Byggdatum || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < start || d >= end) return;
+    (store.users || []).forEach((u) => {
+      if (filter && String(u.username).toLowerCase() !== filter) return;
+      if (!demoUserMatchesLedbyggare_(u, r.Ledbyggare)) return;
+      const bucket = byUser[String(u.username).toLowerCase()];
+      if (!bucket) return;
+      bucket.problemCount += 1;
+      bucket.problemAmount = Math.round(bucket.problemCount * rate * 100) / 100;
+      bucket.routes.push({ nr: r.Nr, workDate: d, ledbyggare: r.Ledbyggare });
+    });
+  });
+  const people = Object.keys(byUser).map((k) => byUser[k]).filter((p) => p.problemCount > 0);
+  return {
+    count: people.reduce((s, p) => s + p.problemCount, 0),
+    amount: Math.round(people.reduce((s, p) => s + p.problemAmount, 0) * 100) / 100,
+    people,
+    routes: filter ? ((people[0] && people[0].routes) || []) : people.reduce((acc, p) => acc.concat(p.routes || []), [])
+  };
 }
 
 function demoRowAmount_(e) {
@@ -1654,26 +1744,57 @@ function demoRowAmount_(e) {
   return Math.round((Number(e && e.hours) || 0) * unit * 100) / 100;
 }
 
-function demoSummarize_(entries, settings) {
+function demoSummarize_(entries, settings, problemStats) {
   const rows = entries || [];
-  let ledbyggHours = 0, ledbyggAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
+  const mode = demoPayMode_(settings);
+  const includeTime = mode === "time" || mode === "both";
+  const includeProblems = mode === "problems" || mode === "both";
+  let ledbyggHours = 0, ledbyggTimeAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
   const byUser = {};
+  function ensure(username, name) {
+    const key = String(username || "").toLowerCase();
+    if (!byUser[key]) {
+      byUser[key] = {
+        username, name: name || username,
+        ledbyggHours: 0, ledbyggTimeAmount: 0, ledbyggAmount: 0,
+        hallvardShifts: 0, hallvardAmount: 0, problemCount: 0, problemAmount: 0, amount: 0
+      };
+    }
+    return byUser[key];
+  }
   rows.forEach((e) => {
     const amt = demoRowAmount_(e);
-    if (e.kind === "hallvard") { hallvardShifts += Number(e.hours) || 0; hallvardAmount += amt; }
-    else { ledbyggHours += Number(e.hours) || 0; ledbyggAmount += amt; }
-    const key = String(e.username || "").toLowerCase();
-    if (!byUser[key]) byUser[key] = { username: e.username, name: e.name || e.username, ledbyggHours: 0, ledbyggAmount: 0, hallvardShifts: 0, hallvardAmount: 0, amount: 0 };
-    const u = byUser[key];
-    if (e.kind === "hallvard") { u.hallvardShifts += Number(e.hours) || 0; u.hallvardAmount += amt; }
-    else { u.ledbyggHours += Number(e.hours) || 0; u.ledbyggAmount += amt; }
-    u.amount += amt;
+    const u = ensure(e.username, e.name);
+    if (e.kind === "hallvard") {
+      hallvardShifts += Number(e.hours) || 0; hallvardAmount += amt;
+      u.hallvardShifts += Number(e.hours) || 0; u.hallvardAmount += amt; u.amount += amt;
+    } else {
+      ledbyggHours += Number(e.hours) || 0;
+      u.ledbyggHours += Number(e.hours) || 0;
+      if (includeTime) {
+        ledbyggTimeAmount += amt;
+        u.ledbyggTimeAmount += amt; u.ledbyggAmount += amt; u.amount += amt;
+      }
+    }
   });
+  let ledbyggProblemCount = 0, ledbyggProblemAmount = 0;
+  if (includeProblems && problemStats) {
+    ledbyggProblemCount = Number(problemStats.count) || 0;
+    ledbyggProblemAmount = Number(problemStats.amount) || 0;
+    (problemStats.people || []).forEach((p) => {
+      const u = ensure(p.username, p.name);
+      u.problemCount = Number(p.problemCount) || 0;
+      u.problemAmount = Number(p.problemAmount) || 0;
+      u.ledbyggAmount = Math.round((u.ledbyggAmount + u.problemAmount) * 100) / 100;
+      u.amount = Math.round((u.amount + u.problemAmount) * 100) / 100;
+    });
+  }
   const people = Object.keys(byUser).map((k) => {
     const u = byUser[k];
     const amount = Math.round(u.amount * 100) / 100;
     return Object.assign(u, {
       ledbyggHours: Math.round(u.ledbyggHours * 100) / 100,
+      ledbyggTimeAmount: Math.round(u.ledbyggTimeAmount * 100) / 100,
       ledbyggAmount: Math.round(u.ledbyggAmount * 100) / 100,
       hallvardShifts: Math.round(u.hallvardShifts * 100) / 100,
       hallvardAmount: Math.round(u.hallvardAmount * 100) / 100,
@@ -1681,9 +1802,14 @@ function demoSummarize_(entries, settings) {
       belowMinPayout: settings.minPayout > 0 && amount > 0 && amount < settings.minPayout
     });
   });
+  const ledbyggAmount = Math.round((ledbyggTimeAmount + ledbyggProblemAmount) * 100) / 100;
   return {
+    ledbyggPayMode: mode,
     ledbyggHours: Math.round(ledbyggHours * 100) / 100,
-    ledbyggAmount: Math.round(ledbyggAmount * 100) / 100,
+    ledbyggTimeAmount: Math.round(ledbyggTimeAmount * 100) / 100,
+    ledbyggProblemCount,
+    ledbyggProblemAmount: Math.round(ledbyggProblemAmount * 100) / 100,
+    ledbyggAmount,
     hallvardShifts: Math.round(hallvardShifts * 100) / 100,
     hallvardAmount: Math.round(hallvardAmount * 100) / 100,
     totalAmount: Math.round((ledbyggAmount + hallvardAmount) * 100) / 100,
@@ -1699,8 +1825,16 @@ function demoMonthFilter_(entries, yearMonth) {
 
 function demoCap_(store, username, settings) {
   const year = new Date().getFullYear();
-  const total = (store.timeEntries || []).filter((e) => e.username === username && String(e.workDate).slice(0, 4) === String(year))
-    .reduce((s, e) => s + demoRowAmount_(e), 0);
+  const mode = demoPayMode_(settings);
+  const includeTime = mode === "time" || mode === "both";
+  let total = (store.timeEntries || []).filter((e) => e.username === username && String(e.workDate).slice(0, 4) === String(year))
+    .reduce((s, e) => {
+      if (e.kind === "hallvard") return s + demoRowAmount_(e);
+      return includeTime ? s + demoRowAmount_(e) : s;
+    }, 0);
+  if (mode === "problems" || mode === "both") {
+    total += demoCountProblems_(store, String(year), username).amount;
+  }
   const max = Number(settings.maxYearAmount) || 0;
   const warn = Number(settings.warningYearAmount) || 0;
   let level = "ok";
@@ -1724,7 +1858,8 @@ function demoTimeApi_(store, action, args) {
   const wallflow = ["superadmin", "admin", "scout"].indexOf(String(currentUser.role || "").toLowerCase()) >= 0;
   if (action === "getTimeApp") {
     const entries = demoMonthFilter_(store.timeEntries, yearMonth).filter((e) => e.username === currentUser.username);
-    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings), cap: demoCap_(store, currentUser.username, settings), flags: { wallflow, reportLedbygg: wallflow, reportHallvard: demoHasRole_("hallvard"), treasurer: String(currentUser.role) === "superadmin" || demoHasRole_("kassor"), timeAdmin: String(currentUser.role) === "superadmin" } };
+    const problems = demoCountProblems_(store, yearMonth, currentUser.username);
+    return { ok: true, yearMonth, settings, entries, problems: problems.routes, summary: demoSummarize_(entries, settings, problems), cap: demoCap_(store, currentUser.username, settings), flags: { wallflow, reportLedbygg: wallflow, reportHallvard: demoHasRole_("hallvard"), treasurer: String(currentUser.role) === "superadmin" || demoHasRole_("kassor"), timeAdmin: String(currentUser.role) === "superadmin" } };
   }
   if (action === "addTimeEntry") {
     const kind = String(payload.kind || "");
@@ -1768,7 +1903,8 @@ function demoTimeApi_(store, action, args) {
       const u = (store.users || []).find((x) => x.username === e.username);
       return Object.assign({}, e, { name: (u && u.name) || e.name || e.username, amount: demoRowAmount_(e) });
     });
-    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings) };
+    const problems = demoCountProblems_(store, yearMonth);
+    return { ok: true, yearMonth, settings, entries, summary: demoSummarize_(entries, settings, problems) };
   }
   if (action === "deleteTimeEntry") {
     if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ta bort tidrader" };
@@ -1783,6 +1919,8 @@ function demoTimeApi_(store, action, args) {
     if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ändra arvode och gränser" };
     const next = {
       ledbyggHourlyRate: Math.max(0, Number(payload.ledbyggHourlyRate) || 0),
+      ledbyggPayMode: demoPayMode_({ ledbyggPayMode: payload.ledbyggPayMode }),
+      ledbyggProblemAmount: Math.max(0, Number(payload.ledbyggProblemAmount) || 0),
       minPayout: Math.max(0, Number(payload.minPayout) || 0),
       hallvardShiftAmount: Math.max(0, Number(payload.hallvardShiftAmount) || 0),
       maxYearAmount: Math.max(0, Number(payload.maxYearAmount) || 0),
@@ -2325,6 +2463,38 @@ function setTheme_(theme) {
   applyTheme_(t);
 }
 
+function isStandaloneDisplay_() {
+  try {
+    return window.matchMedia("(display-mode: standalone)").matches
+      || window.matchMedia("(display-mode: fullscreen)").matches
+      || window.navigator.standalone === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function requestAppFullscreen_() {
+  if (isStandaloneDisplay_()) return;
+  const root = document.documentElement;
+  const fn = root.requestFullscreen || root.webkitRequestFullscreen;
+  if (!fn) return;
+  const opts = { navigationUI: "hide" };
+  try {
+    const p = fn.call(root, opts);
+    if (p && typeof p.catch === "function") p.catch(() => {});
+  } catch (_) { /* ignore */ }
+}
+
+function bindAppFullscreenRequest_() {
+  if (bindAppFullscreenRequest_._bound) return;
+  bindAppFullscreenRequest_._bound = true;
+  const once = () => {
+    document.removeEventListener("pointerdown", once, true);
+    requestAppFullscreen_();
+  };
+  document.addEventListener("pointerdown", once, true);
+}
+
 applyTheme_(getTheme_());
 function getCookie_(name) {
   const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()[\]\\/+^])/g, "\\$1") + "=([^;]*)"));
@@ -2618,6 +2788,7 @@ function normalizeRoute_(r) {
 function startAppBoot_() {
   if (startAppBoot_._started) return;
   startAppBoot_._started = true;
+  bindAppFullscreenRequest_();
   if (USE_DEMO) {
     var banner = document.getElementById("demo-banner");
     if (banner) banner.style.display = "block";
@@ -4125,8 +4296,8 @@ function flashInventoryStage_(kind) {
   inventoryState_.flashTimer = setTimeout(() => {
     stage.classList.remove("flash-ok", "flash-warn", "flash-bad");
     inventoryState_.flashTimer = 0;
-  }, 920);
-}
+    }, 1200);
+  }
 
 function inventoryKindForScan_(route) {
   if (!route) return "unknown";
@@ -4522,6 +4693,7 @@ function checkLogin() {
       clearLoginTimeout_();
       // Håll kvar login-vyn i godkänd/laddar-läge tills appen visas
       setLoginFormBusy_(true, "accepted");
+      requestAppFullscreen_();
       bootAppData_();
     })
     .withFailureHandler(() => {
@@ -4645,7 +4817,7 @@ function renderAdminHome() {
     ${canPay ? `
     <div class="admin-card">
       <h3>Tid och arvode</h3>
-      <p class="small mb-3" style="color:var(--muted);">Timarvode, hallvärdspass, lägsta utbetalning och tak för rapportering.</p>
+      <p class="small mb-3" style="color:var(--muted);">Timarvode, ersättning per ombyggt problem, hallvärdspass, lägsta utbetalning och tak.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="closeSettings(); openTimeTool('settings')">Arvode och gränser</button>
       </div>
@@ -5881,14 +6053,20 @@ function entryMoney_(e) {
 function summaryFromEntries_(entries, base) {
   const s = Object.assign({
     ledbyggHours: 0,
+    ledbyggTimeAmount: 0,
+    ledbyggProblemCount: 0,
+    ledbyggProblemAmount: 0,
     ledbyggAmount: 0,
     hallvardShifts: 0,
     hallvardAmount: 0,
-    totalAmount: 0
+    totalAmount: 0,
+    ledbyggPayMode: "time"
   }, base || {});
+  const mode = demoPayMode_(s);
+  const includeTime = mode === "time" || mode === "both";
+  const includeProblems = mode === "problems" || mode === "both";
   const rows = entries || [];
-  if (!rows.length) return s;
-  let ledbyggHours = 0, ledbyggAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
+  let ledbyggHours = 0, ledbyggTimeAmount = 0, hallvardShifts = 0, hallvardAmount = 0;
   rows.forEach((e) => {
     const money = entryMoney_(e);
     if (e.kind === "hallvard") {
@@ -5896,11 +6074,18 @@ function summaryFromEntries_(entries, base) {
       hallvardAmount += money;
     } else {
       ledbyggHours += Number(e.hours) || 0;
-      ledbyggAmount += money;
+      if (includeTime) ledbyggTimeAmount += money;
     }
   });
+  const problemCount = includeProblems ? (Number(s.ledbyggProblemCount) || 0) : 0;
+  const problemAmount = includeProblems ? (Number(s.ledbyggProblemAmount) || 0) : 0;
+  const ledbyggAmount = ledbyggTimeAmount + problemAmount;
   return Object.assign({}, s, {
+    ledbyggPayMode: mode,
     ledbyggHours,
+    ledbyggTimeAmount,
+    ledbyggProblemCount: problemCount,
+    ledbyggProblemAmount: problemAmount,
     ledbyggAmount,
     hallvardShifts,
     hallvardAmount,
@@ -5909,9 +6094,13 @@ function summaryFromEntries_(entries, base) {
 }
 function timeTotalsHtml_(summary, title) {
   const s = summary || {};
+  const mode = demoPayMode_(s);
+  const showTime = mode === "time" || mode === "both";
+  const showProblems = mode === "problems" || mode === "both";
   return `<div class="time-total">
     <div class="small text-uppercase mb-2" style="color:var(--muted); letter-spacing:.06em;">${escapeHtml_(title || "Preliminärt belopp")}</div>
-    <div class="time-total-row"><span>Ledbygg (${formatHours_(s.ledbyggHours)} t)</span><span class="num">${formatSek_(s.ledbyggAmount)}</span></div>
+    ${showTime ? `<div class="time-total-row"><span>Ledbygg tid (${formatHours_(s.ledbyggHours)} t)</span><span class="num">${formatSek_(s.ledbyggTimeAmount != null ? s.ledbyggTimeAmount : s.ledbyggAmount)}</span></div>` : ""}
+    ${showProblems ? `<div class="time-total-row"><span>Ombyggda problem (${Number(s.ledbyggProblemCount) || 0} st)</span><span class="num">${formatSek_(s.ledbyggProblemAmount)}</span></div>` : ""}
     <div class="time-total-row"><span>Hallvärd (${formatHours_(s.hallvardShifts)} pass)</span><span class="num">${formatSek_(s.hallvardAmount)}</span></div>
     <div class="time-total-row grand"><span>Totalt</span><span class="num">${formatSek_(s.totalAmount)}</span></div>
   </div>`;
@@ -5935,7 +6124,9 @@ function loadMyTime_() {
 function renderMyTime_(data) {
   const canLed = canReportLedbygg_();
   const canHall = canReportHallvard_();
-  const both = canLed && canHall;
+  const payMode = demoPayMode_((data && data.summary) || (data && data.settings) || {});
+  const showLedTime = canLed && payMode !== "problems";
+  const both = showLedTime && canHall;
   const today = escapeHtml_(currentYmd_());
   const ledForm = `<form onsubmit="submitTimeEntry_(event, 'ledbygg')">
         <div class="mb-3"><label class="form-label" for="te-led-date">Datum</label>
@@ -5973,11 +6164,17 @@ function renderMyTime_(data) {
         </label>
         <button class="btn btn-accent w-100" type="submit" id="te-hall-submit">Rapportera hallvärdspass</button>
       </form>`;
+  const problemNote = canLed && payMode !== "time"
+    ? `<div class="admin-card time-no-print">
+        <h3>Ersättning per ombyggt problem</h3>
+        <p class="small mb-0" style="color:var(--muted);">Ledbyggararvode räknas från leder du är angiven som ledbyggare på, med byggdatum i vald period. Ej uppsatta leder räknas inte. ${payMode === "both" ? "Tidrapportering räknas också." : "Tid rapporteras inte för arvode i den här modellen."}</p>
+      </div>`
+    : "";
   let formsHtml = "";
   if (!canLed && !canHall) {
     formsHtml = `<div class="admin-card time-no-print"><p class="small mb-0" style="color:var(--muted);">Du har kassörsbehörighet. Använd kassörsrapporten för utdrag.</p></div>`;
   } else if (both) {
-    formsHtml = `<div class="admin-card time-no-print">
+    formsHtml = `${problemNote}<div class="admin-card time-no-print">
       <h3>Två rapporteringssätt</h3>
       <p class="small mb-0" style="color:var(--muted);">Du är både ledbyggare och hallvärd. Använd kortet som stämmer med det du gjort.</p>
     </div>
@@ -5990,19 +6187,26 @@ function renderMyTime_(data) {
       <h3>Hallvärdspass</h3>
       ${hallForm}
     </div>`;
-  } else if (canLed) {
-    formsHtml = `<div class="admin-card time-no-print">
+  } else if (showLedTime) {
+    formsHtml = `${problemNote}<div class="admin-card time-no-print">
       <h3>Rapportera ledbyggartid</h3>
       <p class="small mb-3" style="color:var(--muted);">Välj datum samt start- och sluttid. Timmar räknas automatiskt. Poster kan inte raderas — felaktig rad rättas med minuspost.</p>
       ${ledForm}
     </div>`;
-  } else {
-    formsHtml = `<div class="admin-card time-no-print">
+  } else if (canHall) {
+    formsHtml = `${problemNote}<div class="admin-card time-no-print">
       <h3>Rapportera hallvärdspass</h3>
       <p class="small mb-3" style="color:var(--muted);">Poster kan inte raderas. Felaktigt pass rättas med en minuspost.</p>
       ${hallForm}
     </div>`;
+  } else {
+    formsHtml = problemNote;
   }
+  const problems = (data.problems || []);
+  const problemList = payMode !== "time"
+    ? `<div class="small mb-2" style="color:var(--muted);">${problems.length ? "Ombyggda problem i perioden:" : "Inga ombyggda problem kopplade till dig i vald period."}</div>
+       ${problems.length ? `<ul class="small mb-3">${problems.map((p) => `<li>Led ${escapeHtml_(p.nr)} · ${escapeHtml_(p.workDate || "")}</li>`).join("")}</ul>` : ""}`
+    : "";
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card time-no-print">
       ${timeMonthPickerHtml_()}
@@ -6011,6 +6215,7 @@ function renderMyTime_(data) {
     ${formsHtml}
     <div class="admin-card">
       <h3>${escapeHtml_(monthLabel_(data.yearMonth))}</h3>
+      ${problemList}
       ${timeEntriesTableHtml_(data.entries, { showUser: false, canDelete: false })}
       ${timeTotalsHtml_(summaryFromEntries_(data.entries, data.summary), "Preliminärt belopp för vald period")}
     </div>`;
@@ -6108,14 +6313,19 @@ function peopleFromEntries_(entries, minPayout) {
 }
 function renderTreasurerReport_(data) {
   const minPayout = (data.summary && data.summary.minPayout) || 0;
-  const people = peopleFromEntries_(data.entries, minPayout);
+  const payMode = demoPayMode_((data && data.summary) || (data && data.settings) || {});
+  const people = (data.summary && data.summary.people && data.summary.people.length)
+    ? data.summary.people
+    : peopleFromEntries_(data.entries, minPayout);
+  const showProblems = payMode !== "time";
   const peopleHtml = people.map((p) => `
     <tr>
       <td>${escapeHtml_(p.name || p.username)}</td>
       <td class="num">${formatHours_(p.ledbyggHours)} t</td>
+      ${showProblems ? `<td class="num">${Number(p.problemCount) || 0} st</td>` : ""}
       <td class="num">${formatHours_(p.hallvardShifts)} pass</td>
       <td class="num">${formatSek_(p.amount)}${p.belowMinPayout ? ` <span class="small" style="color:var(--muted);">(under lägsta ${formatSek_(data.summary.minPayout)})</span>` : ""}</td>
-    </tr>`).join("") || `<tr><td colspan="4" style="color:var(--muted);">Ingen inrapporterad tid.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="${showProblems ? 5 : 4}" style="color:var(--muted);">Ingen inrapporterad tid.</td></tr>`;
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card time-no-print">
       <h3>Kassörsrapport</h3>
@@ -6132,7 +6342,7 @@ function renderTreasurerReport_(data) {
     <div class="admin-card">
       <h4>Per person</h4>
       <div class="table-responsive"><table class="time-table">
-        <thead><tr><th>Namn</th><th class="num">Timmar</th><th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
+        <thead><tr><th>Namn</th><th class="num">Timmar</th>${showProblems ? "<th class=\"num\">Problem</th>" : ""}<th class="num">Hallvärd</th><th class="num">Summa</th></tr></thead>
         <tbody>${peopleHtml}</tbody>
       </table></div>
       ${data.summary && data.summary.minPayout > 0 ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Lägsta utbetalning: ${formatSek_(data.summary.minPayout)}. Personer under gränsen markeras.</p>` : ""}
@@ -6163,13 +6373,27 @@ function loadTimeSettingsView_() {
     .getTimeApp({ yearMonth: timeToolState_.yearMonth });
 }
 function renderTimeSettings_(s) {
+  const mode = demoPayMode_(s);
   document.getElementById("time-main").innerHTML = `
     <div class="admin-card">
       <p class="admin-kicker">Administration · Tid och arvode</p>
       <h3>Arvode och gränser</h3>
-      <p class="small mb-3" style="color:var(--muted);">Gäller nya poster. Befintliga rader behåller beloppet de sparades med.</p>
-      <label class="form-label" for="ts-hour">Arvode per timme, ledbyggare (kr)</label>
-      <input id="ts-hour" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.ledbyggHourlyRate) || 0}">
+      <p class="small mb-3" style="color:var(--muted);">Gäller nya tidposter. Ombyggda problem räknas från leder i registret med byggdatum i perioden.</p>
+      <label class="form-label">Ledbyggarens ersättning bygger på</label>
+      <div class="theme-toggle pay-mode-toggle mb-3">
+        <button type="button" class="btn btn-ghost${mode === "time" ? " is-active" : ""}" data-pay-mode="time" onclick="setTimePayModeUi_('time')">Tid</button>
+        <button type="button" class="btn btn-ghost${mode === "problems" ? " is-active" : ""}" data-pay-mode="problems" onclick="setTimePayModeUi_('problems')">Ombyggda problem</button>
+        <button type="button" class="btn btn-ghost${mode === "both" ? " is-active" : ""}" data-pay-mode="both" onclick="setTimePayModeUi_('both')">Båda</button>
+      </div>
+      <input type="hidden" id="ts-pay-mode" value="${escapeHtml_(mode)}">
+      <div id="ts-hour-wrap">
+        <label class="form-label" for="ts-hour">Arvode per timme, ledbyggare (kr)</label>
+        <input id="ts-hour" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.ledbyggHourlyRate) || 0}">
+      </div>
+      <div id="ts-problem-wrap">
+        <label class="form-label" for="ts-problem">Arvode per ombyggt problem (kr)</label>
+        <input id="ts-problem" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.ledbyggProblemAmount) || 0}">
+      </div>
       <label class="form-label" for="ts-min">Lägsta utbetalning (kr)</label>
       <input id="ts-min" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.minPayout) || 0}">
       <label class="form-label" for="ts-shift">Arvode per hallvärdspass (kr)</label>
@@ -6180,10 +6404,26 @@ function renderTimeSettings_(s) {
       <input id="ts-warn" type="number" min="0" step="1" class="form-control mb-3" value="${Number(s.warningYearAmount) || 0}">
       <button class="btn btn-accent w-100" type="button" id="ts-save" onclick="saveTimeSettings_()">Spara</button>
     </div>`;
+  setTimePayModeUi_(mode, true);
+}
+function setTimePayModeUi_(mode, skipStore) {
+  const next = demoPayMode_({ ledbyggPayMode: mode });
+  const hidden = document.getElementById("ts-pay-mode");
+  if (hidden && !skipStore) hidden.value = next;
+  if (hidden && skipStore) hidden.value = next;
+  document.querySelectorAll("[data-pay-mode]").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.getAttribute("data-pay-mode") === next);
+  });
+  const hourWrap = document.getElementById("ts-hour-wrap");
+  const problemWrap = document.getElementById("ts-problem-wrap");
+  if (hourWrap) hourWrap.style.display = next === "problems" ? "none" : "";
+  if (problemWrap) problemWrap.style.display = next === "time" ? "none" : "";
 }
 function saveTimeSettings_() {
   const payload = {
-    ledbyggHourlyRate: document.getElementById("ts-hour").value,
+    ledbyggHourlyRate: document.getElementById("ts-hour") ? document.getElementById("ts-hour").value : 0,
+    ledbyggPayMode: document.getElementById("ts-pay-mode") ? document.getElementById("ts-pay-mode").value : "time",
+    ledbyggProblemAmount: document.getElementById("ts-problem") ? document.getElementById("ts-problem").value : 0,
     minPayout: document.getElementById("ts-min").value,
     hallvardShiftAmount: document.getElementById("ts-shift").value,
     maxYearAmount: document.getElementById("ts-max").value,
