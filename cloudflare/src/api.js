@@ -71,7 +71,7 @@ import {
   isR2ImageKey,
   uploadRouteImage
 } from "./images.js";
-import { mailPasswordReset, mailWelcome } from "./mail.js";
+import { clipInviteMessage, mailPasswordReset, mailWelcome } from "./mail.js";
 
 export async function dispatch(env, action, token, args) {
   const publicActions = {
@@ -410,7 +410,7 @@ async function createNewAdmin(env, payload, session) {
   let mailError = "";
   if (sendInvite) {
     try {
-      await mailWelcome(env, created, password);
+      await mailWelcome(env, created, password, clipInviteMessage(obj.message || obj.inviteMessage));
       mailSent = true;
     } catch (err) {
       mailError = String(err && err.message ? err.message : err);

@@ -5948,10 +5948,15 @@ function renderCreateUser(preset) {
       ${isSuper ? `<div class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
         ${roleCheckboxesHtml_("nu-role-", presetRoles)}
       </div>` : `<input type="hidden" id="nu-role" value="scout">`}
-      <label class="login-remember d-flex align-items-center gap-2 mb-3">
-        <input type="checkbox" id="nu-send-invite" checked>
+      <label class="login-remember d-flex align-items-center gap-2 mb-2">
+        <input type="checkbox" id="nu-send-invite" checked onchange="onNuSendInviteChange_()">
         Skicka e-post med länk till appen och inloggningen
       </label>
+      <div id="nu-invite-msg-wrap" class="mb-3">
+        <label class="form-label" for="nu-invite-msg">Kort meddelande (valfritt)</label>
+        <textarea id="nu-invite-msg" class="form-control form-control-sm" rows="3" maxlength="500" placeholder="T.ex. välkommen, när ni ses nästa gång…"></textarea>
+        <div class="small mt-1" style="color:var(--muted);">Ingår i välkomstmejlet, högst 500 tecken.</div>
+      </div>
       <button class="btn btn-accent w-100" type="button" onclick="createUser()">${escapeHtml_(title)}</button>
     </div>`;
 }
@@ -6034,7 +6039,8 @@ function createUser() {
     role,
     extraRoles,
     password: document.getElementById("nu-pw").value,
-    sendInvite: !!(document.getElementById("nu-send-invite") && document.getElementById("nu-send-invite").checked)
+    sendInvite: !!(document.getElementById("nu-send-invite") && document.getElementById("nu-send-invite").checked),
+    message: String((document.getElementById("nu-invite-msg") || {}).value || "").trim()
   };
   if (!payload.username) return showToast("Användarnamn saknas");
   if (!payload.name) return showToast("Visningsnamn saknas");
@@ -6064,6 +6070,11 @@ function createUser() {
       renderUserManagement();
     })
     .createNewAdmin(payload);
+}
+function onNuSendInviteChange_() {
+  const box = document.getElementById("nu-send-invite");
+  const wrap = document.getElementById("nu-invite-msg-wrap");
+  if (wrap) wrap.style.display = box && box.checked ? "" : "none";
 }
 function onNuRoleChange_() {
   const el = document.getElementById("nu-role");

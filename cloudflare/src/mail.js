@@ -36,6 +36,10 @@ function compose(opts) {
     textLines.push("");
     for (const row of rows) textLines.push(row.label + ": " + row.value);
   }
+  const personal = String(opts.message || "").trim();
+  if (personal) {
+    textLines.push("", personal);
+  }
   if (opts.notes && opts.notes.length) {
     textLines.push("");
     for (const n of opts.notes) textLines.push(n);
@@ -67,6 +71,9 @@ function compose(opts) {
     `<p style="margin:0 0 4px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#0d6e6e;font-weight:700;">${escapeHtml(APP_NAME)}</p>` +
     `<p style="margin:0 0 8px;">${escapeHtml(greeting)}</p>` +
     `<p style="margin:0 0 16px;">${escapeHtml(opts.intro || "")}</p>` +
+    (personal
+      ? `<p style="margin:0 0 16px;padding:12px 14px;background:#f4f8f8;border-radius:12px;white-space:pre-line;">${escapeHtml(personal)}</p>`
+      : "") +
     (rows.length
       ? `<table style="border-collapse:collapse;width:100%;margin:0 0 8px;background:#f4f8f8;border-radius:12px;overflow:hidden;"><tbody>${rowHtml}</tbody></table>`
       : "") +
@@ -154,12 +161,20 @@ function toMessage(to, composed) {
   return { to, subject: composed.subject, body: composed.body, html: composed.html };
 }
 
-export async function mailWelcome(env, user, password) {
+export function clipInviteMessage(raw) {
+  const next = String(raw == null ? "" : raw).replace(/\r\n/g, "\n").trim();
+  if (!next) return "";
+  if (next.length > 500) return next.slice(0, 500).trim();
+  return next;
+}
+
+export async function mailWelcome(env, user, password, message) {
   const url = loginUrl(env);
   const composed = compose({
     name: user.name || user.username,
     subject: "ditt konto är skapat",
     intro: "Ett WallFlow-konto har skapats åt dig. Logga in med användarnamn eller e-post och det tillfälliga lösenordet, byt sedan lösenord vid första inloggningen.",
+    message: clipInviteMessage(message),
     rows: [
       { label: "Användarnamn", value: user.username },
       { label: "E-post", value: user.email },
