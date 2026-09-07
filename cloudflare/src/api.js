@@ -18,13 +18,18 @@ import {
   parseExtraRoles,
   randomSalt,
   roleOf,
+  savePasswordReset,
   saveSession,
+  takePasswordReset,
+  validateEmail,
   validateUsername
 } from "./auth.js";
 import {
   countSuperadmins,
   deleteUser,
   findUser,
+  findUserByEmail,
+  findUserByLogin,
   getRouteByNr,
   isAllowedGrade,
   nextRouteNumber,
@@ -66,11 +71,14 @@ import {
   isR2ImageKey,
   uploadRouteImage
 } from "./images.js";
+import { mailPasswordReset, mailWelcome } from "./mail.js";
 
 export async function dispatch(env, action, token, args) {
   const publicActions = {
     getAppData: true,
-    verifyAdminPassword: true
+    verifyAdminPassword: true,
+    requestPasswordReset: true,
+    completePasswordReset: true
   };
 
   let session = null;
@@ -85,6 +93,10 @@ export async function dispatch(env, action, token, args) {
       return getAppData(env, token);
     case "verifyAdminPassword":
       return verifyAdminPassword(env, args[0], args[1]);
+    case "requestPasswordReset":
+      return requestPasswordReset(env, args[0]);
+    case "completePasswordReset":
+      return completePasswordReset(env, args[0], args[1]);
     case "finalizeUserPassword":
       return finalizeUserPassword(env, args[0], args[1], session);
     case "changeOwnPassword":
@@ -122,6 +134,8 @@ export async function dispatch(env, action, token, args) {
     }
     case "updateUserDisplayName":
       return updateUserDisplayName(env, args[0], args[1], session);
+    case "updateUserEmail":
+      return updateUserEmail(env, args[0], args[1], session);
     case "updateUserRoles":
       return updateUserRoles(env, args[0], session);
     case "setRouteLifetimeDays":
@@ -158,6 +172,7 @@ async function getAppData(env, token) {
         appData.me = {
           username: me.username,
           name: me.name || "",
+          email: me.email || "",
           role: me.role,
           extraRoles: me.extraRoles || [],
           flags: publicSessionFlags({ ...me, extraRoles: me.extraRoles })
@@ -171,7 +186,7 @@ async function getAppData(env, token) {
 async function verifyAdminPassword(env, username, password) {
   username = String(username || "").trim();
   password = String(password || "");
-  const u = await findUser(env, username);
+  const u = await findUserByLogin(env, username);
   if (!u || !u.salt || !u.passwordHash) return { authorized: false };
   const hash = await hashPassword(password, u.salt);
   if (hash !== u.passwordHash) return { authorized: false };
@@ -185,6 +200,7 @@ async function verifyAdminPassword(env, username, password) {
     extraRoles: u.extraRoles || [],
     username: u.username,
     name: u.name,
+    email: u.email || "",
     firstLogin: isFirstLogin(u.FirstLogin),
     flags: publicSessionFlags(u)
   };
@@ -231,6 +247,41 @@ async function changeOwnPassword(env, oldPw, newPw, session) {
   return { ok: true };
 }
 
+async function requestPasswordReset(env, identifier) {
+  const generic = { ok: true };
+  const login = String(identifier || "").trim();
+  if (!login) return generic;
+  const u = await findUserByLogin(env, login);
+  if (!u || !u.email) return generic;
+  const token = crypto.randomUUID().replace(/-/g, "") + randomSalt().slice(0, 16);
+  await savePasswordReset(env, token, u.username);
+  try {
+    await mailPasswordReset(env, u, token);
+  } catch (err) {
+    console.error("Kunde inte skicka återställningsmejl", String(err && err.message ? err.message : err));
+  }
+  return generic;
+}
+
+async function completePasswordReset(env, token, newPassword) {
+  if (!newPassword || String(newPassword).length < 6) {
+    return { ok: false, error: "Lösenordet måste vara minst 6 tecken" };
+  }
+  const reset = await takePasswordReset(env, token);
+  if (!reset) return { ok: false, error: "Länken är ogiltig eller har gått ut" };
+  const u = await findUser(env, reset.username);
+  if (!u) return { ok: false, error: "Länken är ogiltig eller har gått ut" };
+  const salt = randomSalt();
+  await upsertUser(env, {
+    ...u,
+    salt,
+    passwordHash: await hashPassword(String(newPassword), salt),
+    FirstLogin: "FALSE",
+    first_login: false
+  });
+  return { ok: true };
+}
+
 async function changeOwnUsername(env, newUsername, session) {
   if (!session) return { ok: false, error: "Ej inloggad" };
   const check = validateUsername(newUsername);
@@ -270,11 +321,29 @@ async function updateUserDisplayName(env, username, name, session) {
   return { ok: true, username: target, name: nextName };
 }
 
+async function updateUserEmail(env, username, email, session) {
+  if (!canManageUsers(session)) return { ok: false, error: "Saknar behörighet" };
+  const target = String(username || "").trim();
+  if (!target) return { ok: false, error: "Användarnamn saknas" };
+  const mailCheck = validateEmail(email);
+  if (!mailCheck.ok) return mailCheck;
+  const u = await findUser(env, target);
+  if (!u) return { ok: false, error: "Hittades inte" };
+  if (isAdminActor(session) && !isLedbyggareRole(u.role)) {
+    return { ok: false, error: "Admin kan bara hantera ledbyggare" };
+  }
+  const taken = await findUserByEmail(env, mailCheck.email, target);
+  if (taken) return { ok: false, error: "E-postadressen används redan" };
+  await upsertUser(env, { ...u, email: mailCheck.email });
+  return { ok: true, username: target, email: mailCheck.email };
+}
+
 async function getAllAdmins(env, session) {
   if (!canManageUsers(session)) return [];
   let users = (await readUsers(env)).map((u) => ({
     username: u.username,
     name: u.name,
+    email: u.email || "",
     role: u.role,
     extraRoles: u.extraRoles || []
   }));
@@ -291,6 +360,10 @@ async function createNewAdmin(env, payload, session) {
   obj = obj || {};
   let username = String(obj.username || "").trim();
   const name = String(obj.name || "").trim();
+  const emailCheck = validateEmail(obj.email);
+  if (!emailCheck.ok) return emailCheck;
+  const email = emailCheck.email;
+  const sendInvite = obj.sendInvite === true || obj.sendInvite === "true" || obj.sendInvite === 1 || obj.sendInvite === "1";
   let role = normalizeRole(obj.role || "admin");
   const extraRoles = isAdminActor(session) ? [] : parseExtraRoles(obj.extraRoles || obj.extra_roles);
   const password = String(obj.password || "");
@@ -315,19 +388,36 @@ async function createNewAdmin(env, payload, session) {
   if (await findUser(env, username)) {
     return { ok: false, error: "Användaren finns redan" };
   }
+  if (await findUserByEmail(env, email)) {
+    return { ok: false, error: "E-postadressen används redan" };
+  }
 
   const salt = randomSalt();
-  await upsertUser(env, {
+  const created = {
     username,
     passwordHash: await hashPassword(password, salt),
     salt,
     role,
     extraRoles,
     name,
+    email,
     FirstLogin: "TRUE",
     first_login: true
-  });
-  return { ok: true };
+  };
+  await upsertUser(env, created);
+
+  let mailSent = false;
+  let mailError = "";
+  if (sendInvite) {
+    try {
+      await mailWelcome(env, created, password);
+      mailSent = true;
+    } catch (err) {
+      mailError = String(err && err.message ? err.message : err);
+      console.error("Kunde inte skicka välkomstmejl", mailError);
+    }
+  }
+  return { ok: true, mailSent, mailError };
 }
 
 async function updateUserRole(env, username, role, session) {

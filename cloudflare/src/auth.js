@@ -2,6 +2,8 @@
 
 export const SESSION_HOURS = 24 * 14;
 export const SESSION_PREFIX = "wf_sess_";
+export const RESET_PREFIX = "wf_reset_";
+export const RESET_HOURS = 2;
 export const ALL_PRIMARY_ROLES = ["superadmin", "admin", "scout", "kassor", "hallvard"];
 
 export function normalizeRole(role) {
@@ -110,6 +112,46 @@ export function validateUsername(username) {
     return { ok: false, error: "Användarnamn: endast a–z, 0–9, punkt, _ och -" };
   }
   return { ok: true, username: next };
+}
+
+export function validateEmail(email) {
+  const next = String(email || "").trim().toLowerCase();
+  if (!next) return { ok: false, error: "E-post saknas" };
+  if (next.length > 120) return { ok: false, error: "E-postadressen är för lång" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) {
+    return { ok: false, error: "Ogiltig e-postadress" };
+  }
+  return { ok: true, email: next };
+}
+
+export async function sha256Hex(value) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function savePasswordReset(env, token, username) {
+  const key = RESET_PREFIX + (await sha256Hex(token));
+  const payload = JSON.stringify({
+    username: String(username || "").trim(),
+    exp: Date.now() + RESET_HOURS * 3600 * 1000
+  });
+  await env.SESSIONS.put(key, payload, { expirationTtl: RESET_HOURS * 3600 });
+}
+
+export async function takePasswordReset(env, token) {
+  const rawToken = String(token || "").trim();
+  if (!rawToken) return null;
+  const key = RESET_PREFIX + (await sha256Hex(rawToken));
+  const raw = await env.SESSIONS.get(key);
+  if (!raw) return null;
+  await env.SESSIONS.delete(key);
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.username || !obj.exp || obj.exp < Date.now()) return null;
+    return { username: String(obj.username) };
+  } catch {
+    return null;
+  }
 }
 
 export async function hashPassword(password, salt) {

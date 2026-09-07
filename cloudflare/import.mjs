@@ -255,6 +255,7 @@ function loadFromCsvDir(dir) {
       salt: u.salt,
       role: u.role || u.Role,
       name: u.name || u.Name || u.Namn,
+      email: u.email || u.Email || u.Epost,
       FirstLogin: u.FirstLogin
     }));
   }
@@ -359,6 +360,7 @@ function normalizeSnapshot(raw) {
       salt: String(u.salt || ""),
       role: normalizeRole(u.role || u.Role),
       name: String(u.name || u.Name || u.Namn || "").trim(),
+      email: String(u.email || u.Email || u.Epost || "").trim().toLowerCase(),
       firstLogin: isFirstLogin(u.FirstLogin)
     });
   }
@@ -443,8 +445,8 @@ function emitSql(data) {
       continue;
     }
     lines.push(
-      "INSERT INTO users (username, password_hash, salt, role, name, first_login) VALUES (" +
-        [sqlStr(u.username), sqlStr(u.passwordHash), sqlStr(u.salt), sqlStr(u.role), sqlStr(u.name), u.firstLogin ? "1" : "0"].join(", ") +
+      "INSERT INTO users (username, password_hash, salt, role, name, email, first_login) VALUES (" +
+        [sqlStr(u.username), sqlStr(u.passwordHash), sqlStr(u.salt), sqlStr(u.role), sqlStr(u.name), sqlStr(u.email || ""), u.firstLogin ? "1" : "0"].join(", ") +
         ");"
     );
   }

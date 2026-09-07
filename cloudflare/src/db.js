@@ -149,6 +149,7 @@ export async function readUsers(env) {
     extraRoles: parseExtraRoles(u.extra_roles),
     extra_roles: serializeExtraRoles(u.extra_roles),
     name: String(u.name || "").trim(),
+    email: String(u.email || "").trim().toLowerCase(),
     FirstLogin: u.first_login ? "TRUE" : "FALSE",
     first_login: !!u.first_login
   })).filter((u) => !!u.username);
@@ -161,16 +162,39 @@ export async function findUser(env, username) {
   return users.find((u) => u.username.toLowerCase() === target) || null;
 }
 
+export async function findUserByLogin(env, identifier) {
+  const target = String(identifier || "").trim().toLowerCase();
+  if (!target) return null;
+  const users = await readUsers(env);
+  return users.find((u) => {
+    if (u.username.toLowerCase() === target) return true;
+    return !!u.email && u.email.toLowerCase() === target;
+  }) || null;
+}
+
+export async function findUserByEmail(env, email, exceptUsername) {
+  const target = String(email || "").trim().toLowerCase();
+  if (!target) return null;
+  const skip = String(exceptUsername || "").trim().toLowerCase();
+  const users = await readUsers(env);
+  return users.find((u) => {
+    if (!u.email || u.email.toLowerCase() !== target) return false;
+    if (skip && u.username.toLowerCase() === skip) return false;
+    return true;
+  }) || null;
+}
+
 export async function upsertUser(env, user) {
   await env.DB.prepare(
-    `INSERT INTO users (username, password_hash, salt, role, extra_roles, name, first_login)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO users (username, password_hash, salt, role, extra_roles, name, email, first_login)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(username) DO UPDATE SET
        password_hash = excluded.password_hash,
        salt = excluded.salt,
        role = excluded.role,
        extra_roles = excluded.extra_roles,
        name = excluded.name,
+       email = excluded.email,
        first_login = excluded.first_login`
   ).bind(
     user.username,
@@ -179,6 +203,7 @@ export async function upsertUser(env, user) {
     normalizeRole(user.role),
     serializeExtraRoles(user.extraRoles != null ? user.extraRoles : user.extra_roles),
     user.name || "",
+    String(user.email || "").trim().toLowerCase(),
     isFirstLogin(user.FirstLogin) || user.first_login ? 1 : 0
   ).run();
 }

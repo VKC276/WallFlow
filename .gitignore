@@ -6,4 +6,5 @@ skills-lock.json
 cloudflare/node_modules/
 cloudflare/.wrangler/
 cloudflare/.env
+cloudflare/.dev.vars
 cloudflare/wrangler.toml

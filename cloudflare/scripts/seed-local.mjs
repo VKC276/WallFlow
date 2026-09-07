@@ -55,8 +55,8 @@ for (const r of snap.routes || []) {
 }
 
 lines.push(
-  `INSERT INTO users (username, password_hash, salt, role, name, first_login) VALUES (` +
-  `'admin', '${adminHash}', '${salt}', 'superadmin', 'Admin', 0);`
+  `INSERT INTO users (username, password_hash, salt, role, name, email, first_login) VALUES (` +
+  `'admin', '${adminHash}', '${salt}', 'superadmin', 'Admin', 'admin@example.com', 0);`
 );
 
 lines.push(`INSERT INTO settings (key, value) VALUES ('routeLifetimeDays', '${esc(snap.routeLifetimeDays || 30)}');`);

@@ -1,0 +1,6 @@
+# Kopiera till .dev.vars i denna mapp för lokal wrangler dev.
+# Samma värden som Worker-secrets på rentr-api.
+
+APP_BASE_URL=https://wallflow.vastervikclimbing.se
+MAIL_WEBHOOK_URL=
+MAIL_WEBHOOK_SECRET=

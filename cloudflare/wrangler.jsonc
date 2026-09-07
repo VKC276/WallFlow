@@ -8,6 +8,12 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "vars": {
+    "APP_BASE_URL": "https://wallflow.vastervikclimbing.se"
+  },
+  // Mejl: samma GAS-relay som RentR. Sätt secrets (samma värden som rentr-api):
+  //   npx wrangler secret put MAIL_WEBHOOK_URL
+  //   npx wrangler secret put MAIL_WEBHOOK_SECRET
   // Fyll i riktiga ID:n efter `wrangler d1 create` / `kv namespace create` (eller kör migrate.mjs).
   // Lokalt (`wrangler dev`) fungerar med placeholder-ID:n.
   "d1_databases": [

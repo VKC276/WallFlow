@@ -32,6 +32,7 @@ CREATE TABLE users (
   role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'scout', 'kassor', 'hallvard')),
   extra_roles TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
   first_login INTEGER NOT NULL DEFAULT 1 CHECK (first_login IN (0, 1))
 );
 
@@ -57,6 +58,7 @@ CREATE TABLE settings (
 CREATE INDEX idx_routes_gradering ON routes (gradering);
 CREATE INDEX idx_grades_order ON grades (sort_order);
 CREATE INDEX idx_users_role ON users (role);
+CREATE UNIQUE INDEX idx_users_email ON users (email COLLATE NOCASE) WHERE email != '';
 CREATE INDEX idx_time_entries_user_date ON time_entries (username, work_date);
 CREATE INDEX idx_time_entries_date ON time_entries (work_date);
 CREATE INDEX idx_time_entries_kind ON time_entries (kind);
