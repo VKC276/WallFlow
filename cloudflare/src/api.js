@@ -84,7 +84,8 @@ export async function dispatch(env, action, token, args, extras) {
     getAppData: true,
     verifyAdminPassword: true,
     requestPasswordReset: true,
-    completePasswordReset: true
+    completePasswordReset: true,
+    getVerifApp: true
   };
 
   let session = null;

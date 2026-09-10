@@ -1,6 +1,6 @@
 /**
  * Mejl via samma GAS-relay som RentR (ClimbLink).
- * POST { action: 'relayMail', secret, messages: [{ to, subject, body, html }] }
+ * POST { action: 'relayMail', secret, messages: [{ to, subject, body, html, attachments? }] }
  */
 
 const APP_NAME = "WallFlow";
@@ -199,8 +199,8 @@ export async function mailVerification(env, opts) {
       { label: "Bokföringsinkorg", value: archiveEmail }
     ],
     notes: [
-      "Skicka PDF:en vidare till " + archiveEmail + " för hantering i bokföringen.",
-      "Bifoga samma PDF som du fått här — kassören ska kunna se om det är utbetalning eller bara verifikation."
+      "PDF:en ligger bifogad i det här mejlet.",
+      "Skicka samma PDF vidare till " + archiveEmail + " för hantering i bokföringen."
     ],
     ctaLabel: "Öppna PDF",
     ctaUrl: opts.downloadUrl
@@ -209,7 +209,9 @@ export async function mailVerification(env, opts) {
   if (opts.pdfBytes && opts.filename) {
     attachments.push({
       filename: String(opts.filename),
+      name: String(opts.filename),
       mimeType: "application/pdf",
+      type: "application/pdf",
       content: bytesToBase64(opts.pdfBytes)
     });
   }

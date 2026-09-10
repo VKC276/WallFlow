@@ -72,7 +72,6 @@ function looksLikePdf(bytes) {
 }
 
 export async function getVerifApp(env, session) {
-  if (!canUseVerifTool(session)) return { ok: false, error: "Ej inloggad" };
   return {
     ok: true,
     archiveEmail: await readVerifArchiveEmail(env),

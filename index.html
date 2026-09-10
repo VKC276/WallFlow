@@ -1587,6 +1587,7 @@
             <span class="login-spinner" aria-hidden="true"></span>
             <span class="login-btn-label">Logga in</span>
           </button>
+          <button id="login-verif-btn" class="btn btn-ghost w-100 mt-2" type="button" onclick="openVerifFromLogin_()">Skapa underlag utan inloggning</button>
         </div>
         <div id="login-form-forgot" style="display:none;">
           <div class="mb-3"><input id="forgot-login" class="form-control form-control-lg" placeholder="Användarnamn eller e-post" autocomplete="username" onkeydown="if(event.key==='Enter')submitForgotPassword_()"></div>
@@ -1977,7 +1978,7 @@ function demoVerifApi_(store, action, args) {
       orgName: "Västerviks klätterklubb",
       orgNr: "802431-5718",
       today: currentYmd_(),
-      canManage: String(currentUser.role) === "superadmin"
+      canManage: !!(currentUser && currentUser.authorized && String(currentUser.role) === "superadmin")
     };
   }
   if (action === "saveVerifSettings") {
@@ -2069,7 +2070,7 @@ function demoApi_(action, args) {
         saveDemoDb_(store);
         return ok({ ok: true });
       }
-      if (__sessionToken !== "demo-token-admin" && action !== "getAppData") return fail("Ej inloggad");
+      if (__sessionToken !== "demo-token-admin" && action !== "getAppData" && action !== "getVerifApp") return fail("Ej inloggad");
 
       if (action === "uploadRouteImage") {
         const payload = args[0] || {};
@@ -2462,6 +2463,11 @@ function renderAccountMenu_() {
   const menu = document.getElementById("account-menu");
   if (!menu) return;
   const items = [];
+  if (!currentUser.authorized) {
+    items.push(`<button type="button" role="menuitem" onclick="closeVerifTool()">Tillbaka till inloggning</button>`);
+    menu.innerHTML = items.join("");
+    return;
+  }
   if (hasWallflowAccess_()) {
     items.push(`<button type="button" role="menuitem" onclick="openRoutesFromMenu_()">Ledbyggnation</button>`);
   }
@@ -2706,7 +2712,10 @@ function showAppChrome_() {
 }
 function onTopBrandClick_() {
   closeAccountMenu_();
-  if (!currentUser.authorized) return;
+  if (!currentUser.authorized) {
+    closeVerifTool();
+    return;
+  }
   if (hasWallflowAccess_()) {
     closeTimeTool();
     closeVerifTool();
@@ -4786,6 +4795,8 @@ function setLoginFormBusy_(busy, phase) {
   if (rememberEl) rememberEl.disabled = !!busy;
   const forgotBtn = document.getElementById("login-forgot-btn");
   if (forgotBtn) forgotBtn.disabled = !!busy;
+  const verifBtn = document.getElementById("login-verif-btn");
+  if (verifBtn) verifBtn.disabled = !!busy;
 }
 
 function clearLoginTimeout_() {
@@ -5112,7 +5123,7 @@ function renderAdminHome() {
     </div>
     <div class="admin-card">
       <h3>Bokföring</h3>
-      <p class="small mb-3" style="color:var(--muted);">E-postadress som ska stå i mejlet med den sammanslagna PDF:en, dit medlemmen skickar verifikationen.</p>
+      <p class="small mb-3" style="color:var(--muted);">E-postadress som visas i verktyget och på PDF:en, dit medlemmen skickar underlaget.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="renderVerifSettingsFromAdmin_()">Bokföringsinkorg</button>
       </div>
@@ -6937,17 +6948,30 @@ let verifFiles_ = [];
 let verifLineCount_ = 2;
 let verifArchiveEmail_ = "inbox.ver.1624638@arkivplats.se";
 
+let verifGuest_ = false;
+
 function closeVerifTool() {
   const el = document.getElementById("app-verif");
   if (el) el.classList.remove("show");
   document.body.classList.remove("verif-open");
+  if (verifGuest_ || !currentUser.authorized) {
+    verifGuest_ = false;
+    hideAppChrome_();
+    showLoginGate_();
+    return;
+  }
   if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show")) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
 }
+function openVerifFromLogin_() {
+  if (loginInFlight_) return;
+  verifGuest_ = true;
+  document.getElementById("login-panel").classList.remove("show");
+  openVerifTool();
+}
 function openVerifTool() {
-  if (!currentUser.authorized) return showLoginGate_();
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-public").classList.remove("ready");
@@ -6966,7 +6990,7 @@ function splitDisplayName_() {
 function loadVerifProfile_() {
   const fallback = splitDisplayName_();
   try {
-    const raw = localStorage.getItem(VERIF_PROFILE_KEY_ + ":" + String(currentUser.username || "").toLowerCase());
+    const raw = localStorage.getItem(VERIF_PROFILE_KEY_ + ":" + String((currentUser && currentUser.username) || "guest").toLowerCase());
     if (!raw) return fallback;
     const p = JSON.parse(raw);
     return {
@@ -6985,7 +7009,7 @@ function loadVerifProfile_() {
 }
 function saveVerifProfile_(p) {
   try {
-    localStorage.setItem(VERIF_PROFILE_KEY_ + ":" + String(currentUser.username || "").toLowerCase(), JSON.stringify(p));
+    localStorage.setItem(VERIF_PROFILE_KEY_ + ":" + String((currentUser && currentUser.username) || "guest").toLowerCase(), JSON.stringify(p));
   } catch (_) {}
 }
 function loadVerifForm_() {
@@ -6993,39 +7017,39 @@ function loadVerifForm_() {
   main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
   google.script.run
     .withSuccessHandler((res) => {
-      if (!res || res.ok === false) {
-        main.innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte öppna verktyget")}</p></div>`;
+      if (res && res.ok !== false && res.archiveEmail) {
+        verifArchiveEmail_ = String(res.archiveEmail);
+        renderVerifForm_(res);
         return;
       }
-      verifArchiveEmail_ = String(res.archiveEmail || verifArchiveEmail_);
-      renderVerifForm_(res);
+      renderVerifForm_({ archiveEmail: verifArchiveEmail_, today: currentYmd_() });
     })
     .withFailureHandler(() => {
-      main.innerHTML = `<div class="admin-card"><p>Kunde inte öppna verktyget.</p></div>`;
+      renderVerifForm_({ archiveEmail: verifArchiveEmail_, today: currentYmd_() });
     })
     .getVerifApp();
 }
 function renderVerifForm_(data) {
   const profile = loadVerifProfile_();
   const today = escapeHtml_((data && data.today) || currentYmd_());
-  const email = String(currentUser.email || "").trim();
+  const archive = String((data && data.archiveEmail) || verifArchiveEmail_);
   verifFiles_ = [];
   verifLineCount_ = 2;
   document.getElementById("verif-main").innerHTML = `
     <div class="admin-card">
       <p class="admin-kicker">Utlägg · Verifikation</p>
+      ${!currentUser.authorized ? `<button class="btn btn-sm btn-ghost mb-3" type="button" onclick="closeVerifTool()">← Tillbaka till inloggning</button>` : ""}
       <h3>Ny blankett</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Fyll i samma uppgifter som på utläggsblanketten. Bifoga kvitton som PDF eller bild.
-        Du får en sammanslagen PDF mejlad till <strong>${escapeHtml_(email || "din kontomejl")}</strong> med uppmaning att skicka den till
-        <strong>${escapeHtml_(data.archiveEmail)}</strong> för bokföringen.
+        Fyll i blanketten och bifoga kvitton. PDF:en laddas ner på enheten.
+        Skicka den sedan med valfritt mejlprogram till
+        <strong>${escapeHtml_(archive)}</strong>.
       </p>
-      ${email ? "" : `<div class="time-banner max">Ditt konto saknar e-post. Be en admin lägga till den innan du kan skicka.</div>`}
       <label class="d-flex align-items-start gap-2 mb-3">
         <input type="checkbox" id="verif-club-card" style="margin-top:4px;" onchange="onVerifClubCardChange_()">
         <span>
           <strong>Köpt med klubbens kort</strong>
-          <span class="small d-block" style="color:var(--muted); font-weight:400;">Kryssa i om ingen utbetalning ska göras — då blir det en ren verifikation till kassören.</span>
+          <span class="small d-block" style="color:var(--muted); font-weight:400;">Köpet är redan betalt med klubbens kort.</span>
         </span>
       </label>
       <div id="verif-kind-banner" class="time-banner verif-banner payout">Utlägg — pengar ska betalas ut till medlemmen</div>
@@ -7083,7 +7107,8 @@ function renderVerifForm_(data) {
       <div class="verif-files" id="verif-file-list"></div>
     </div>
     <div class="admin-card">
-      <button class="btn btn-accent w-100" type="button" id="verif-submit" onclick="submitVerif_()">Skapa PDF och mejla mig</button>
+      <p class="small mb-3" style="color:var(--muted);">Efter nedladdning: skicka PDF:en till <strong>${escapeHtml_(archive)}</strong>.</p>
+      <button class="btn btn-accent w-100" type="button" id="verif-submit" onclick="submitVerif_()">Skapa och ladda ner PDF</button>
     </div>`;
   renderVerifLines_();
 }
@@ -7093,7 +7118,7 @@ function onVerifClubCardChange_() {
   if (banner) {
     banner.className = "time-banner verif-banner " + (on ? "card" : "payout");
     banner.textContent = on
-      ? "Klubbkort — ingen utbetalning till medlemmen, bara verifikation"
+      ? "Verifikation — ingen utbetalning till medlemmen"
       : "Utlägg — pengar ska betalas ut till medlemmen";
   }
   const person = document.getElementById("verif-person-card");
@@ -7222,37 +7247,12 @@ async function submitVerif_() {
   if (btn) { btn.disabled = true; btn.textContent = "Skapar PDF…"; }
   try {
     const pdf = await buildVerifPdf_(payload, verifFiles_);
-    payload.pdfBase64 = pdf.base64;
-    payload.total = pdf.total;
-    if (btn) btn.textContent = "Skickar mejl…";
-    google.script.run
-      .withSuccessHandler((res) => {
-        if (btn) { btn.disabled = false; btn.textContent = "Skapa PDF och mejla mig"; }
-        if (!res || res.ok === false) {
-          if (res && res.downloadUrl) {
-            showToast((res.error || "Mejlet misslyckades") + " PDF finns som länk.");
-            window.open(res.downloadUrl, "_blank");
-            return;
-          }
-          return showToast((res && res.error) || "Kunde inte skicka");
-        }
-        if (res.demo) {
-          downloadBytes_(pdf.bytes, pdf.filename);
-          showToast("Demoläge: PDF nedladdad. Mejl skickas i live-läge.");
-          return;
-        }
-        showToast("Mejlat till " + (currentUser.email || "dig") + ". Skicka vidare till " + (res.archiveEmail || verifArchiveEmail_));
-        loadVerifForm_();
-      })
-      .withFailureHandler(() => {
-        if (btn) { btn.disabled = false; btn.textContent = "Skapa PDF och mejla mig"; }
-        showToast("Kunde inte skicka");
-      })
-      .submitVerification(payload);
+    downloadBytes_(pdf.bytes, pdf.filename);
+    showToast("PDF nedladdad. Skicka den till " + verifArchiveEmail_);
   } catch (err) {
-    if (btn) { btn.disabled = false; btn.textContent = "Skapa PDF och mejla mig"; }
     showToast(String(err && err.message ? err.message : err));
   }
+  if (btn) { btn.disabled = false; btn.textContent = "Skapa och ladda ner PDF"; }
 }
 function downloadBytes_(bytes, filename) {
   const blob = new Blob([bytes], { type: "application/pdf" });
@@ -7345,8 +7345,8 @@ async function buildVerifPdf_(payload, files) {
   drawText("Org.nr 802431-5718", margin, y, 10, false, rgb(0.35, 0.4, 0.45));
   y -= 28;
   drawText(clubCard ? "VERIFIKATION" : "UTLÄGGSBLANKETT", margin, y, 22, true);
-  y -= 18;
-  drawText(clubCard ? "Klubbkort - ingen utbetalning" : "Utlägg - utbetalning till medlem", margin, y, 12, true,
+  y -= 16;
+  drawText(clubCard ? "Betalt med klubbens kort" : "Utlägg", margin, y, 12, true,
     clubCard ? rgb(0.72, 0.45, 0.08) : rgb(0.12, 0.48, 0.38));
   y -= 14;
   const bannerH = 46;
@@ -7356,8 +7356,8 @@ async function buildVerifPdf_(payload, files) {
     color: clubCard ? rgb(0.98, 0.92, 0.78) : rgb(0.82, 0.93, 0.88)
   });
   drawText(clubCard
-    ? "KASSÖR: Detta är en verifikation. Pengar ska INTE gå ut till medlemmen."
-    : "KASSÖR: Pengar ska betalas ut till medlemmen enligt bankuppgifterna.",
+    ? "KASSÖR: Ingen utbetalning till medlemmen."
+    : "KASSÖR: Pengar ska betalas ut till medlemmen.",
     margin + 10, y + 18, 10, true, rgb(0.16, 0.18, 0.2));
   y -= 28;
   const name = clubCard
@@ -7399,7 +7399,7 @@ async function buildVerifPdf_(payload, files) {
   drawText(formatSek_(total).replace(/\s/g, " "), pageW - margin - 90, y - 4, 12, true);
   y -= 36;
   if (clubCard) {
-    drawText("Betalning: klubbens kort. Ingen insättning till medlem.", margin, y, 11, true);
+    drawText("Betalsätt: klubbens kort", margin, y, 11, true);
   } else {
     drawText("För utbetalning (lämnas varje gång)", margin, y, 11, true);
     y -= 16;
@@ -7464,8 +7464,7 @@ function renderVerifSettings_(email) {
       <p class="admin-kicker">Administration · Bokföring</p>
       <h3>Bokföringsinkorg</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Adressen skrivs i mejlet som går till den inloggade användaren, tillsammans med den sammanslagna PDF:en.
-        Medlemmen uppmanas skicka PDF:en dit för hantering i bokföringen.
+        Adressen visas i utläggsverktyget och på försättsbladet. Medlemmen skickar den nedladdade PDF:en dit själv.
       </p>
       <label class="form-label" for="verif-archive-email">E-post</label>
       <input id="verif-archive-email" type="email" class="form-control mb-3" value="${escapeHtml_(email)}" autocomplete="off">
