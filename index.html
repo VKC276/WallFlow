@@ -1587,7 +1587,6 @@
             <span class="login-spinner" aria-hidden="true"></span>
             <span class="login-btn-label">Logga in</span>
           </button>
-          <button id="login-verif-btn" class="btn btn-ghost w-100 mt-2" type="button" onclick="openVerifFromLogin_()">Skapa underlag utan inloggning</button>
         </div>
         <div id="login-form-forgot" style="display:none;">
           <div class="mb-3"><input id="forgot-login" class="form-control form-control-lg" placeholder="Användarnamn eller e-post" autocomplete="username" onkeydown="if(event.key==='Enter')submitForgotPassword_()"></div>
@@ -2731,6 +2730,7 @@ function showAppShell_() {
     document.getElementById("app-public").classList.remove("ready");
     if (currentUser.firstLogin) openSettings();
     else openTimeTool();
+    if (isVerifRoute_()) openVerifTool();
     return;
   }
   document.getElementById("app-time").classList.remove("show");
@@ -2739,6 +2739,7 @@ function showAppShell_() {
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
+  else if (isVerifRoute_()) openVerifTool();
 }
 function renderEditToolbar_() {
   /* Redigera sker via ledkortet; + Ny led ligger under Administration för superadmin. */
@@ -2944,6 +2945,11 @@ function startAppBoot_() {
     if (banner) banner.style.display = "block";
   }
   const hasSession = restoreSession_();
+  if (isVerifRoute_() && !hasSession) {
+    hideLoadingScreen();
+    openGuestVerifFromRoute_();
+    return;
+  }
   if (!hasSession) {
     hideLoadingScreen();
     showLoginGate_();
@@ -4795,8 +4801,6 @@ function setLoginFormBusy_(busy, phase) {
   if (rememberEl) rememberEl.disabled = !!busy;
   const forgotBtn = document.getElementById("login-forgot-btn");
   if (forgotBtn) forgotBtn.disabled = !!busy;
-  const verifBtn = document.getElementById("login-verif-btn");
-  if (verifBtn) verifBtn.disabled = !!busy;
 }
 
 function clearLoginTimeout_() {
@@ -6950,10 +6954,33 @@ let verifArchiveEmail_ = "inbox.ver.1624638@arkivplats.se";
 
 let verifGuest_ = false;
 
+function isVerifRoute_() {
+  const path = String(location.pathname || "").replace(/\/index\.html$/i, "").replace(/\/+$/, "").toLowerCase();
+  if (/(^|\/)verifikation$/.test(path)) return true;
+  const hash = String(location.hash || "").replace(/^#/, "").split(/[?&]/)[0].toLowerCase();
+  return hash === "verifikation";
+}
+function clearVerifRoute_() {
+  try {
+    let path = String(location.pathname || "/");
+    path = path.replace(/\/verifikation\/?$/i, "/");
+    if (!path) path = "/";
+    const hashRaw = String(location.hash || "").replace(/^#/, "");
+    const keepHash = hashRaw.toLowerCase() === "verifikation" ? "" : location.hash;
+    history.replaceState(null, "", path + location.search + keepHash);
+  } catch (_) { /* ignore */ }
+}
+function openGuestVerifFromRoute_() {
+  verifGuest_ = !currentUser.authorized;
+  const login = document.getElementById("login-panel");
+  if (login) login.classList.remove("show");
+  openVerifTool();
+}
 function closeVerifTool() {
   const el = document.getElementById("app-verif");
   if (el) el.classList.remove("show");
   document.body.classList.remove("verif-open");
+  clearVerifRoute_();
   if (verifGuest_ || !currentUser.authorized) {
     verifGuest_ = false;
     hideAppChrome_();
@@ -6964,12 +6991,6 @@ function closeVerifTool() {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
-}
-function openVerifFromLogin_() {
-  if (loginInFlight_) return;
-  verifGuest_ = true;
-  document.getElementById("login-panel").classList.remove("show");
-  openVerifTool();
 }
 function openVerifTool() {
   document.getElementById("app-admin").classList.remove("show");
@@ -7493,12 +7514,17 @@ if (document.readyState === "loading") {
 }
 window.addEventListener("hashchange", () => {
   const token = consumeResetTokenFromUrl_();
-  if (!token) return;
-  pendingResetToken_ = token;
-  if (currentUser && currentUser.authorized) return;
-  const panel = document.getElementById("login-panel");
-  if (panel) panel.classList.add("show");
-  showLoginMode_("reset");
+  if (token) {
+    pendingResetToken_ = token;
+    if (currentUser && currentUser.authorized) return;
+    const panel = document.getElementById("login-panel");
+    if (panel) panel.classList.add("show");
+    showLoginMode_("reset");
+    return;
+  }
+  if (isVerifRoute_() && !(currentUser && currentUser.authorized)) {
+    openGuestVerifFromRoute_();
+  }
 });
   </script>
 </body>

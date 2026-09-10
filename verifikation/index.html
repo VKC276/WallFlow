@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WallFlow</title>
+  <script>
+    (function () {
+      var path = String(location.pathname || "/").replace(/\/verifikation\/?$/i, "/");
+      if (!path) path = "/";
+      location.replace(path + location.search + "#verifikation");
+    })();
+  </script>
+</head>
+<body></body>
+</html>
