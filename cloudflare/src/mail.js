@@ -157,8 +157,63 @@ export async function sendMessages(env, messages) {
   return { ok: true, sent: out.length };
 }
 
-function toMessage(to, composed) {
-  return { to, subject: composed.subject, body: composed.body, html: composed.html };
+function toMessage(to, composed, attachments) {
+  const msg = { to, subject: composed.subject, body: composed.body, html: composed.html };
+  if (attachments && attachments.length) msg.attachments = attachments;
+  return msg;
+}
+
+function bytesToBase64(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function formatSekSv(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "0 kr";
+  return new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + " kr";
+}
+
+export async function mailVerification(env, opts) {
+  const meta = opts.meta || {};
+  const clubCard = !!meta.clubCard;
+  const archiveEmail = String(opts.archiveEmail || "").trim();
+  const kindLabel = clubCard
+    ? "Klubbkort — ingen utbetalning"
+    : "Utlägg — utbetalning till medlem";
+  const composed = compose({
+    name: opts.name,
+    subject: clubCard ? "verifikation (klubbkort)" : "utlägg att betala ut",
+    intro: clubCard
+      ? "Här är din sammanslagna PDF med försättsblad och kvitton. Det är en verifikation på ett köp som redan betalats med klubbens kort — inga pengar ska gå ut till medlemmen."
+      : "Här är din sammanslagna PDF med utläggsblankett och kvitton. Pengar ska betalas ut till medlemmen enligt uppgifterna på försättsbladet.",
+    rows: [
+      { label: "Typ", value: kindLabel },
+      { label: "Datum", value: String(meta.purchaseDate || "") },
+      { label: "Belopp", value: formatSekSv(meta.total) },
+      { label: "Bokföringsinkorg", value: archiveEmail }
+    ],
+    notes: [
+      "Skicka PDF:en vidare till " + archiveEmail + " för hantering i bokföringen.",
+      "Bifoga samma PDF som du fått här — kassören ska kunna se om det är utbetalning eller bara verifikation."
+    ],
+    ctaLabel: "Öppna PDF",
+    ctaUrl: opts.downloadUrl
+  });
+  const attachments = [];
+  if (opts.pdfBytes && opts.filename) {
+    attachments.push({
+      filename: String(opts.filename),
+      mimeType: "application/pdf",
+      content: bytesToBase64(opts.pdfBytes)
+    });
+  }
+  await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
 }
 
 export function clipInviteMessage(raw) {

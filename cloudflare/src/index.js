@@ -3,11 +3,13 @@
  *
  * POST / (eller /api)  → { action, token, args } JSON (text/plain eller application/json)
  * GET  /img/<key>      → R2-bild
+ * GET  /verif/<uuid>.pdf → verifikations-PDF
  * GET  /               → health
  */
 
 import { dispatch } from "./api.js";
 import { serveImage } from "./images.js";
+import { serveVerifPdf } from "./verif.js";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +46,15 @@ export default {
       return new Response(res.body, { status: res.status, headers });
     }
 
+    if (request.method === "GET" && (url.pathname.startsWith("/verif/") || url.pathname.startsWith("/verif%2F"))) {
+      const key = url.pathname.replace(/^\/verif\/?/, "");
+      const res = await serveVerifPdf(env, key);
+      if (!res) return new Response("Not found", { status: 404, headers: CORS_HEADERS });
+      const headers = new Headers(res.headers);
+      for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+      return new Response(res.body, { status: res.status, headers });
+    }
+
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/api")) {
       return jsonResponse({ ok: true, app: "WallFlow", backend: "cloudflare" });
     }
@@ -55,7 +66,7 @@ export default {
         const action = String(payload.action || "");
         const token = String(payload.token || "");
         const args = Array.isArray(payload.args) ? payload.args : [];
-        const result = await dispatch(env, action, token, args);
+        const result = await dispatch(env, action, token, args, { origin: url.origin });
         return jsonResponse(result);
       } catch (err) {
         return jsonResponse({

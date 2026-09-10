@@ -72,8 +72,14 @@ import {
   uploadRouteImage
 } from "./images.js";
 import { clipInviteMessage, mailPasswordReset, mailWelcome } from "./mail.js";
+import {
+  getVerifApp,
+  saveVerifSettingsAction,
+  submitVerification
+} from "./verif.js";
 
-export async function dispatch(env, action, token, args) {
+export async function dispatch(env, action, token, args, extras) {
+  extras = extras || {};
   const publicActions = {
     getAppData: true,
     verifyAdminPassword: true,
@@ -152,6 +158,14 @@ export async function dispatch(env, action, token, args) {
       return deleteTimeEntryAction(env, args[0], session);
     case "saveTimeSettings":
       return saveTimeSettingsAction(env, args[0], session);
+    case "getVerifApp":
+      return getVerifApp(env, session);
+    case "saveVerifSettings":
+      return saveVerifSettingsAction(env, args[0], session);
+    case "submitVerification": {
+      const me = await findUser(env, session.username);
+      return submitVerification(env, args[0], session, me, extras && extras.origin);
+    }
     default:
       return { ok: false, error: "Okänd action: " + action };
   }
