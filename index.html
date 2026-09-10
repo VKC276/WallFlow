@@ -7365,21 +7365,15 @@ async function buildVerifPdf_(payload, files) {
   y -= 16;
   drawText("Org.nr 802431-5718", margin, y, 10, false, rgb(0.35, 0.4, 0.45));
   y -= 28;
-  drawText(clubCard ? "VERIFIKATION" : "UTLÄGGSBLANKETT", margin, y, 22, true);
-  y -= 16;
-  drawText(clubCard ? "Betalt med klubbens kort" : "Utlägg", margin, y, 12, true,
-    clubCard ? rgb(0.72, 0.45, 0.08) : rgb(0.12, 0.48, 0.38));
-  y -= 14;
-  const bannerH = 46;
-  y -= bannerH;
-  page.drawRectangle({
-    x: margin, y, width: pageW - margin * 2, height: bannerH,
-    color: clubCard ? rgb(0.98, 0.92, 0.78) : rgb(0.82, 0.93, 0.88)
-  });
-  drawText(clubCard
-    ? "KASSÖR: Ingen utbetalning till medlemmen."
-    : "KASSÖR: Pengar ska betalas ut till medlemmen.",
-    margin + 10, y + 18, 10, true, rgb(0.16, 0.18, 0.2));
+  if (clubCard) {
+    drawText("VERIFIKATION", margin, y, 22, true);
+    y -= 16;
+    drawText("Betalt med klubbens kort", margin, y, 12, true, rgb(0.72, 0.45, 0.08));
+  } else {
+    drawText("Utlägg", margin, y, 22, true);
+    y -= 16;
+    drawText("Betalas ut till sökande", margin, y, 12, true, rgb(0.12, 0.48, 0.38));
+  }
   y -= 28;
   const name = clubCard
     ? (payload.purchaser || "")
