@@ -648,7 +648,15 @@
       display: flex; justify-content: space-between; align-items: center; gap: 10px;
       padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2);
       font-size: 0.88rem;
+      min-width: 0;
     }
+    .verif-file span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .verif-file .btn { flex: 0 0 auto; }
     .time-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     .time-table th, .time-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     .time-table th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
@@ -7408,16 +7416,7 @@ function updateVerifTotal_() {
 function onVerifFiles_(ev) {
   const list = ev && ev.target && ev.target.files;
   if (!list) return;
-  const fromCamera = ev.target && ev.target.id === "verif-camera";
-  for (const file of list) {
-    let next = file;
-    if (fromCamera) {
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-      const name = (file && file.name && !/^image\.\w+$/i.test(file.name)) ? file.name : ("kvitto-" + stamp + ".jpg");
-      next = new File([file], name, { type: file.type || "image/jpeg" });
-    }
-    verifFiles_.push(next);
-  }
+  for (const file of list) verifFiles_.push(file);
   ev.target.value = "";
   renderVerifFileList_();
 }
@@ -7429,7 +7428,7 @@ function renderVerifFileList_() {
     return;
   }
   host.innerHTML = verifFiles_.map((f, i) =>
-    `<div class="verif-file"><span>${escapeHtml_(f.name || "fil")} · ${Math.round((f.size || 0) / 1024)} kB</span>
+    `<div class="verif-file"><span>Bild ${i + 1}</span>
      <button class="btn btn-ghost btn-sm" type="button" onclick="removeVerifFile_(${i})">Ta bort</button></div>`
   ).join("");
 }
