@@ -7151,7 +7151,7 @@ function saveTimeSettings_() {
 
 const VERIF_PROFILE_KEY_ = "wallflow_verif_profile_v1";
 let verifFiles_ = [];
-let verifLineCount_ = 2;
+let verifLineCount_ = 1;
 let verifArchiveEmail_ = "inbox.ver.1624638@arkivplats.se";
 
 let verifGuest_ = false;
@@ -7257,7 +7257,7 @@ function renderVerifForm_(data) {
   const today = escapeHtml_((data && data.today) || currentYmd_());
   const archive = String((data && data.archiveEmail) || verifArchiveEmail_);
   verifFiles_ = [];
-  verifLineCount_ = 2;
+  verifLineCount_ = 1;
   document.getElementById("verif-main").innerHTML = `
     <div class="admin-card">
       <p class="admin-kicker">Utlägg · Verifikation</p>
