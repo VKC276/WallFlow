@@ -2182,17 +2182,14 @@ function demoApi_(action, args) {
         const me = (store.users || []).find((x) => x.username === currentUser.username);
         if (!me) return fail("Användaren hittades inte");
         if (me.password !== password) return fail("Fel lösenord");
-        const full = payload.full === true || payload.full === "true" || payload.full === 1;
         const wanted = {};
-        if (!full) {
-          const list = Array.isArray(payload.nrs) ? payload.nrs : [];
-          list.forEach((n) => {
-            const nr = String(n == null ? "" : n).trim();
-            if (nr) wanted[nr] = true;
-          });
-          if (!Object.keys(wanted).length) {
-            return fail("Välj minst ett problem, eller gör en full reset");
-          }
+        const list = Array.isArray(payload.nrs) ? payload.nrs : [];
+        list.forEach((n) => {
+          const nr = String(n == null ? "" : n).trim();
+          if (nr) wanted[nr] = true;
+        });
+        if (!Object.keys(wanted).length) {
+          return fail("Välj minst ett problem");
         }
         const applyReset_ = (r) => {
           const days = Math.max(1, Math.round(Number(r.Livslangd) || store.routeLifetimeDays || 30));
@@ -2212,13 +2209,13 @@ function demoApi_(action, args) {
         store.routes = (store.routes || []).map((r) => {
           const nr = String(r.Nr == null ? "" : r.Nr).trim();
           if (!nr) return r;
-          if (!full && !wanted[nr]) return r;
+          if (!wanted[nr]) return r;
           nrs.push(nr);
           return applyReset_(r);
         });
-        if (!full && !nrs.length) return fail("Inga matchande problem hittades");
+        if (!nrs.length) return fail("Inga matchande problem hittades");
         saveDemoDb_(store);
-        return ok({ ok: true, full: !!full, resetCount: nrs.length, nrs });
+        return ok({ ok: true, resetCount: nrs.length, nrs });
       }
       if (action === "getAllAdmins") {
         const role = String(currentUser.role || "").toLowerCase();
@@ -5196,7 +5193,7 @@ function renderAdminHome() {
     ${canReset ? `
     <div class="admin-card">
       <h3>Wall reset</h3>
-      <p class="small mb-3" style="color:var(--muted);">Rensa bilder och information på valda problem, eller hela väggen. Status blir Ej uppsatt. Kräver lösenord.</p>
+      <p class="small mb-3" style="color:var(--muted);">Rensa bilder och information på valda problem. Status blir Ej uppsatt. Kräver lösenord.</p>
       <div class="admin-actions">
         <button class="btn btn-outline-danger" type="button" onclick="renderWallReset()">Öppna Wall reset</button>
       </div>
@@ -5252,7 +5249,7 @@ function renderWallReset() {
       <h3>Wall reset</h3>
       <p class="small mb-3" style="color:var(--muted);">
         Bild, ledbyggare, byggdatum och anteckningar rensas. Lednummer behålls och status sätts till <strong>Ej uppsatt</strong>.
-        Ange ditt lösenord innan rensningen körs.
+        Markera de problem som ska rensas (eller <strong>Markera alla</strong>) och ange ditt lösenord.
       </p>
       ${routes.length ? `
       <div class="wall-reset-toolbar">
@@ -5265,8 +5262,7 @@ function renderWallReset() {
       <label class="form-label" for="wall-reset-pw">Bekräfta med lösenord</label>
       <input id="wall-reset-pw" type="password" class="form-control mb-3" autocomplete="current-password" placeholder="Ditt lösenord">
       <div class="admin-actions">
-        <button class="btn btn-outline-danger" type="button" id="wall-reset-selected-btn" onclick="submitWallReset_(false)">Rensa valda problem</button>
-        <button class="btn btn-outline-danger" type="button" id="wall-reset-full-btn" onclick="submitWallReset_(true)">Full reset — alla problem</button>
+        <button class="btn btn-outline-danger" type="button" id="wall-reset-selected-btn" onclick="submitWallReset_()">Rensa valda problem</button>
       </div>
     </div>`;
   wallResetUpdateCount_();
@@ -5307,32 +5303,29 @@ function applyWallResetLocal_(nrs) {
   });
 }
 
-function submitWallReset_(full) {
+function submitWallReset_() {
   if (!canWallResetRole()) return showToast("Bara admin");
   const pwEl = document.getElementById("wall-reset-pw");
   const password = String(pwEl && pwEl.value || "");
   if (!password) return showToast("Ange ditt lösenord för att bekräfta");
-  const nrs = full ? [] : wallResetSelectedNrs_();
-  if (!full && !nrs.length) return showToast("Välj minst ett problem, eller gör en full reset");
+  const nrs = wallResetSelectedNrs_();
+  if (!nrs.length) return showToast("Välj minst ett problem");
   const selectedBtn = document.getElementById("wall-reset-selected-btn");
-  const fullBtn = document.getElementById("wall-reset-full-btn");
   const lock = (on) => {
-    if (selectedBtn) { selectedBtn.disabled = on; selectedBtn.textContent = on && !full ? "Rensar…" : "Rensa valda problem"; }
-    if (fullBtn) { fullBtn.disabled = on; fullBtn.textContent = on && full ? "Rensar…" : "Full reset — alla problem"; }
+    if (selectedBtn) {
+      selectedBtn.disabled = on;
+      selectedBtn.textContent = on ? "Rensar…" : "Rensa valda problem";
+    }
   };
   lock(true);
   google.script.run
     .withSuccessHandler((res) => {
       lock(false);
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte rensa");
-      const resetNrs = Array.isArray(res.nrs) && res.nrs.length
-        ? res.nrs
-        : (full ? wallResetSortedRoutes_().map((r) => String(r.Nr)) : nrs);
+      const resetNrs = Array.isArray(res.nrs) && res.nrs.length ? res.nrs : nrs;
       applyWallResetLocal_(resetNrs);
       if (pwEl) pwEl.value = "";
-      showToast(full
-        ? ("Full reset: " + (Number(res.resetCount) || resetNrs.length) + " problem")
-        : ("Rensade " + (Number(res.resetCount) || resetNrs.length) + " problem"));
+      showToast("Rensade " + (Number(res.resetCount) || resetNrs.length) + " problem");
       try { filterData(); } catch (_) { /* lista kanske inte är öppen */ }
       renderWallReset();
     })
@@ -5340,7 +5333,7 @@ function submitWallReset_(full) {
       lock(false);
       showToast("Kunde inte rensa");
     })
-    .resetWall({ password, full: !!full, nrs });
+    .resetWall({ password, nrs });
 }
 
 function renderLifetimeSettings() {

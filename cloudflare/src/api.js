@@ -622,29 +622,22 @@ async function resetWall(env, payload, session) {
   const pwCheck = await verifySessionPassword(env, session, payload.password);
   if (!pwCheck.ok) return pwCheck;
 
-  const full = payload.full === true || payload.full === "true" || payload.full === 1;
-  let targets;
-  if (full) {
-    const { results } = await env.DB.prepare("SELECT nr, bild_key FROM routes").all();
-    targets = results || [];
-  } else {
-    const wanted = uniqueRouteNrs(payload.nrs || payload.nrsToReset || payload.routes);
-    if (!wanted.length) {
-      return { ok: false, error: "Välj minst ett problem, eller gör en full reset" };
-    }
-    targets = [];
-    const chunk = 40;
-    for (let i = 0; i < wanted.length; i += chunk) {
-      const part = wanted.slice(i, i + chunk);
-      const placeholders = part.map(() => "?").join(",");
-      const { results } = await env.DB.prepare(
-        "SELECT nr, bild_key FROM routes WHERE nr IN (" + placeholders + ")"
-      ).bind(...part).all();
-      targets = targets.concat(results || []);
-    }
-    if (!targets.length) {
-      return { ok: false, error: "Inga matchande problem hittades" };
-    }
+  const wanted = uniqueRouteNrs(payload.nrs || payload.nrsToReset || payload.routes);
+  if (!wanted.length) {
+    return { ok: false, error: "Välj minst ett problem" };
+  }
+  let targets = [];
+  const chunk = 40;
+  for (let i = 0; i < wanted.length; i += chunk) {
+    const part = wanted.slice(i, i + chunk);
+    const placeholders = part.map(() => "?").join(",");
+    const { results } = await env.DB.prepare(
+      "SELECT nr, bild_key FROM routes WHERE nr IN (" + placeholders + ")"
+    ).bind(...part).all();
+    targets = targets.concat(results || []);
+  }
+  if (!targets.length) {
+    return { ok: false, error: "Inga matchande problem hittades" };
   }
 
   if (targets.length) {
@@ -673,7 +666,7 @@ async function resetWall(env, payload, session) {
   }
 
   const nrs = targets.map((row) => String(row.nr == null ? "" : row.nr).trim()).filter(Boolean);
-  return { ok: true, full, resetCount: nrs.length, nrs };
+  return { ok: true, resetCount: nrs.length, nrs };
 }
 
 async function deleteRoute(env, nr, session) {
