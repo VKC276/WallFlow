@@ -826,6 +826,20 @@
     }
     .admin-actions { display: grid; gap: 8px; }
     .admin-actions .btn { min-height: 44px; font-weight: 600; text-align: left; justify-content: flex-start; }
+    .wall-reset-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .wall-reset-list {
+      max-height: 340px; overflow-y: auto; border: 1px solid var(--line);
+      border-radius: 12px; background: var(--surface-2); margin-bottom: 12px;
+    }
+    .wall-reset-item {
+      display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .wall-reset-item:last-child { border-bottom: 0; }
+    .wall-reset-item input { margin-top: 4px; flex-shrink: 0; }
+    .wall-reset-item-meta { min-width: 0; }
+    .wall-reset-item-title { font-weight: 600; }
+    .wall-reset-item-sub { font-size: 0.82rem; color: var(--muted); }
     .toast-wrap { position: fixed; left: 50%; bottom: calc(92px + var(--safe-bottom)); transform: translateX(-50%); z-index: 100; pointer-events: none; }
     .toast-msg {
       background: var(--toast-bg); border: 1px solid var(--line); color: var(--text); padding: 10px 14px;
@@ -2149,6 +2163,55 @@ function demoApi_(action, args) {
         saveDemoDb_(store);
         return ok({ ok: true });
       }
+      if (action === "resetWall") {
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin" && meRole !== "admin") {
+          return fail("Bara admin kan återställa väggen");
+        }
+        const payload = args[0] || {};
+        const password = String(payload.password || "");
+        if (!password) return fail("Ange ditt lösenord för att bekräfta");
+        const me = (store.users || []).find((x) => x.username === currentUser.username);
+        if (!me) return fail("Användaren hittades inte");
+        if (me.password !== password) return fail("Fel lösenord");
+        const full = payload.full === true || payload.full === "true" || payload.full === 1;
+        const wanted = {};
+        if (!full) {
+          const list = Array.isArray(payload.nrs) ? payload.nrs : [];
+          list.forEach((n) => {
+            const nr = String(n == null ? "" : n).trim();
+            if (nr) wanted[nr] = true;
+          });
+          if (!Object.keys(wanted).length) {
+            return fail("Välj minst ett problem, eller gör en full reset");
+          }
+        }
+        const applyReset_ = (r) => {
+          const days = Math.max(1, Math.round(Number(r.Livslangd) || store.routeLifetimeDays || 30));
+          return {
+            ...r,
+            Gradering: "Ej uppsatt",
+            DagsAttByggaOm: "-",
+            Ledbyggare: "",
+            Byggdatum: "",
+            Slutdatum: "",
+            Anteckningar: "",
+            Bild: "",
+            Livslangd: days
+          };
+        };
+        const nrs = [];
+        store.routes = (store.routes || []).map((r) => {
+          const nr = String(r.Nr == null ? "" : r.Nr).trim();
+          if (!nr) return r;
+          if (!full && !wanted[nr]) return r;
+          nrs.push(nr);
+          return applyReset_(r);
+        });
+        if (!full && !nrs.length) return fail("Inga matchande problem hittades");
+        saveDemoDb_(store);
+        return ok({ ok: true, full: !!full, resetCount: nrs.length, nrs });
+      }
       if (action === "getAllAdmins") {
         const role = String(currentUser.role || "").toLowerCase();
         if (role !== "superadmin" && role !== "admin") return ok([]);
@@ -2416,6 +2479,10 @@ function canManageUsersRole() {
   const r = userRole_();
   return r === "superadmin" || r === "admin";
 }
+function canWallResetRole() {
+  const r = userRole_();
+  return r === "superadmin" || r === "admin";
+}
 /** Superadmin: lägga till / ta bort led-rader. Övriga ser bara redigera. */
 function canManageRouteStructureRole() { return userRole_() === "superadmin"; }
 /** Superadmin: livslängd (standard + per led). */
@@ -2566,7 +2633,7 @@ function adminRoleHelpSv_() {
   return `
     <ul class="small mb-0 ps-3" style="color:var(--muted); line-height:1.45;">
       <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild). Kan även kryssas som hallvärd och får då två sätt att rapportera tid.</li>
-      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus lägga till/hantera ledbyggare (inte admin eller superadmin).</li>
+      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus lägga till/hantera ledbyggare (inte admin eller superadmin) och Wall reset.</li>
       <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, styra livslängd, arvoden och hantera alla roller. Minst en superadmin måste alltid finnas.</li>
       <li><strong style="color:var(--text);">Kassör</strong> — slussas till tidverktyget och kan ta ut rapporter för alla inrapporterade.</li>
       <li><strong style="color:var(--text);">Hallvärd</strong> — slussas direkt till tidverktyget vid inloggning (samma som kassör) och rapporterar pass (datum + engångsbelopp). Kan kombineras med kassör. Ledbyggare kan få hallvärd som tillägg.</li>
@@ -5091,6 +5158,7 @@ function renderAdminHome() {
   const canRoutes = canManageRouteStructureRole();
   const canLife = canManageLifetimeRole();
   const canPay = canTimeAdmin_();
+  const canReset = canWallResetRole();
   document.getElementById("admin-main").innerHTML = `
     ${canUsers ? `
     <div class="admin-card">
@@ -5117,6 +5185,14 @@ function renderAdminHome() {
         ${canLife ? `<button class="btn btn-ghost" type="button" onclick="renderBaseUrlQrSettings()">QR-bas-URL</button>` : ""}
       </div>
     </div>` : ""}
+    ${canReset ? `
+    <div class="admin-card">
+      <h3>Wall reset</h3>
+      <p class="small mb-3" style="color:var(--muted);">Rensa bilder och information på valda problem, eller hela väggen. Status blir Ej uppsatt. Kräver lösenord.</p>
+      <div class="admin-actions">
+        <button class="btn btn-outline-danger" type="button" onclick="renderWallReset()">Öppna Wall reset</button>
+      </div>
+    </div>` : ""}
     ${canPay ? `
     <div class="admin-card">
       <h3>Tid och arvode</h3>
@@ -5132,6 +5208,131 @@ function renderAdminHome() {
         <button class="btn btn-ghost" type="button" onclick="renderVerifSettingsFromAdmin_()">Bokföringsinkorg</button>
       </div>
     </div>` : ""}`;
+}
+
+function wallResetSortedRoutes_() {
+  return ((db && db.routes) || []).slice().sort((a, b) =>
+    String(a.Nr || "").localeCompare(String(b.Nr || ""), "sv", { numeric: true, sensitivity: "base" })
+  );
+}
+
+function renderWallReset() {
+  if (!canWallResetRole()) return showToast("Bara admin");
+  setAdminChrome_("Administration");
+  document.getElementById("app-admin").classList.add("show");
+  const routes = wallResetSortedRoutes_();
+  const rows = routes.map((r) => {
+    const nr = String(r.Nr || "");
+    const grade = String(r.Gradering || "—") || "—";
+    const setter = String(r.Ledbyggare || "").trim();
+    const note = String(r.Anteckningar || "").trim();
+    const bits = [grade];
+    if (setter) bits.push(setter);
+    if (note) bits.push(note);
+    return `<label class="wall-reset-item">
+      <input type="checkbox" class="wall-reset-nr" value="${escapeHtml_(nr)}" onchange="wallResetUpdateCount_()">
+      <span class="wall-reset-item-meta">
+        <span class="wall-reset-item-title">Led ${escapeHtml_(nr)}</span>
+        <span class="wall-reset-item-sub">${escapeHtml_(bits.join(" · "))}</span>
+      </span>
+    </label>`;
+  }).join("");
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <p class="admin-kicker">Administration · Väggen</p>
+      <h3>Wall reset</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Bild, ledbyggare, byggdatum och anteckningar rensas. Lednummer behålls och status sätts till <strong>Ej uppsatt</strong>.
+        Ange ditt lösenord innan rensningen körs.
+      </p>
+      ${routes.length ? `
+      <div class="wall-reset-toolbar">
+        <button class="btn btn-sm btn-ghost" type="button" onclick="wallResetToggleAll_(true)">Markera alla</button>
+        <button class="btn btn-sm btn-ghost" type="button" onclick="wallResetToggleAll_(false)">Avmarkera</button>
+      </div>
+      <div class="wall-reset-list">${rows}</div>
+      <p class="small mb-3" id="wall-reset-count" style="color:var(--muted);">0 valda</p>
+      ` : `<p class="small mb-3" style="color:var(--muted);">Inga problem i registret.</p>`}
+      <label class="form-label" for="wall-reset-pw">Bekräfta med lösenord</label>
+      <input id="wall-reset-pw" type="password" class="form-control mb-3" autocomplete="current-password" placeholder="Ditt lösenord">
+      <div class="admin-actions">
+        <button class="btn btn-outline-danger" type="button" id="wall-reset-selected-btn" onclick="submitWallReset_(false)">Rensa valda problem</button>
+        <button class="btn btn-outline-danger" type="button" id="wall-reset-full-btn" onclick="submitWallReset_(true)">Full reset — alla problem</button>
+      </div>
+    </div>`;
+  wallResetUpdateCount_();
+}
+
+function wallResetToggleAll_(on) {
+  document.querySelectorAll(".wall-reset-nr").forEach((el) => { el.checked = !!on; });
+  wallResetUpdateCount_();
+}
+
+function wallResetSelectedNrs_() {
+  return Array.prototype.map.call(document.querySelectorAll(".wall-reset-nr:checked"), (el) => String(el.value || "").trim()).filter(Boolean);
+}
+
+function wallResetUpdateCount_() {
+  const el = document.getElementById("wall-reset-count");
+  if (!el) return;
+  const n = wallResetSelectedNrs_().length;
+  const total = document.querySelectorAll(".wall-reset-nr").length;
+  el.textContent = n + " valda av " + total;
+}
+
+function applyWallResetLocal_(nrs) {
+  const wanted = {};
+  (nrs || []).forEach((n) => { wanted[String(n)] = true; });
+  db.routes = ((db && db.routes) || []).map((r) => {
+    if (!wanted[String(r.Nr)]) return r;
+    return normalizeRoute_({
+      ...r,
+      Gradering: "Ej uppsatt",
+      DagsAttByggaOm: "-",
+      Ledbyggare: "",
+      Byggdatum: "",
+      Slutdatum: "",
+      Anteckningar: "",
+      Bild: ""
+    });
+  });
+}
+
+function submitWallReset_(full) {
+  if (!canWallResetRole()) return showToast("Bara admin");
+  const pwEl = document.getElementById("wall-reset-pw");
+  const password = String(pwEl && pwEl.value || "");
+  if (!password) return showToast("Ange ditt lösenord för att bekräfta");
+  const nrs = full ? [] : wallResetSelectedNrs_();
+  if (!full && !nrs.length) return showToast("Välj minst ett problem, eller gör en full reset");
+  const selectedBtn = document.getElementById("wall-reset-selected-btn");
+  const fullBtn = document.getElementById("wall-reset-full-btn");
+  const lock = (on) => {
+    if (selectedBtn) { selectedBtn.disabled = on; selectedBtn.textContent = on && !full ? "Rensar…" : "Rensa valda problem"; }
+    if (fullBtn) { fullBtn.disabled = on; fullBtn.textContent = on && full ? "Rensar…" : "Full reset — alla problem"; }
+  };
+  lock(true);
+  google.script.run
+    .withSuccessHandler((res) => {
+      lock(false);
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte rensa");
+      const resetNrs = Array.isArray(res.nrs) && res.nrs.length
+        ? res.nrs
+        : (full ? wallResetSortedRoutes_().map((r) => String(r.Nr)) : nrs);
+      applyWallResetLocal_(resetNrs);
+      if (pwEl) pwEl.value = "";
+      showToast(full
+        ? ("Full reset: " + (Number(res.resetCount) || resetNrs.length) + " problem")
+        : ("Rensade " + (Number(res.resetCount) || resetNrs.length) + " problem"));
+      try { filterData(); } catch (_) { /* lista kanske inte är öppen */ }
+      renderWallReset();
+    })
+    .withFailureHandler(() => {
+      lock(false);
+      showToast("Kunde inte rensa");
+    })
+    .resetWall({ password, full: !!full, nrs });
 }
 
 function renderLifetimeSettings() {

@@ -73,6 +73,12 @@ export function canManageUsers(session) {
   return r === "superadmin" || r === "admin";
 }
 
+/** Admin + Superadmin: rensa problem (bilder, info) till Ej uppsatt. */
+export function canWallReset(session) {
+  const r = roleOf(session);
+  return r === "superadmin" || r === "admin";
+}
+
 export function canManageLifetime(session) {
   return roleOf(session) === "superadmin";
 }

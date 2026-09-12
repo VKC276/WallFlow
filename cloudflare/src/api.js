@@ -8,6 +8,7 @@ import {
   canManageLifetime,
   canManageRouteStructure,
   canManageUsers,
+  canWallReset,
   getSession,
   hashPassword,
   isAdminActor,
@@ -124,6 +125,8 @@ export async function dispatch(env, action, token, args, extras) {
     }
     case "deleteRoute":
       return deleteRoute(env, args[0], session);
+    case "resetWall":
+      return resetWall(env, args[0], session);
     case "getAllAdmins":
       return getAllAdmins(env, session);
     case "createNewAdmin":
@@ -583,6 +586,94 @@ async function saveRoute(env, route, session) {
 
   const saved = await getRouteByNr(env, nr);
   return { ok: true, route: saved };
+}
+
+async function verifySessionPassword(env, session, password) {
+  if (!String(password || "")) {
+    return { ok: false, error: "Ange ditt lösenord för att bekräfta" };
+  }
+  const u = await findUser(env, session && session.username);
+  if (!u || !u.salt || !u.passwordHash) {
+    return { ok: false, error: "Användaren hittades inte" };
+  }
+  const hash = await hashPassword(String(password), u.salt);
+  if (hash !== u.passwordHash) return { ok: false, error: "Fel lösenord" };
+  return { ok: true };
+}
+
+function uniqueRouteNrs(raw) {
+  const seen = {};
+  const out = [];
+  const list = Array.isArray(raw) ? raw : [];
+  for (let i = 0; i < list.length; i++) {
+    const nr = String(list[i] == null ? "" : list[i]).trim();
+    if (!nr || seen[nr]) continue;
+    seen[nr] = true;
+    out.push(nr);
+  }
+  return out;
+}
+
+async function resetWall(env, payload, session) {
+  if (!canWallReset(session)) {
+    return { ok: false, error: "Bara admin kan återställa väggen" };
+  }
+  payload = payload && typeof payload === "object" ? payload : {};
+  const pwCheck = await verifySessionPassword(env, session, payload.password);
+  if (!pwCheck.ok) return pwCheck;
+
+  const full = payload.full === true || payload.full === "true" || payload.full === 1;
+  let targets;
+  if (full) {
+    const { results } = await env.DB.prepare("SELECT nr, bild_key FROM routes").all();
+    targets = results || [];
+  } else {
+    const wanted = uniqueRouteNrs(payload.nrs || payload.nrsToReset || payload.routes);
+    if (!wanted.length) {
+      return { ok: false, error: "Välj minst ett problem, eller gör en full reset" };
+    }
+    targets = [];
+    const chunk = 40;
+    for (let i = 0; i < wanted.length; i += chunk) {
+      const part = wanted.slice(i, i + chunk);
+      const placeholders = part.map(() => "?").join(",");
+      const { results } = await env.DB.prepare(
+        "SELECT nr, bild_key FROM routes WHERE nr IN (" + placeholders + ")"
+      ).bind(...part).all();
+      targets = targets.concat(results || []);
+    }
+    if (!targets.length) {
+      return { ok: false, error: "Inga matchande problem hittades" };
+    }
+  }
+
+  if (targets.length) {
+    const stmts = targets.map((row) =>
+      env.DB.prepare(
+        `UPDATE routes
+         SET gradering = 'Ej uppsatt', ledbyggare = '', byggdatum = '', anteckningar = '', bild_key = ''
+         WHERE nr = ?`
+      ).bind(String(row.nr))
+    );
+    const batchSize = 50;
+    for (let i = 0; i < stmts.length; i += batchSize) {
+      await env.DB.batch(stmts.slice(i, i + batchSize));
+    }
+    for (let i = 0; i < targets.length; i++) {
+      const row = targets[i];
+      const nr = String(row.nr == null ? "" : row.nr).trim();
+      const img = String(row.bild_key || "").trim();
+      try {
+        if (isR2ImageKey(img)) await deleteBilderKey(env, img);
+        if (nr) await deleteBilderByRouteNr(env, nr);
+      } catch {
+        /* rensning av bild får inte faila reset */
+      }
+    }
+  }
+
+  const nrs = targets.map((row) => String(row.nr == null ? "" : row.nr).trim()).filter(Boolean);
+  return { ok: true, full, resetCount: nrs.length, nrs };
 }
 
 async function deleteRoute(env, nr, session) {

@@ -41,8 +41,8 @@ export function computeSlutdatum(byggdatum, livslangd) {
 }
 
 export function computeDagsAttByggaOm(gradering, byggdatum, slutdatum) {
-  if (!String(byggdatum || "").trim()) return "";
   if (String(gradering || "").trim().toLowerCase() === "ej uppsatt") return "-";
+  if (!String(byggdatum || "").trim()) return "";
   const slut = String(slutdatum || "").trim();
   if (!slut) return "";
   return slut < todayStockholm() ? "Ja" : "Nej";
