@@ -7123,8 +7123,13 @@ function renderVerifForm_(data) {
     </div>
     <div class="admin-card">
       <h3>Kvitton</h3>
-      <p class="small mb-3" style="color:var(--muted);">PDF eller bild. De läggs efter försättsbladet i den sammanslagna filen.</p>
-      <input id="verif-files" class="form-control" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="onVerifFiles_(event)">
+      <p class="small mb-3" style="color:var(--muted);">Ta foto på kvittot, eller välj PDF/bild. De läggs efter försättsbladet.</p>
+      <input id="verif-camera" type="file" accept="image/*" capture="environment" style="display:none" onchange="onVerifFiles_(event)">
+      <input id="verif-files" class="form-control" type="file" accept="image/*,application/pdf,.pdf" multiple style="display:none" onchange="onVerifFiles_(event)">
+      <div class="d-flex gap-2 flex-wrap mb-2">
+        <button class="btn btn-accent" type="button" onclick="document.getElementById('verif-camera').click()">Ta foto</button>
+        <button class="btn btn-ghost" type="button" onclick="document.getElementById('verif-files').click()">Välj PDF eller bild</button>
+      </div>
       <div class="verif-files" id="verif-file-list"></div>
     </div>
     <div class="admin-card">
@@ -7202,7 +7207,16 @@ function updateVerifTotal_() {
 function onVerifFiles_(ev) {
   const list = ev && ev.target && ev.target.files;
   if (!list) return;
-  for (const file of list) verifFiles_.push(file);
+  const fromCamera = ev.target && ev.target.id === "verif-camera";
+  for (const file of list) {
+    let next = file;
+    if (fromCamera) {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const name = (file && file.name && !/^image\.\w+$/i.test(file.name)) ? file.name : ("kvitto-" + stamp + ".jpg");
+      next = new File([file], name, { type: file.type || "image/jpeg" });
+    }
+    verifFiles_.push(next);
+  }
   ev.target.value = "";
   renderVerifFileList_();
 }
