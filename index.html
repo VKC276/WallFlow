@@ -8457,7 +8457,7 @@ function openTencardTool() {
   showAppChrome_();
   renderTencardTool_();
 }
-let tencardState_ = { query: "", result: null, list: null, listError: "", showList: false, showCreate: false };
+let tencardState_ = { query: "", searchValue: "", result: null, list: null, listError: "", showList: false, showCreate: false };
 
 function bindTencardClicks_(root) {
   if (!root) return;
@@ -8503,7 +8503,7 @@ function renderTencardTool_(opts) {
   if (!main) return;
   const result = tencardState_.result;
   const card = result && result.card;
-  const query = tencardState_.query || (result && result.card_id) || "";
+  const query = tencardState_.searchValue || "";
   let resultHtml = "";
   if (result && result.pending) {
     resultHtml = `<p class="mb-0" style="color:var(--muted);">Söker…</p>`;
@@ -8597,6 +8597,7 @@ function submitTencardSearch_(ev) {
     tencardFocusSearch_();
     return;
   }
+  tencardState_.searchValue = "";
   tencardState_.query = cardId;
   tencardState_.result = { pending: true, card_id: cardId };
   renderTencardTool_();
@@ -8606,7 +8607,6 @@ function submitTencardSearch_(ev) {
         tencardState_.result = { error: (res && res.error) || "Kunde inte söka", card_id: cardId };
       } else {
         tencardState_.result = res;
-        tencardState_.query = res.card_id || cardId;
       }
       renderTencardTool_();
     })
