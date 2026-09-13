@@ -221,13 +221,18 @@ export async function deleteTencardAction(env, payload, session) {
   if (!canManageTencards(session)) return { ok: false, error: "Saknar behörighet" };
   const cardId = normalizeCardId(payload && (payload.card_id || payload.cardId || payload));
   if (!cardId) return { ok: false, error: "Ange kortnummer" };
-  const res = await kioskAdminRequest(env, "/api/admin/tencards/" + encodeURIComponent(cardId), { method: "DELETE" });
-  if (res.error && !res.data) return { ok: false, error: res.error };
+  const encoded = encodeURIComponent(cardId);
+  let res = await kioskAdminRequest(env, "/api/admin/tencards/" + encoded, { method: "DELETE" });
   if (res.okHttp) return { ok: true, card_id: cardId };
-  const err = (res.data && res.data.error) || "";
+  const deleteFailed = !res.okHttp || !res.data;
+  if (deleteFailed) {
+    res = await kioskAdminRequest(env, "/api/admin/tencards/" + encoded + "/delete", { method: "POST" });
+  }
+  if (res.okHttp) return { ok: true, card_id: cardId };
+  const err = (res.data && res.data.error) || res.error || "";
+  if (err === "unauthorized") return { ok: false, error: "Fel ADMIN_TOKEN mot kiosk-API:t" };
   if (err === "not_tencard") return { ok: false, error: "Kortnumret tillhör inte ett 10-kort" };
-  if (res.http === 404) return { ok: false, error: "Kortet finns inte" };
-  if (res.http === 405) return { ok: false, error: "Kiosk-API:t saknar radering — deploya kiosk-Workern" };
+  if (err === "not_found" || res.http === 404) return { ok: false, error: "Kortet finns inte" };
   return { ok: false, error: err || "Kunde inte ta bort kortet" };
 }
 
