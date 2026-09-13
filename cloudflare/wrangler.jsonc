@@ -37,5 +37,11 @@
       "binding": "BILDER",
       "bucket_name": "wallflow-bilder"
     }
+  ],
+  "services": [
+    {
+      "binding": "KIOSK",
+      "service": "vkc-kiosk"
+    }
   ]
 }

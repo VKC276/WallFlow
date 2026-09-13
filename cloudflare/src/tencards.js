@@ -27,33 +27,54 @@ function adminToken(env) {
   return String(env.ADMIN_TOKEN || env.KIOSK_ADMIN_TOKEN || "").trim();
 }
 
+function kioskError(message, http) {
+  return { ok: false, error: message, status: http || 0, http: http || 0, data: null, okHttp: false };
+}
+
 async function kioskAdminRequest(env, path, options) {
-  const base = kioskBase(env);
   const token = adminToken(env);
-  if (!base || !token) return { ok: false, error: "10-kort är inte konfigurerat på servern", status: 0 };
+  if (!token) {
+    return kioskError("ADMIN_TOKEN saknas på WallFlow-servern. Kör wrangler secret put ADMIN_TOKEN.");
+  }
   const method = (options && options.method) || "GET";
   const headers = {
     Authorization: "Bearer " + token,
+    "X-Kiosk-Token": token,
     Accept: "application/json"
   };
-  const init = { method, headers };
+  let body;
   if (options && options.body != null) {
     headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(options.body);
+    body = JSON.stringify(options.body);
   }
+  const init = { method, headers };
+  if (body != null) init.body = body;
   let res;
   try {
-    res = await fetch(base + path, init);
+    if (env.KIOSK && typeof env.KIOSK.fetch === "function") {
+      res = await env.KIOSK.fetch(new Request("https://kiosk" + path, init));
+    } else {
+      const base = kioskBase(env);
+      if (!base) return kioskError("KIOSK_API_URL saknas på WallFlow-servern");
+      res = await fetch(base + path, Object.assign({ redirect: "manual" }, init));
+    }
   } catch (err) {
-    return { ok: false, error: "Kunde inte nå kiosk-API:t", status: 0, detail: String(err && err.message ? err.message : err) };
+    return kioskError("Kunde inte nå kiosk-API:t: " + String(err && err.message ? err.message : err));
   }
+  if (res.status >= 300 && res.status < 400) {
+    return kioskError("Kiosk-API:t gjorde redirect (HTTP " + res.status + ")", res.status);
+  }
+  const text = await res.text();
   let data = null;
   try {
-    data = await res.json();
+    data = JSON.parse(text);
   } catch {
     data = null;
   }
-  return { http: res.status, data: data && typeof data === "object" ? data : {}, okHttp: res.ok };
+  if (!data || typeof data !== "object") {
+    return kioskError("Kiosk-API:t svarade inte med JSON (HTTP " + res.status + ")", res.status);
+  }
+  return { http: res.status, data, okHttp: res.ok };
 }
 
 function mapCard(card) {
@@ -89,9 +110,14 @@ export async function listTencardsAction(env, session) {
   const res = await kioskAdminRequest(env, "/api/admin/tencards");
   if (res.error && !res.data) return { ok: false, error: res.error };
   if (!res.okHttp) {
-    return { ok: false, error: (res.data && res.data.error) || "Kunde inte lista 10-kort" };
+    const err = (res.data && res.data.error) || res.error || "Kunde inte lista 10-kort";
+    if (err === "unauthorized") {
+      return { ok: false, error: "Fel ADMIN_TOKEN mot kiosk-API:t" };
+    }
+    return { ok: false, error: err };
   }
-  const rows = Array.isArray(res.data.tencards) ? res.data.tencards : [];
+  const rows = Array.isArray(res.data.tencards) ? res.data.tencards : null;
+  if (!rows) return { ok: false, error: "Kiosk-API:t skickade ingen kortlista" };
   return { ok: true, tencards: rows.map(mapCard) };
 }
 
@@ -102,7 +128,9 @@ export async function lookupTencardAction(env, payload, session) {
   const res = await kioskAdminRequest(env, "/api/admin/lookup/" + encodeURIComponent(cardId));
   if (res.error && !res.data) return { ok: false, error: res.error };
   if (!res.okHttp) {
-    return { ok: false, error: (res.data && res.data.error) || "Kunde inte söka kort" };
+    const err = (res.data && res.data.error) || "";
+    if (err === "unauthorized") return { ok: false, error: "Fel ADMIN_TOKEN mot kiosk-API:t" };
+    return { ok: false, error: err || "Kunde inte söka kort" };
   }
   const card = mapCard(res.data.card);
   return {
@@ -141,10 +169,11 @@ export async function saveTencardAction(env, payload, session) {
   if (res.error && !res.data) return { ok: false, error: res.error };
   if (!res.okHttp) {
     const err = (res.data && res.data.error) || "";
+    if (err === "unauthorized") return { ok: false, error: "Fel ADMIN_TOKEN mot kiosk-API:t" };
     if (err === "card_id is not a 10-kort") {
       return { ok: false, error: "Kortnumret tillhör ett medlemskort och kan inte bli 10-kort" };
     }
-    return { ok: false, error: err || "Kunde inte spara 10-kort" };
+    return { ok: false, error: err || "Kunde inte spara 10-kort (HTTP " + (res.http || "?") + ")" };
   }
   return { ok: true, card_id: cardId, card: mapCard(res.data.card) };
 }
