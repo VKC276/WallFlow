@@ -897,11 +897,15 @@
     }
     .tencard-list th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .tencard-list .num { text-align: right; font-variant-numeric: tabular-nums; }
-    .tencard-list input[type="number"] {
-      width: 4.2rem;
-      min-height: 36px;
+    .tencard-list tbody tr {
+      cursor: pointer;
     }
-    .tencard-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tencard-list tbody tr:hover {
+      background: var(--surface-2);
+    }
+    .tencard-list tbody tr.is-selected {
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+    }
     .wall-reset-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .wall-reset-list {
       max-height: 340px; overflow-y: auto; border: 1px solid var(--line);
@@ -8457,17 +8461,22 @@ let tencardState_ = { query: "", result: null, list: null, listError: "", showLi
 
 function bindTencardClicks_(root) {
   if (!root) return;
-  root.querySelectorAll("[data-tencard-act]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
+  root.querySelectorAll("[data-tencard-act]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      const act = btn.getAttribute("data-tencard-act");
-      const cardId = btn.getAttribute("data-card-id");
+      const act = el.getAttribute("data-tencard-act");
+      const cardId = el.getAttribute("data-card-id");
       if (act === "clip") return clipTencard_(cardId);
-      if (act === "adjust") return adjustTencardPrompt_(cardId, Number(btn.getAttribute("data-remaining")));
+      if (act === "adjust") return adjustTencardPrompt_(cardId, Number(el.getAttribute("data-remaining")));
       if (act === "delete") return deleteTencard_(cardId);
-      if (act === "create") return createTencard_(cardId, 10);
-      if (act === "save-remaining") return saveTencardRemaining_(cardId);
+      if (act === "open") return openTencardFromList_(cardId);
+    });
+    el.addEventListener("keydown", (ev) => {
+      if (el.getAttribute("data-tencard-act") !== "open") return;
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      openTencardFromList_(el.getAttribute("data-card-id"));
     });
   });
 }
@@ -8489,7 +8498,7 @@ function tencardFormatWhen_(raw) {
   if (!s) return "—";
   return s.replace("T", " ").slice(0, 19);
 }
-function renderTencardTool_() {
+function renderTencardTool_(opts) {
   const main = document.getElementById("tencard-main");
   if (!main) return;
   const result = tencardState_.result;
@@ -8519,12 +8528,7 @@ function renderTencardTool_() {
         <button class="btn btn-outline-danger" type="button" data-tencard-act="delete" data-card-id="${escapeHtml_(card.card_id)}">Ta bort kort</button>
       </div>`;
   } else if (result && result.found === false) {
-    const id = escapeHtml_(result.card_id);
-    resultHtml = `
-      <p class="mb-2">Kort <strong>${id}</strong> finns inte bland 10-korten.</p>
-      <div class="tencard-actions">
-        <button class="btn btn-accent" type="button" data-tencard-act="create" data-card-id="${id}">Lägg till som nytt 10-kort (10 klipp)</button>
-      </div>`;
+    resultHtml = `<p class="mb-0">Kort <strong>${escapeHtml_(result.card_id)}</strong> finns inte bland 10-korten.</p>`;
   }
   const list = tencardState_.list;
   let listHtml = "";
@@ -8536,23 +8540,21 @@ function renderTencardTool_() {
     } else if (!list.length) {
       listHtml = `<p class="mb-0" style="color:var(--muted);">Inga 10-kort i databasen.</p>`;
     } else {
+      const selected = String((result && result.card && result.card.card_id) || (result && result.card_id) || "");
       const rows = list.map((c) => {
         const id = escapeHtml_(c.card_id);
-        const rem = Number(c.remaining) || 0;
-        return `<tr>
+        const rem = Number(c.remaining);
+        const on = String(c.card_id) === selected ? " is-selected" : "";
+        return `<tr class="${on}" data-tencard-act="open" data-card-id="${id}" tabindex="0">
           <td>${id}</td>
-          <td class="num"><input class="form-control tencard-rem-input" type="number" min="0" max="99" value="${rem}" data-card-id="${id}"></td>
+          <td class="num">${Number.isFinite(rem) ? rem : "—"}</td>
           <td>${escapeHtml_(c.status || "—")}</td>
           <td>${escapeHtml_(tencardFormatWhen_(c.last_clipped_at))}</td>
-          <td class="tencard-row-actions">
-            <button class="btn btn-sm btn-accent" type="button" ${rem > 0 ? "" : "disabled"} data-tencard-act="clip" data-card-id="${id}">Klipp</button>
-            <button class="btn btn-sm btn-ghost" type="button" data-tencard-act="save-remaining" data-card-id="${id}">Spara</button>
-            <button class="btn btn-sm btn-outline-danger" type="button" data-tencard-act="delete" data-card-id="${id}">Ta bort</button>
-          </td>
         </tr>`;
       }).join("");
-      listHtml = `<div style="overflow-x:auto;"><table class="tencard-list">
-        <thead><tr><th>Kortnummer</th><th class="num">Klipp</th><th>Status</th><th>Senast klippt</th><th></th></tr></thead>
+      listHtml = `<p class="small mb-2" style="color:var(--muted);">Klicka på en rad för att klippa, justera eller ta bort.</p>
+      <div style="overflow-x:auto;"><table class="tencard-list">
+        <thead><tr><th>Kortnummer</th><th class="num">Klipp</th><th>Status</th><th>Senast klippt</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>`;
     }
@@ -8584,7 +8586,7 @@ function renderTencardTool_() {
     </div>
     ${tencardState_.showList ? `<div class="admin-card"><h3>Alla 10-kort</h3>${listHtml}</div>` : ""}`;
   bindTencardClicks_(main);
-  setTimeout(tencardFocusSearch_, 30);
+  if (!(opts && opts.keepFocus)) setTimeout(tencardFocusSearch_, 30);
 }
 function submitTencardSearch_(ev) {
   if (ev) ev.preventDefault();
@@ -8613,6 +8615,21 @@ function submitTencardSearch_(ev) {
       renderTencardTool_();
     })
     .lookupTencard({ card_id: cardId });
+}
+function openTencardFromList_(cardId) {
+  const row = (tencardState_.list || []).find((c) => String(c.card_id) === String(cardId));
+  if (!row) return;
+  tencardState_.query = String(row.card_id);
+  tencardState_.showCreate = false;
+  tencardState_.result = {
+    ok: true,
+    found: true,
+    card_id: row.card_id,
+    card: Object.assign({ kind: "tencard" }, row)
+  };
+  renderTencardTool_({ keepFocus: true });
+  const panel = document.querySelector(".tencard-result");
+  if (panel && panel.scrollIntoView) panel.scrollIntoView({ block: "nearest" });
 }
 function afterTencardMutation_(cardId) {
   if (tencardState_.showList) loadTencardList_(true);
