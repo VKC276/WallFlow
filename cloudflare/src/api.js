@@ -33,6 +33,7 @@ import {
   findUserByLogin,
   getRouteByNr,
   isAllowedGrade,
+  isEjUppsattGrade,
   nextRouteNumber,
   normalizeLifetimeDays,
   readBaseUrlQr,
@@ -557,9 +558,16 @@ async function saveRoute(env, route, session) {
     ? lifeVal
     : (existing ? existing.Livslangd : defaultLife);
 
-  const ledbyggare = String(route.Ledbyggare || "");
-  const byggdatum = String(route.Byggdatum || "");
+  const unset = isEjUppsattGrade(grade);
+  const ledbyggare = unset ? "" : String(route.Ledbyggare || "").trim();
+  const byggdatum = unset ? "" : String(route.Byggdatum || "").trim();
   const anteckningar = String(route.Anteckningar || "");
+  if (!unset) {
+    if (!ledbyggare) return { ok: false, error: "Ange ledbyggare" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(byggdatum.slice(0, 10))) {
+      return { ok: false, error: "Ange byggdatum" };
+    }
+  }
 
   await env.DB.prepare(
     `INSERT INTO routes (nr, gradering, ledbyggare, byggdatum, anteckningar, bild_key, livslangd)

@@ -772,6 +772,10 @@
       color: var(--text) !important; border-radius: 12px !important;
       color-scheme: var(--color-scheme);
     }
+    .form-control::placeholder {
+      color: var(--placeholder) !important;
+      opacity: 1;
+    }
     .form-control:focus, .form-select:focus {
       border-color: color-mix(in srgb, var(--accent) 55%, transparent) !important;
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent) !important;
@@ -1159,6 +1163,27 @@
     }
     .qr-scan-actions .btn { flex: 1 1 auto; }
     body.qr-scan-open { overflow: hidden; }
+    .qr-scan-stage.photo-stage::after { display: none; }
+    #verif-cam-video {
+      width: 100%;
+      height: 100%;
+      min-height: 220px;
+      object-fit: cover;
+      display: block;
+      transform-origin: center center;
+    }
+    .file-input-ios {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      border: 0;
+      white-space: nowrap;
+    }
 
     .quickinfo-inline { font-weight: 600; }
 
@@ -1236,6 +1261,65 @@
       background: transparent;
       box-shadow: inset 0 0 0 6px transparent;
     }
+    .inventory-grade-flash {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      border-radius: inherit;
+      background: var(--inventory-flash-color, var(--ok));
+      opacity: 0;
+    }
+    .inventory-grade-flash.is-on {
+      animation: inventoryGradeFade 1.7s ease-in-out;
+    }
+    .inventory-grade-flash-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4em;
+      text-align: center;
+      padding: 0 18px;
+      color: var(--inventory-flash-ink, #f7f4ee);
+      text-shadow: 0 2px 16px rgba(0, 0, 0, 0.28);
+      opacity: 0;
+    }
+    .inventory-grade-flash.is-on .inventory-grade-flash-inner {
+      animation: inventoryGradeTextFade 1.7s ease-in-out;
+    }
+    .inventory-grade-flash small {
+      font-family: inherit;
+      font-weight: 700;
+      font-size: clamp(0.78rem, 3.6vw, 1rem);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .inventory-grade-flash span {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(2.2rem, 14vw, 3.8rem);
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    .inventory-grade-flash.is-repeat span {
+      font-size: clamp(1.45rem, 8vw, 2.2rem);
+    }
+    @keyframes inventoryGradeFade {
+      0% { opacity: 0; }
+      16% { opacity: 1; }
+      62% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @keyframes inventoryGradeTextFade {
+      0% { opacity: 0; transform: scale(0.9); }
+      16% { opacity: 1; transform: scale(1); }
+      62% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.04); }
+    }
     #inventory-stage.flash-ok::before {
       animation: inventoryFlash 1.15s ease-out;
       background: color-mix(in srgb, var(--ok) 78%, transparent);
@@ -1259,8 +1343,12 @@
     }
     #inventory-stage.flash-ok,
     #inventory-stage.flash-warn,
-    #inventory-stage.flash-bad {
+    #inventory-stage.flash-bad,
+    #inventory-stage.flash-grade {
       animation: inventoryStagePulse 1.15s ease-out;
+    }
+    #inventory-stage.flash-grade {
+      animation-duration: 1.7s;
     }
     @keyframes inventoryFlash {
       0% { opacity: 0; }
@@ -1279,8 +1367,11 @@
       #inventory-stage.flash-bad::before,
       #inventory-stage.flash-ok,
       #inventory-stage.flash-warn,
-      #inventory-stage.flash-bad {
-        animation-duration: 0.4s;
+      #inventory-stage.flash-bad,
+      #inventory-stage.flash-grade,
+      .inventory-grade-flash.is-on,
+      .inventory-grade-flash.is-on .inventory-grade-flash-inner {
+        animation-duration: 0.45s;
       }
     }
     #quickinfo-video,
@@ -1523,7 +1614,7 @@
         <button class="icon-btn" type="button" onclick="closeQrScanner_()" aria-label="Stäng QR-skanner">✕</button>
       </div>
       <div class="qr-scan-stage" id="qr-scan-stage">
-        <video id="qr-scan-video" autoplay playsinline muted></video>
+        <video id="qr-scan-video" autoplay playsinline webkit-playsinline muted></video>
         <div class="cam-zoom" id="qr-scan-zoom" hidden>
           <button type="button" class="cam-zoom-btn" data-zoom-nudge="-1" aria-label="Zooma ut">−</button>
           <input id="qr-scan-zoom-range" type="range" min="1" max="4" step="0.1" value="1" aria-label="Kamerazoom">
@@ -1539,6 +1630,29 @@
     </div>
   </div>
 
+  <div id="verif-cam-overlay" class="qr-scan-overlay" aria-hidden="true">
+    <div class="qr-scan-card" role="dialog" aria-modal="true" aria-labelledby="verif-cam-title">
+      <div class="qr-scan-head">
+        <strong id="verif-cam-title">Ta foto på kvitto</strong>
+        <button class="icon-btn" type="button" onclick="closeVerifCamera_()" aria-label="Stäng kamera">✕</button>
+      </div>
+      <div class="qr-scan-stage photo-stage" id="verif-cam-stage">
+        <video id="verif-cam-video" autoplay playsinline webkit-playsinline muted></video>
+        <div class="cam-zoom" id="verif-cam-zoom" hidden>
+          <button type="button" class="cam-zoom-btn" data-zoom-nudge="-1" aria-label="Zooma ut">−</button>
+          <input id="verif-cam-zoom-range" type="range" min="1" max="4" step="0.1" value="1" aria-label="Kamerazoom">
+          <button type="button" class="cam-zoom-btn" data-zoom-nudge="1" aria-label="Zooma in">+</button>
+          <span class="cam-zoom-label" id="verif-cam-zoom-label">1×</span>
+        </div>
+      </div>
+      <div id="verif-cam-status" class="qr-scan-status">Startar kamera…</div>
+      <div class="qr-scan-actions">
+        <button class="btn btn-ghost" type="button" onclick="closeVerifCamera_()">Avbryt</button>
+        <button class="btn btn-accent" type="button" id="verif-cam-shot" onclick="captureVerifPhoto_()" disabled>Ta bild</button>
+      </div>
+    </div>
+  </div>
+
   <div id="quickinfo-overlay" class="quickinfo-overlay" aria-hidden="true">
     <div class="quickinfo-head">
       <div>
@@ -1549,7 +1663,7 @@
     </div>
     <div class="quickinfo-body">
       <div class="quickinfo-stage" id="quickinfo-stage">
-        <video id="quickinfo-video" autoplay playsinline muted></video>
+        <video id="quickinfo-video" autoplay playsinline webkit-playsinline muted></video>
         <div class="cam-zoom" id="quickinfo-zoom" hidden>
           <button type="button" class="cam-zoom-btn" data-zoom-nudge="-1" aria-label="Zooma ut">−</button>
           <input id="quickinfo-zoom-range" type="range" min="1" max="4" step="0.1" value="1" aria-label="Kamerazoom">
@@ -1578,12 +1692,18 @@
     </div>
     <div class="quickinfo-body">
       <div class="quickinfo-stage" id="inventory-stage">
-        <video id="inventory-video" autoplay playsinline muted></video>
+        <video id="inventory-video" autoplay playsinline webkit-playsinline muted></video>
         <div class="cam-zoom" id="inventory-zoom" hidden>
           <button type="button" class="cam-zoom-btn" data-zoom-nudge="-1" aria-label="Zooma ut">−</button>
           <input id="inventory-zoom-range" type="range" min="1" max="4" step="0.1" value="1" aria-label="Kamerazoom">
           <button type="button" class="cam-zoom-btn" data-zoom-nudge="1" aria-label="Zooma in">+</button>
           <span class="cam-zoom-label" id="inventory-zoom-label">1×</span>
+        </div>
+        <div id="inventory-grade-flash" class="inventory-grade-flash" aria-hidden="true">
+          <div class="inventory-grade-flash-inner">
+            <small id="inventory-grade-flash-kicker" hidden></small>
+            <span id="inventory-grade-flash-text"></span>
+          </div>
         </div>
       </div>
       <div id="inventory-status" class="quickinfo-status">Startar kamera…</div>
@@ -2135,6 +2255,17 @@ function demoApi_(action, args) {
         if (!okGrade) {
           return fail("Ogiltig gradering. Tillåtna: " + grades.join(", ") + ", Wildcard, Ej uppsatt");
         }
+        if (isEjUppsattGrade_(route.Gradering)) {
+          route.Ledbyggare = "";
+          route.Byggdatum = "";
+          route.Slutdatum = "";
+          route.DagsAttByggaOm = "-";
+        } else {
+          if (!String(route.Ledbyggare || "").trim()) return fail("Ange ledbyggare");
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(route.Byggdatum || "").trim().slice(0, 10))) {
+            return fail("Ange byggdatum");
+          }
+        }
         if (route.Livslangd != null && String(route.Livslangd).trim() !== "") {
           if (!isSuper) return fail("Bara superadmin kan ändra livslängd");
           const life = Math.round(Number(route.Livslangd));
@@ -2448,6 +2579,15 @@ function escapeHtml_(str) {
 }
 function colorHex_(name) {
   return COLOR_HEX[name] || "#95a5a6";
+}
+function contrastInkForHex_(hex) {
+  const raw = String(hex || "").replace("#", "");
+  if (raw.length !== 6) return "#f7f4ee";
+  const r = parseInt(raw.slice(0, 2), 16);
+  const g = parseInt(raw.slice(2, 4), 16);
+  const b = parseInt(raw.slice(4, 6), 16);
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum > 0.58 ? "#12151a" : "#f7f4ee";
 }
 function gradeList_() {
   return (db.grades && db.grades.length) ? db.grades.slice() : DEFAULT_GRADES.slice();
@@ -3708,6 +3848,50 @@ function hapticSuccess_() {
   } catch (_) { /* ignore */ }
 }
 
+let inventoryAudioCtx_ = null;
+
+function unlockInventoryAudio_() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!inventoryAudioCtx_) inventoryAudioCtx_ = new AC();
+    if (inventoryAudioCtx_.state === "suspended") inventoryAudioCtx_.resume();
+  } catch (_) { /* ignore */ }
+}
+
+function playInventoryChime_(notes, peakGain) {
+  try {
+    unlockInventoryAudio_();
+    const ctx = inventoryAudioCtx_;
+    if (!ctx || !notes || !notes.length) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(notes[0].freq, t0);
+    for (let i = 1; i < notes.length; i++) {
+      osc.frequency.setValueAtTime(notes[i].freq, t0 + notes[i].t);
+    }
+    const last = notes[notes.length - 1];
+    const end = Math.max(0.18, (last.t || 0) + 0.16);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(peakGain || 0.18, t0 + 0.016);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + end);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + end + 0.02);
+  } catch (_) { /* ignore */ }
+}
+
+function playInventoryPling_() {
+  playInventoryChime_([{ freq: 880, t: 0 }, { freq: 1318.5, t: 0.06 }], 0.2);
+}
+
+function playInventoryAlreadyChime_() {
+  playInventoryChime_([{ freq: 392, t: 0 }, { freq: 294, t: 0.1 }], 0.14);
+}
+
 /** Dubbelpuls när QR lästes men ingen led matchade. */
 function hapticError_() {
   try {
@@ -4001,15 +4185,167 @@ function resetCamZoom_(id) {
   camZoomState_[id] = null;
 }
 
+function canUseCamera_() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+/** Bakre kamera; flera constraint-varianter för iOS Safari. */
+async function requestRearCameraStream_() {
+  const attempts = [
+    { video: { facingMode: { ideal: "environment" } }, audio: false },
+    { video: { facingMode: "environment" }, audio: false },
+    { video: true, audio: false }
+  ];
+  let lastErr = null;
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(attempts[i]);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error("getUserMedia");
+}
+
+async function attachCameraToVideo_(video, stream) {
+  if (!video) return;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.muted = true;
+  video.autoplay = true;
+  video.srcObject = stream;
+  if (video.readyState < 2) {
+    await new Promise((resolve, reject) => {
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
+      const onErr = () => {
+        cleanup();
+        reject(new Error("video"));
+      };
+      const cleanup = () => {
+        video.removeEventListener("loadeddata", onReady);
+        video.removeEventListener("error", onErr);
+      };
+      video.addEventListener("loadeddata", onReady);
+      video.addEventListener("error", onErr);
+    });
+  }
+  try {
+    await video.play();
+  } catch (_) {
+    /* autoplay kan redan ha startat */
+  }
+}
+
+const JSQR_SRC_ = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
+const JSQR_MAX_SIDE_ = 480;
+let jsQRLoadPromise_ = null;
+let qrDetectorPromise_ = null;
+let qrDecodeCanvas_ = null;
+let qrDecodeCtx_ = null;
+
+function loadJsQRLibrary_() {
+  if (typeof window.jsQR === "function") return Promise.resolve(window.jsQR);
+  if (jsQRLoadPromise_) return jsQRLoadPromise_;
+  jsQRLoadPromise_ = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = JSQR_SRC_;
+    script.async = true;
+    script.onload = () => {
+      if (typeof window.jsQR === "function") resolve(window.jsQR);
+      else reject(new Error("jsQR saknas"));
+    };
+    script.onerror = () => {
+      jsQRLoadPromise_ = null;
+      reject(new Error("Kunde inte ladda QR-avkodare"));
+    };
+    document.head.appendChild(script);
+  });
+  return jsQRLoadPromise_;
+}
+
+function qrSourceToImageData_(source) {
+  if (!source) return null;
+  const srcW = source instanceof HTMLCanvasElement ? source.width : source.videoWidth;
+  const srcH = source instanceof HTMLCanvasElement ? source.height : source.videoHeight;
+  if (!srcW || !srcH) return null;
+  const scale = Math.min(1, JSQR_MAX_SIDE_ / Math.max(srcW, srcH));
+  const w = Math.max(1, Math.round(srcW * scale));
+  const h = Math.max(1, Math.round(srcH * scale));
+  if (!qrDecodeCanvas_) {
+    qrDecodeCanvas_ = document.createElement("canvas");
+    qrDecodeCtx_ = qrDecodeCanvas_.getContext("2d", { willReadFrequently: true });
+  }
+  if (!qrDecodeCtx_) return null;
+  if (qrDecodeCanvas_.width !== w) qrDecodeCanvas_.width = w;
+  if (qrDecodeCanvas_.height !== h) qrDecodeCanvas_.height = h;
+  qrDecodeCtx_.drawImage(source, 0, 0, w, h);
+  return qrDecodeCtx_.getImageData(0, 0, w, h);
+}
+
+function jsQRDetector_() {
+  return {
+    detect(source) {
+      try {
+        const img = qrSourceToImageData_(source);
+        if (!img) return Promise.resolve([]);
+        const code = window.jsQR(img.data, img.width, img.height, {
+          inversionAttempts: "attemptBoth"
+        });
+        const value = code && code.data ? String(code.data).trim() : "";
+        return Promise.resolve(value ? [{ rawValue: value }] : []);
+      } catch (_) {
+        return Promise.resolve([]);
+      }
+    }
+  };
+}
+
+/**
+ * Native BarcodeDetector på Chromium/Android; jsQR på iOS/Safari/Firefox
+ * där API:t saknas eller är avstängt.
+ */
+async function createQrDetector_() {
+  if (typeof window.BarcodeDetector === "function") {
+    try {
+      let supported = true;
+      if (typeof BarcodeDetector.getSupportedFormats === "function") {
+        const formats = await BarcodeDetector.getSupportedFormats();
+        supported = Array.isArray(formats) && formats.indexOf("qr_code") !== -1;
+      }
+      if (supported) {
+        const native = new BarcodeDetector({ formats: ["qr_code"] });
+        const probe = document.createElement("canvas");
+        probe.width = 16;
+        probe.height = 16;
+        await native.detect(probe);
+        return native;
+      }
+    } catch (_) {
+      /* iOS: konstruktor kan finnas men Shape Detection är avstängd */
+    }
+  }
+  await loadJsQRLibrary_();
+  return jsQRDetector_();
+}
+
+function getQrDetector_() {
+  if (!qrDetectorPromise_) {
+    qrDetectorPromise_ = createQrDetector_().catch((err) => {
+      qrDetectorPromise_ = null;
+      throw err;
+    });
+  }
+  return qrDetectorPromise_;
+}
+
 async function openQrScanner_() {
   if (isQrScannerOpen_()) return;
   if (isInventoryOpen_()) closeInventory_();
   if (isQuickInfoOpen_()) closeQuickInfo_();
-  if (!window.BarcodeDetector) {
-    showToast("QR-skanning stöds inte här — mata in kod manuellt");
-    return manualQrInput_();
-  }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  if (!canUseCamera_()) {
     showToast("Kamera stöds inte i den här webbläsaren — mata in kod manuellt");
     return manualQrInput_();
   }
@@ -4025,21 +4361,24 @@ async function openQrScanner_() {
   ensureQrScanHistory_();
 
   try {
-    qrScanState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+    qrScanState_.detector = await getQrDetector_();
   } catch (e) {
     closeQrScanner_();
-    showToast("QR-format stöds inte — mata in kod manuellt");
+    showToast("QR-skanning stöds inte — mata in kod manuellt");
     return manualQrInput_();
   }
+  if (!isQrScannerOpen_()) return;
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false
-    });
+    const stream = await requestRearCameraStream_();
+    if (!isQrScannerOpen_()) {
+      stream.getTracks().forEach((track) => {
+        try { track.stop(); } catch (e) { /* ignore */ }
+      });
+      return;
+    }
     qrScanState_.stream = stream;
-    video.srcObject = stream;
-    await video.play();
+    await attachCameraToVideo_(video, stream);
     initCamZoom_("qr-scan", stream, video);
     setQrScanStatus_("Rikta kameran mot en QR-kod med lednummer.");
     qrScanState_.rafId = requestAnimationFrame(qrScanTick_);
@@ -4327,14 +4666,10 @@ async function openQuickInfo_() {
   if (isInventoryOpen_()) closeInventory_();
   if (isQrScannerOpen_()) closeQrScanner_();
 
-  const canDetect = !!window.BarcodeDetector;
-  const canCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  if (!canDetect || !canCamera) {
+  if (!canUseCamera_()) {
     openQuickInfoShell_({
       manual: true,
-      status: canDetect
-        ? "Kamera saknas — mata in lednummer."
-        : "QR-skanning stöds inte här — mata in lednummer."
+      status: "Kamera saknas — mata in lednummer."
     });
     return manualQuickInfoInput_();
   }
@@ -4342,20 +4677,18 @@ async function openQuickInfo_() {
   if (!openQuickInfoShell_({ manual: false, status: "Startar kamera…" })) return;
 
   try {
-    quickInfoState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+    quickInfoState_.detector = await getQrDetector_();
   } catch (e) {
     setQuickInfoManualMode_(true);
-    setQuickInfoStatus_("QR-format stöds inte — mata in lednummer.");
-    showToast("QR-format stöds inte");
+    setQuickInfoStatus_("QR-skanning stöds inte — mata in lednummer.");
+    showToast("QR-skanning stöds inte");
     return manualQuickInfoInput_();
   }
+  if (!isQuickInfoOpen_()) return;
 
   const video = document.getElementById("quickinfo-video");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false
-    });
+    const stream = await requestRearCameraStream_();
     if (!isQuickInfoOpen_()) {
       stream.getTracks().forEach((track) => {
         try { track.stop(); } catch (e) { /* ignore */ }
@@ -4363,10 +4696,7 @@ async function openQuickInfo_() {
       return;
     }
     quickInfoState_.stream = stream;
-    if (video) {
-      video.srcObject = stream;
-      await video.play();
-    }
+    await attachCameraToVideo_(video, stream);
     initCamZoom_("quickinfo", stream, video);
     setQuickInfoStatus_("Skannar löpande — håll QR-koden i ramen.");
     quickInfoState_.rafId = requestAnimationFrame(quickInfoTick_);
@@ -4503,6 +4833,7 @@ function openInventoryShell_(opts) {
   document.body.classList.add("quickinfo-open");
   inventoryState_.open = true;
   resetInventorySession_();
+  unlockInventoryAudio_();
   setInventoryManualMode_(!!opts.manual);
   setInventoryStatus_(opts.status || (opts.manual
     ? "Mata in lednummer manuellt."
@@ -4535,19 +4866,64 @@ function closeInventory_(fromPopstate) {
   }
 }
 
-function flashInventoryStage_(kind) {
+function flashInventoryStage_(kind, route, opts) {
+  opts = opts || {};
+  const already = !!opts.already;
   const stage = document.getElementById("inventory-stage");
+  const flash = document.getElementById("inventory-grade-flash");
+  const label = document.getElementById("inventory-grade-flash-text");
+  const kicker = document.getElementById("inventory-grade-flash-kicker");
   if (!stage) return;
-  const cls = kind === "ok" ? "flash-ok" : kind === "unexpected" ? "flash-warn" : "flash-bad";
-  stage.classList.remove("flash-ok", "flash-warn", "flash-bad");
-  void stage.offsetWidth;
-  stage.classList.add(cls);
-  if (inventoryState_.flashTimer) clearTimeout(inventoryState_.flashTimer);
-  inventoryState_.flashTimer = setTimeout(() => {
-    stage.classList.remove("flash-ok", "flash-warn", "flash-bad");
-    inventoryState_.flashTimer = 0;
-    }, 1200);
+  stage.classList.remove("flash-ok", "flash-warn", "flash-bad", "flash-grade");
+  if (flash) {
+    flash.classList.remove("is-on", "is-repeat");
+    flash.setAttribute("aria-hidden", "true");
   }
+  if (inventoryState_.flashTimer) clearTimeout(inventoryState_.flashTimer);
+  void stage.offsetWidth;
+  if (flash) void flash.offsetWidth;
+
+  const showGrade = !!(route && (kind === "ok" || already));
+  const holdMs = showGrade ? 1750 : 1200;
+  if (showGrade) {
+    const grade = String(route.Gradering || "").trim() || ("Led " + (route.Nr || ""));
+    const hex = already && kind !== "ok" ? "#f0c44a" : colorHex_(route.Gradering);
+    if (flash) {
+      flash.style.setProperty("--inventory-flash-color", hex);
+      flash.style.setProperty("--inventory-flash-ink", contrastInkForHex_(hex));
+      if (already) {
+        flash.classList.add("is-repeat");
+        if (kicker) {
+          kicker.hidden = false;
+          kicker.textContent = grade;
+        }
+        if (label) label.textContent = "Redan skannad";
+      } else {
+        if (kicker) {
+          kicker.hidden = true;
+          kicker.textContent = "";
+        }
+        if (label) label.textContent = grade;
+      }
+      flash.classList.add("is-on");
+      flash.setAttribute("aria-hidden", "false");
+    }
+    stage.classList.add("flash-grade");
+    if (already) playInventoryAlreadyChime_();
+    else playInventoryPling_();
+  } else {
+    const cls = kind === "unexpected" ? "flash-warn" : "flash-bad";
+    stage.classList.add(cls);
+  }
+  inventoryState_.flashTimer = setTimeout(() => {
+    stage.classList.remove("flash-ok", "flash-warn", "flash-bad", "flash-grade");
+    if (flash) {
+      flash.classList.remove("is-on", "is-repeat");
+      flash.setAttribute("aria-hidden", "true");
+    }
+    inventoryState_.flashTimer = 0;
+  }, holdMs);
+}
 
 function inventoryKindForScan_(route) {
   if (!route) return "unknown";
@@ -4561,9 +4937,9 @@ function handleInventoryValue_(rawValue) {
   if (!parsed.ok) return;
   const route = routeByQrValue_(parsed.value);
   const kind = inventoryKindForScan_(route);
-  flashInventoryStage_(kind);
   const key = inventoryScanKeyFromRoute_(route, parsed.value);
   const already = inventoryState_.scanned.some((s) => inventoryItemKey_(s) === key);
+  flashInventoryStage_(kind, route, { already });
   if (already) {
     setInventoryStatus_("Redan skannad: " + (route ? ("led " + route.Nr) : parsed.value));
     return;
@@ -4694,41 +5070,38 @@ async function openInventory_() {
   if (isQuickInfoOpen_()) closeQuickInfo_();
   if (isQrScannerOpen_()) closeQrScanner_();
 
-  const canDetect = !!window.BarcodeDetector;
-  const canCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const canCamera = canUseCamera_();
   if (isInventoryOpen_()) {
     stopInventoryLoop_();
     stopInventoryStream_();
     resetInventorySession_();
-    setInventoryStatus_((!canDetect || !canCamera)
-      ? (canDetect ? "Kamera saknas — mata in lednummer." : "QR-skanning stöds inte här — mata in lednummer.")
-      : "Startar kamera…");
+    setInventoryStatus_(canCamera
+      ? "Startar kamera…"
+      : "Kamera saknas — mata in lednummer.");
   } else if (!openInventoryShell_({
-    manual: !canDetect || !canCamera,
-    status: (!canDetect || !canCamera)
-      ? (canDetect ? "Kamera saknas — mata in lednummer." : "QR-skanning stöds inte här — mata in lednummer.")
-      : "Startar kamera…"
+    manual: !canCamera,
+    status: canCamera
+      ? "Startar kamera…"
+      : "Kamera saknas — mata in lednummer."
   })) return;
 
-  if (!canDetect || !canCamera) {
+  if (!canCamera) {
     return manualInventoryInput_();
   }
 
   try {
-    inventoryState_.detector = new BarcodeDetector({ formats: ["qr_code"] });
+    inventoryState_.detector = await getQrDetector_();
   } catch (e) {
     setInventoryManualMode_(true);
-    setInventoryStatus_("QR-format stöds inte — mata in lednummer.");
-    showToast("QR-format stöds inte");
+    setInventoryStatus_("QR-skanning stöds inte — mata in lednummer.");
+    showToast("QR-skanning stöds inte");
     return manualInventoryInput_();
   }
+  if (!isInventoryOpen_()) return;
 
   const video = document.getElementById("inventory-video");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false
-    });
+    const stream = await requestRearCameraStream_();
     if (!isInventoryOpen_()) {
       stream.getTracks().forEach((track) => {
         try { track.stop(); } catch (e) { /* ignore */ }
@@ -4736,10 +5109,7 @@ async function openInventory_() {
       return;
     }
     inventoryState_.stream = stream;
-    if (video) {
-      video.srcObject = stream;
-      await video.play();
-    }
+    await attachCameraToVideo_(video, stream);
     initCamZoom_("inventory", stream, video);
     const n = expectedInventoryRoutes_().length;
     setInventoryStatus_("Skannar löpande — " + n + " leder ska vara uppsatta enligt registret.");
@@ -5486,15 +5856,19 @@ function renderRouteForm(nr) {
   const colorOpts = formGrades.map((c) => `<option value="${escapeHtml_(c)}" ${selectedGrade === c ? "selected" : ""}>${escapeHtml_(c)}</option>`).join("");
   const nrReadonly = !!nr || !canManageRouteStructureRole();
   const displayName = currentDisplayName_();
+  const storedSetter = String(route.Ledbyggare || "").trim();
+  const unsetSelected = isEjUppsattGrade_(selectedGrade);
+  const setterValue = unsetSelected ? "" : (storedSetter || displayName);
+  const buildValue = unsetSelected ? "" : String(route.Byggdatum || "");
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("panel-title").textContent = nr ? ("Redigera led " + nr) : "Ny led";
   document.getElementById("panel-body").innerHTML = `
       <div class="row g-2 mb-3">
         <div class="col-4"><label class="form-label">Nr</label><input id="f-nr" class="form-control" value="${escapeHtml_(route.Nr)}" ${nrReadonly ? "readonly" : ""} placeholder="auto"></div>
-        <div class="col-8"><label class="form-label">Gradering</label><select id="f-grad" class="form-select">${colorOpts}</select></div>
+        <div class="col-8"><label class="form-label">Gradering</label><select id="f-grad" class="form-select" onchange="syncRouteFormUnsetFields_()">${colorOpts}</select></div>
       </div>
-      <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(route.Ledbyggare)}" placeholder="${escapeHtml_(displayName)}"></div>
-      <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(route.Byggdatum)}"></div>
+      <div class="mb-3"><label class="form-label">Ledbyggare</label><input id="f-setter" class="form-control" value="${escapeHtml_(setterValue)}" placeholder="Namn på ledbyggare" autocomplete="name"${unsetSelected ? " disabled" : ""}></div>
+      <div class="mb-3"><label class="form-label">Byggdatum</label><input id="f-build" type="date" class="form-control" value="${escapeHtml_(buildValue)}"${unsetSelected ? " disabled" : ""}></div>
       ${canManageLifetimeRole() ? `
       <div class="mb-3">
         <label class="form-label" for="f-lifetime">Livslängd (dagar)</label>
@@ -5524,8 +5898,9 @@ function renderRouteForm(nr) {
   setPanelOpen_(true);
   if (!wasOpen) ensurePanelHistory_();
   bindRouteImageEditor_(route.Bild || "");
-  // Vid redigering: första klick i Ledbyggare rensar och sätter inloggad persons namn (inte användarnamn)
-  if (nr) {
+  syncRouteFormUnsetFields_();
+  // Vid redigering av en led som redan har byggare: första klick byter till inloggad persons namn.
+  if (nr && storedSetter && !unsetSelected) {
     const setterEl = document.getElementById("f-setter");
     if (setterEl) {
       setterEl.addEventListener("focus", () => {
@@ -6089,6 +6464,23 @@ function persistRouteOnServer_(route) {
   });
 }
 
+function syncRouteFormUnsetFields_() {
+  const gradEl = document.getElementById("f-grad");
+  const setterEl = document.getElementById("f-setter");
+  const buildEl = document.getElementById("f-build");
+  if (!gradEl) return;
+  const unset = isEjUppsattGrade_(gradEl.value);
+  if (setterEl) {
+    setterEl.disabled = unset;
+    if (unset) setterEl.value = "";
+    else if (!String(setterEl.value || "").trim()) setterEl.value = currentDisplayName_();
+  }
+  if (buildEl) {
+    buildEl.disabled = unset;
+    if (unset) buildEl.value = "";
+  }
+}
+
 function saveRoute(existingNr) {
   if (!canEditContentRole()) return showToast("Saknar behörighet");
   const nrVal = document.getElementById("f-nr").value.trim() || existingNr || "";
@@ -6112,6 +6504,15 @@ function saveRoute(existingNr) {
   }
   if (!isListableGrade_(route.Gradering)) {
     return showToast("Välj en giltig gradering");
+  }
+  if (isEjUppsattGrade_(route.Gradering)) {
+    route.Ledbyggare = "";
+    route.Byggdatum = "";
+  } else {
+    if (!route.Ledbyggare) return showToast("Ange ledbyggare");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(route.Byggdatum || "").trim().slice(0, 10))) {
+      return showToast("Ange byggdatum");
+    }
   }
   const exists = route.Nr && db.routes.some((r) => String(r.Nr) === String(route.Nr));
   if ((!route.Nr || !exists) && !canManageRouteStructureRole()) {
@@ -7174,6 +7575,7 @@ const VERIF_PROFILE_KEY_ = "wallflow_verif_profile_v1";
 let verifFiles_ = [];
 let verifLineCount_ = 1;
 let verifArchiveEmail_ = "inbox.ver.1624638@arkivplats.se";
+let verifCamState_ = { open: false, stream: null };
 
 let verifGuest_ = false;
 
@@ -7200,6 +7602,7 @@ function openGuestVerifFromRoute_() {
   openVerifTool();
 }
 function closeVerifTool() {
+  closeVerifCamera_();
   const el = document.getElementById("app-verif");
   if (el) el.classList.remove("show");
   document.body.classList.remove("verif-open");
@@ -7347,11 +7750,13 @@ function renderVerifForm_(data) {
     <div class="admin-card">
       <h3>Kvitton</h3>
       <p class="small mb-3" style="color:var(--muted);">Ta foto på kvittot, eller välj PDF/bild. De läggs efter försättsbladet.</p>
-      <input id="verif-camera" type="file" accept="image/*" capture="environment" style="display:none" onchange="onVerifFiles_(event)">
-      <input id="verif-files" class="form-control" type="file" accept="image/*,application/pdf,.pdf" multiple style="display:none" onchange="onVerifFiles_(event)">
+      <div class="position-relative">
+        <input id="verif-camera" class="file-input-ios" type="file" accept="image/*" capture="environment" onchange="onVerifFiles_(event)">
+        <input id="verif-files" class="file-input-ios" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="onVerifFiles_(event)">
+      </div>
       <div class="d-flex gap-2 flex-wrap mb-2">
-        <button class="btn btn-accent" type="button" onclick="document.getElementById('verif-camera').click()">Ta foto</button>
-        <button class="btn btn-ghost" type="button" onclick="document.getElementById('verif-files').click()">Välj PDF eller bild</button>
+        <button class="btn btn-accent" type="button" onclick="openVerifCamera_()">Ta foto</button>
+        <label class="btn btn-ghost mb-0" for="verif-files">Välj PDF eller bild</label>
       </div>
       <div class="verif-files" id="verif-file-list"></div>
     </div>
@@ -7427,6 +7832,131 @@ function updateVerifTotal_() {
   const total = readVerifLines_().reduce((s, r) => s + (Number(r.amount) || 0), 0);
   el.textContent = formatSek_(total);
 }
+function setVerifCamStatus_(msg) {
+  const el = document.getElementById("verif-cam-status");
+  if (el) el.textContent = msg || "";
+}
+
+function stopVerifCameraStream_() {
+  resetCamZoom_("verif-cam");
+  const stream = verifCamState_.stream;
+  if (stream) {
+    stream.getTracks().forEach((track) => {
+      try { track.stop(); } catch (_) { /* ignore */ }
+    });
+  }
+  verifCamState_.stream = null;
+  const video = document.getElementById("verif-cam-video");
+  if (video) video.srcObject = null;
+}
+
+function closeVerifCamera_() {
+  const overlay = document.getElementById("verif-cam-overlay");
+  stopVerifCameraStream_();
+  verifCamState_.open = false;
+  const shot = document.getElementById("verif-cam-shot");
+  if (shot) shot.disabled = true;
+  if (overlay) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("qr-scan-open");
+}
+
+function fallbackVerifNativeCamera_() {
+  const input = document.getElementById("verif-camera");
+  if (!input) return;
+  try { input.value = ""; } catch (_) { /* ignore */ }
+  try { input.click(); } catch (_) { /* ignore */ }
+}
+
+async function openVerifCamera_() {
+  if (verifCamState_.open) return;
+  if (!canUseCamera_()) {
+    fallbackVerifNativeCamera_();
+    return;
+  }
+  const overlay = document.getElementById("verif-cam-overlay");
+  const video = document.getElementById("verif-cam-video");
+  const shot = document.getElementById("verif-cam-shot");
+  if (!overlay || !video) {
+    fallbackVerifNativeCamera_();
+    return;
+  }
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("qr-scan-open");
+  verifCamState_.open = true;
+  if (shot) shot.disabled = true;
+  setVerifCamStatus_("Startar kamera…");
+  try {
+    const stream = await requestRearCameraStream_();
+    if (!verifCamState_.open) {
+      stream.getTracks().forEach((track) => {
+        try { track.stop(); } catch (_) { /* ignore */ }
+      });
+      return;
+    }
+    verifCamState_.stream = stream;
+    await attachCameraToVideo_(video, stream);
+    initCamZoom_("verif-cam", stream, video);
+    setVerifCamStatus_("Rikta kameran mot kvittot.");
+    if (shot) shot.disabled = false;
+  } catch (err) {
+    closeVerifCamera_();
+    showToast("Kunde inte starta kameran — välj PDF eller bild istället");
+  }
+}
+
+function captureVerifFrameFile_(video) {
+  const vw = video && video.videoWidth;
+  const vh = video && video.videoHeight;
+  if (!vw || !vh) return Promise.reject(new Error("Kamerabilden är inte redo"));
+  const state = camZoomState_["verif-cam"];
+  const zoom = state && !state.hw ? Number(state.digital || state.value || 1) : 1;
+  let sx = 0, sy = 0, sw = vw, sh = vh;
+  if (zoom > 1.02) {
+    sw = Math.max(32, Math.round(vw / zoom));
+    sh = Math.max(32, Math.round(vh / zoom));
+    sx = Math.round((vw - sw) / 2);
+    sy = Math.round((vh - sh) / 2);
+  }
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(sw, sh));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sw * scale));
+  canvas.height = Math.max(1, Math.round(sh * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return Promise.reject(new Error("Kunde inte ta foto"));
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error("Kunde inte ta foto"));
+      const file = new File([blob], "kvitto-" + Date.now() + ".jpg", { type: "image/jpeg" });
+      resolve(file);
+    }, "image/jpeg", 0.86);
+  });
+}
+
+async function captureVerifPhoto_() {
+  if (!verifCamState_.open) return;
+  const video = document.getElementById("verif-cam-video");
+  const shot = document.getElementById("verif-cam-shot");
+  if (shot) shot.disabled = true;
+  setVerifCamStatus_("Sparar bild…");
+  try {
+    const file = await captureVerifFrameFile_(video);
+    verifFiles_.push(file);
+    renderVerifFileList_();
+    closeVerifCamera_();
+    showToast("Kvitto tillagt");
+  } catch (err) {
+    setVerifCamStatus_("Kunde inte ta bilden — försök igen.");
+    if (shot) shot.disabled = false;
+    showToast((err && err.message) || "Kunde inte ta foto");
+  }
+}
+
 function onVerifFiles_(ev) {
   const list = ev && ev.target && ev.target.files;
   if (!list) return;

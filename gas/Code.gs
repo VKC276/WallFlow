@@ -1165,6 +1165,17 @@ function saveRoute_(route, session) {
     return { ok: false, error: "Ogiltig gradering. Tillåtna: " + readGrades_().join(", ") };
   }
   route.Gradering = grade;
+  if (isEjUppsattGrade_(grade)) {
+    route.Ledbyggare = "";
+    route.Byggdatum = "";
+  } else {
+    if (!String(route.Ledbyggare || "").trim()) {
+      return { ok: false, error: "Ange ledbyggare" };
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(route.Byggdatum || "").trim().slice(0, 10))) {
+      return { ok: false, error: "Ange byggdatum" };
+    }
+  }
   var sh = sheet_(WALLFLOW_SHEET_ROUTES);
 
   // Säkerställ header
