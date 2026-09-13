@@ -8637,7 +8637,13 @@ function afterTencardMutation_(cardId) {
   if (cardId) {
     google.script.run
       .withSuccessHandler((res) => {
-        tencardState_.result = res && res.ok !== false ? res : { error: (res && res.error) || "Kunde inte hämta kort", card_id: cardId };
+        if (!res || res.ok === false) {
+          tencardState_.result = { error: (res && res.error) || "Kunde inte hämta kort", card_id: cardId };
+        } else if (!res.found || !res.card) {
+          tencardState_.result = null;
+        } else {
+          tencardState_.result = res;
+        }
         renderTencardTool_();
       })
       .lookupTencard({ card_id: cardId });
@@ -8704,14 +8710,21 @@ function deleteTencard_(cardId) {
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ta bort");
       showToast("Kort borttaget");
-      tencardState_.result = { found: false, card_id: cardId, card: null };
-      afterTencardMutation_(cardId);
+      tencardState_.result = null;
+      tencardState_.query = "";
+      if (tencardState_.showList) loadTencardList_(true);
+      else renderTencardTool_();
     })
     .withFailureHandler(() => showToast("Kunde inte ta bort"))
     .deleteTencard({ card_id: cardId });
 }
 function toggleTencardCreate_() {
   tencardState_.showCreate = !tencardState_.showCreate;
+  if (tencardState_.showCreate) {
+    tencardState_.result = null;
+    tencardState_.query = "";
+    tencardState_.searchValue = "";
+  }
   renderTencardTool_();
 }
 function toggleTencardList_() {
