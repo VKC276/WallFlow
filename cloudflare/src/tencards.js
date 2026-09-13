@@ -178,41 +178,43 @@ export async function saveTencardAction(env, payload, session) {
   return { ok: true, card_id: cardId, card: mapCard(res.data.card) };
 }
 
+async function clipViaSave(env, cardId, session) {
+  const looked = await lookupTencardAction(env, { card_id: cardId }, session);
+  if (!looked.ok) return looked;
+  const card = looked.card;
+  if (!card) return { ok: false, error: "Kortet finns inte" };
+  if (card.kind && card.kind !== "tencard") {
+    return { ok: false, error: "Detta är inte ett 10-kort" };
+  }
+  const remaining = Number(card.remaining);
+  if (!(remaining > 0)) return { ok: false, error: "Inga klipp kvar", card };
+  const saved = await saveTencardAction(env, {
+    card_id: cardId,
+    remaining: remaining - 1,
+    name: card.name || "",
+    last_clipped_at: stockholmNow()
+  }, session);
+  if (!saved.ok) return saved;
+  const next = saved.card || { ...card, remaining: remaining - 1 };
+  return { ok: true, card_id: cardId, remaining: next.remaining, card: next };
+}
+
 export async function clipTencardAction(env, payload, session) {
   if (!canManageTencards(session)) return { ok: false, error: "Saknar behörighet" };
   const cardId = normalizeCardId(payload && (payload.card_id || payload.cardId || payload));
   if (!cardId) return { ok: false, error: "Ange kortnummer" };
   const clipPath = "/api/admin/tencards/" + encodeURIComponent(cardId) + "/clip";
   const res = await kioskAdminRequest(env, clipPath, { method: "POST" });
-  if (res.error && !res.data) return { ok: false, error: res.error };
-  if (res.http === 404 && (!res.data || res.data.error === "not_found")) {
-    return { ok: false, error: "Kortet finns inte" };
+  if (res.okHttp && res.data && res.data.ok) {
+    return { ok: true, card_id: cardId, remaining: res.data.remaining, card: mapCard(res.data.card) };
   }
   if (res.http === 409 || (res.data && res.data.error === "exhausted")) {
     return { ok: false, error: "Inga klipp kvar", card: mapCard(res.data && res.data.card) };
   }
-  if (res.okHttp && res.data && res.data.ok) {
-    return { ok: true, card_id: cardId, remaining: res.data.remaining, card: mapCard(res.data.card) };
-  }
-  // Äldre kiosk-Worker utan /clip: hämta + spara remaining-1
-  if (res.http === 404 || res.http === 405) {
-    const looked = await lookupTencardAction(env, { card_id: cardId }, session);
-    if (!looked.ok) return looked;
-    const card = looked.card;
-    if (!card) return { ok: false, error: "Kortet finns inte" };
-    if (card.kind && card.kind !== "tencard") {
-      return { ok: false, error: "Detta är inte ett 10-kort" };
-    }
-    const remaining = Number(card.remaining);
-    if (!(remaining > 0)) return { ok: false, error: "Inga klipp kvar", card };
-    return saveTencardAction(env, {
-      card_id: cardId,
-      remaining: remaining - 1,
-      name: card.name || "",
-      last_clipped_at: stockholmNow()
-    }, session);
-  }
-  return { ok: false, error: (res.data && res.data.error) || "Kunde inte klippa kortet" };
+  const err = (res.data && res.data.error) || res.error || "";
+  if (err === "unauthorized") return { ok: false, error: "Fel ADMIN_TOKEN mot kiosk-API:t" };
+  // Live kiosk har inte /clip ännu (404 HTML). Klipp via admin-save (remaining - 1).
+  return clipViaSave(env, cardId, session);
 }
 
 export async function deleteTencardAction(env, payload, session) {
