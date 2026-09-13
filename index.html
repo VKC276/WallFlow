@@ -3581,13 +3581,15 @@ function renderColors(routes) {
     byColor[key].push(r);
   });
   const colors = availableColors_();
+  // Cirkeln visar bara uppsatta leder; ej uppsatt ligger kvar i listan per kategori.
+  const pieCountFor_ = (c) => (byColor[c] || []).filter((r) => !isEjUppsattRoute_(r)).length;
   const slices = colors
-    .map((c) => ({ name: c, count: (byColor[c] || []).length, color: colorHex_(c) }))
+    .map((c) => ({ name: c, count: pieCountFor_(c), color: colorHex_(c) }))
     .filter((s) => s.count > 0);
-  const total = distRoutes.length;
+  const total = distRoutes.filter((r) => !isEjUppsattRoute_(r)).length;
 
   const cardsHtml = colors.map((c) => {
-    const n = (byColor[c] || []).length;
+    const n = pieCountFor_(c);
     const active = colorFilter === c || (isEjUppsattGrade_(colorFilter) && isEjUppsattGrade_(c)) ? " active" : "";
     return `
       <button type="button" class="color-dist-card${active}" onclick="setColorFilter('${escapeHtml_(c)}')">

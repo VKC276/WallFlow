@@ -604,6 +604,7 @@ function renderOverview_(routes, opts) {
   const colors = availableColors_();
   colors.forEach((name) => { byColor[name] = 0; });
   routes.forEach((r) => {
+    if (isEjUppsattRoute_(r)) return;
     const key = gradeBucketKey_(r);
     if (byColor[key] == null) byColor[key] = 0;
     byColor[key]++;
@@ -611,6 +612,7 @@ function renderOverview_(routes, opts) {
   const slices = colors
     .map((name) => ({ name, count: byColor[name] || 0, color: colorHex_(name) }))
     .filter((s) => s.count > 0);
+  const pieTotal = slices.reduce((n, s) => n + s.count, 0);
   const cards = colors
     .filter((name) => (byColor[name] || 0) > 0)
     .map((name) => `
@@ -622,7 +624,7 @@ function renderOverview_(routes, opts) {
     `).join("");
   return `
     <section class="pie-panel" aria-label="Färgfördelning">
-      ${buildColorPieSvg_(slices, routes.length)}
+      ${buildColorPieSvg_(slices, pieTotal)}
     </section>
     <section class="stats" aria-label="Status">
       <div class="stat"><strong style="color:var(--rebuild)">${c.ja}</strong><span>Markerade för ombyggnation</span></div>
