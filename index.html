@@ -8453,10 +8453,23 @@ function openTencardTool() {
   showAppChrome_();
   renderTencardTool_();
 }
-let tencardState_ = { query: "", result: null, list: null, showList: false, showCreate: false };
+let tencardState_ = { query: "", result: null, list: null, listError: "", showList: false, showCreate: false };
 
-function tencardJs_(id) {
-  return JSON.stringify(String(id));
+function bindTencardClicks_(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-tencard-act]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const act = btn.getAttribute("data-tencard-act");
+      const cardId = btn.getAttribute("data-card-id");
+      if (act === "clip") return clipTencard_(cardId);
+      if (act === "adjust") return adjustTencardPrompt_(cardId, Number(btn.getAttribute("data-remaining")));
+      if (act === "delete") return deleteTencard_(cardId);
+      if (act === "create") return createTencard_(cardId, 10);
+      if (act === "save-remaining") return saveTencardRemaining_(cardId);
+    });
+  });
 }
 function tencardNormalizeId_(raw) {
   let text = String(raw == null ? "" : raw).trim().replace(/\s+/g, "");
@@ -8501,29 +8514,30 @@ function renderTencardTool_() {
       <div class="tencard-remaining${zero ? " is-zero" : ""}">${escapeHtml_(String(remaining))}<span style="font-size:1rem; font-weight:600; color:var(--muted); margin-left:8px;">klipp kvar</span></div>
       <p class="small mb-2" style="color:var(--muted);">Senast klippt: ${escapeHtml_(tencardFormatWhen_(card.last_clipped_at))}${card.name ? " · " + escapeHtml_(card.name) : ""}</p>
       <div class="tencard-actions">
-        <button class="btn btn-accent" type="button" ${zero ? "disabled" : ""} onclick="clipTencard_(${tencardJs_(card.card_id)})">Klipp kort</button>
-        <button class="btn btn-ghost" type="button" onclick="adjustTencardPrompt_(${tencardJs_(card.card_id)}, ${remaining})">Justera antal</button>
-        <button class="btn btn-outline-danger" type="button" onclick="deleteTencard_(${tencardJs_(card.card_id)})">Ta bort kort</button>
+        <button class="btn btn-accent" type="button" ${zero ? "disabled" : ""} data-tencard-act="clip" data-card-id="${escapeHtml_(card.card_id)}">Klipp kort</button>
+        <button class="btn btn-ghost" type="button" data-tencard-act="adjust" data-card-id="${escapeHtml_(card.card_id)}" data-remaining="${remaining}">Justera antal</button>
+        <button class="btn btn-outline-danger" type="button" data-tencard-act="delete" data-card-id="${escapeHtml_(card.card_id)}">Ta bort kort</button>
       </div>`;
   } else if (result && result.found === false) {
     const id = escapeHtml_(result.card_id);
     resultHtml = `
       <p class="mb-2">Kort <strong>${id}</strong> finns inte bland 10-korten.</p>
       <div class="tencard-actions">
-        <button class="btn btn-accent" type="button" onclick="createTencard_(${tencardJs_(result.card_id)}, 10)">Lägg till som nytt 10-kort (10 klipp)</button>
+        <button class="btn btn-accent" type="button" data-tencard-act="create" data-card-id="${id}">Lägg till som nytt 10-kort (10 klipp)</button>
       </div>`;
   }
   const list = tencardState_.list;
   let listHtml = "";
   if (tencardState_.showList) {
-    if (!list) {
+    if (tencardState_.listError) {
+      listHtml = `<p class="mb-0" style="color:#e8b4b4;">${escapeHtml_(tencardState_.listError)}</p>`;
+    } else if (!list) {
       listHtml = `<p class="mb-0" style="color:var(--muted);">Laddar lista…</p>`;
     } else if (!list.length) {
       listHtml = `<p class="mb-0" style="color:var(--muted);">Inga 10-kort i databasen.</p>`;
     } else {
       const rows = list.map((c) => {
         const id = escapeHtml_(c.card_id);
-        const jsId = tencardJs_(c.card_id);
         const rem = Number(c.remaining) || 0;
         return `<tr>
           <td>${id}</td>
@@ -8531,9 +8545,9 @@ function renderTencardTool_() {
           <td>${escapeHtml_(c.status || "—")}</td>
           <td>${escapeHtml_(tencardFormatWhen_(c.last_clipped_at))}</td>
           <td class="tencard-row-actions">
-            <button class="btn btn-sm btn-accent" type="button" ${rem > 0 ? "" : "disabled"} onclick="clipTencard_(${jsId})">Klipp</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick="saveTencardRemaining_(${jsId})">Spara</button>
-            <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteTencard_(${jsId})">Ta bort</button>
+            <button class="btn btn-sm btn-accent" type="button" ${rem > 0 ? "" : "disabled"} data-tencard-act="clip" data-card-id="${id}">Klipp</button>
+            <button class="btn btn-sm btn-ghost" type="button" data-tencard-act="save-remaining" data-card-id="${id}">Spara</button>
+            <button class="btn btn-sm btn-outline-danger" type="button" data-tencard-act="delete" data-card-id="${id}">Ta bort</button>
           </td>
         </tr>`;
       }).join("");
@@ -8569,6 +8583,7 @@ function renderTencardTool_() {
       </form>` : ""}
     </div>
     ${tencardState_.showList ? `<div class="admin-card"><h3>Alla 10-kort</h3>${listHtml}</div>` : ""}`;
+  bindTencardClicks_(main);
   setTimeout(tencardFocusSearch_, 30);
 }
 function submitTencardSearch_(ev) {
@@ -8623,6 +8638,7 @@ function clipTencard_(cardId) {
       tencardState_.result = { ok: true, found: true, card_id: cardId, card: res.card };
       afterTencardMutation_(cardId);
     })
+    .withFailureHandler(() => showToast("Kunde inte klippa"))
     .clipTencard({ card_id: cardId });
 }
 function adjustTencardPrompt_(cardId, current) {
@@ -8649,6 +8665,7 @@ function saveTencardValues_(cardId, remaining) {
       tencardState_.result = { ok: true, found: true, card_id: cardId, card: res.card };
       afterTencardMutation_(cardId);
     })
+    .withFailureHandler(() => showToast("Kunde inte spara"))
     .saveTencard({ card_id: cardId, remaining });
 }
 function createTencard_(cardId, remaining) {
@@ -8673,6 +8690,7 @@ function deleteTencard_(cardId) {
       tencardState_.result = { found: false, card_id: cardId, card: null };
       afterTencardMutation_(cardId);
     })
+    .withFailureHandler(() => showToast("Kunde inte ta bort"))
     .deleteTencard({ card_id: cardId });
 }
 function toggleTencardCreate_() {
@@ -8688,20 +8706,25 @@ function toggleTencardList_() {
   }
 }
 function loadTencardList_(keepResult) {
+  tencardState_.listError = "";
   if (!keepResult) renderTencardTool_();
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
-        showToast((res && res.error) || "Kunde inte lista kort");
+        const msg = (res && res.error) || "Kunde inte lista kort";
+        tencardState_.listError = msg;
         tencardState_.list = [];
+        showToast(msg);
       } else {
+        tencardState_.listError = "";
         tencardState_.list = res.tencards || [];
       }
       renderTencardTool_();
     })
     .withFailureHandler(() => {
-      showToast("Kunde inte lista kort");
+      tencardState_.listError = "Kunde inte lista kort";
       tencardState_.list = [];
+      showToast("Kunde inte lista kort");
       renderTencardTool_();
     })
     .listTencards();
