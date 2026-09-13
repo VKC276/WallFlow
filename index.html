@@ -563,25 +563,29 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #app-time, #app-verif { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #app-time, #app-verif, #app-tencard { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show { display: flex; }
     body.time-open .filters-block,
     body.time-open .search-toggle,
     body.time-open .search-wrap,
     body.verif-open .filters-block,
     body.verif-open .search-toggle,
     body.verif-open .search-wrap,
+    body.tencard-open .filters-block,
+    body.tencard-open .search-toggle,
+    body.tencard-open .search-wrap,
     body.no-routes .filters-block,
     body.no-routes .search-toggle,
     body.no-routes .search-wrap { display: none !important; }
     body.time-open .topbar,
     body.verif-open .topbar,
+    body.tencard-open .topbar,
     body.no-routes .topbar {
       grid-template-areas: "brand actions";
     }
@@ -855,6 +859,49 @@
     }
     .admin-actions { display: grid; gap: 8px; }
     .admin-actions .btn { min-height: 44px; font-weight: 600; text-align: left; justify-content: flex-start; }
+    .tencard-search {
+      font-size: 1.35rem !important;
+      letter-spacing: 0.04em;
+      min-height: 56px;
+      font-variant-numeric: tabular-nums;
+    }
+    .tencard-result {
+      display: grid;
+      gap: 10px;
+    }
+    .tencard-remaining {
+      font-family: var(--font-display);
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+    .tencard-remaining.is-zero { color: #e8b4b4; }
+    html[data-theme="light"] .tencard-remaining.is-zero { color: #a33b3b; }
+    .tencard-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tencard-actions .btn { min-height: 44px; }
+    .tencard-list {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .tencard-list th, .tencard-list td {
+      text-align: left;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .tencard-list th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tencard-list .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .tencard-list input[type="number"] {
+      width: 4.2rem;
+      min-height: 36px;
+    }
+    .tencard-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .wall-reset-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .wall-reset-list {
       max-height: 340px; overflow-y: auto; border: 1px solid var(--line);
@@ -1590,6 +1637,9 @@
     <div id="app-verif">
       <div class="admin-shell wide" id="verif-main"></div>
     </div>
+    <div id="app-tencard">
+      <div class="admin-shell wide" id="tencard-main"></div>
+    </div>
   </div>
 
   <div id="panel-backdrop" class="panel-backdrop" aria-hidden="true" onclick="onPanelBackdropClick_(event)"></div>
@@ -1872,7 +1922,12 @@ function seedDemoDb_() {
     timeSettings: { ledbyggHourlyRate: 150, ledbyggPayMode: "time", ledbyggProblemAmount: 80, minPayout: 500, hallvardShiftAmount: 200, hallvardExtraAmount: 100, maxYearAmount: 5000, warningYearAmount: 4000 },
     timeEntries: [],
     timeEntrySeq: 1,
-    verifArchiveEmail: "inbox.ver.1624638@arkivplats.se"
+    verifArchiveEmail: "inbox.ver.1624638@arkivplats.se",
+    tencards: [
+      { card_id: "623662933", remaining: 7, status: "Aktivt", last_clipped_at: "2026-09-10 12:14:02", name: "" },
+      { card_id: "1443137877", remaining: 1, status: "Aktivt", last_clipped_at: "2026-09-12 18:02:11", name: "" },
+      { card_id: "999000010", remaining: 0, status: "Inga besök kvar", last_clipped_at: "2026-08-01 09:00:00", name: "" }
+    ]
   };
 }
 function loadDemoDb_() {
@@ -1885,6 +1940,7 @@ function loadDemoDb_() {
         if (!parsed.timeEntries) parsed.timeEntries = [];
         if (!parsed.timeEntrySeq) parsed.timeEntrySeq = 1;
         if (!parsed.verifArchiveEmail) parsed.verifArchiveEmail = "inbox.ver.1624638@arkivplats.se";
+        if (!Array.isArray(parsed.tencards)) parsed.tencards = seedDemoDb_().tencards;
         (parsed.users || []).forEach((u) => { if (!u.extraRoles) u.extraRoles = []; });
         return parsed;
       }
@@ -2163,6 +2219,80 @@ function demoVerifApi_(store, action, args) {
       filename: payload.clubCard ? "verifikation-klubbkort.pdf" : "utlagg.pdf",
       demo: true
     };
+  }
+  return { ok: false, error: "Okänd action: " + action };
+}
+
+function demoCanManageTencards_() {
+  const r = String((currentUser && currentUser.role) || "").toLowerCase();
+  return r === "superadmin" || r === "admin" || demoHasRole_("hallvard");
+}
+function demoNormalizeCardId_(raw) {
+  let text = String(raw == null ? "" : raw).trim().replace(/\s+/g, "");
+  if (text.endsWith(".0") && /^\d+\.0$/.test(text)) text = text.slice(0, -2);
+  const n = Number(text);
+  if (Number.isFinite(n) && Number.isInteger(n) && n >= 0) return String(n);
+  return text;
+}
+function demoTencardStatus_(remaining) {
+  return remaining > 0 ? "Aktivt" : "Inga besök kvar";
+}
+function demoTencardNow_() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Stockholm",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+  }).format(new Date()).replace(",", "");
+}
+function demoTencardApi_(store, action, args) {
+  if (!demoCanManageTencards_()) return { ok: false, error: "Saknar behörighet" };
+  if (!store.tencards) store.tencards = [];
+  const payload = args[0] || {};
+  if (action === "listTencards") {
+    return { ok: true, tencards: store.tencards.slice().sort((a, b) => String(a.card_id).localeCompare(String(b.card_id), "sv", { numeric: true })) };
+  }
+  if (action === "lookupTencard") {
+    const cardId = demoNormalizeCardId_(payload.card_id || payload.cardId || payload);
+    if (!cardId) return { ok: false, error: "Ange kortnummer" };
+    const card = store.tencards.find((c) => c.card_id === cardId) || null;
+    return { ok: true, card_id: cardId, found: !!card, card: card ? Object.assign({ kind: "tencard" }, card) : null };
+  }
+  if (action === "saveTencard") {
+    const cardId = demoNormalizeCardId_(payload.card_id || payload.cardId);
+    if (!cardId) return { ok: false, error: "Ange kortnummer" };
+    const remaining = Math.trunc(Number(payload.remaining));
+    if (!Number.isFinite(remaining) || remaining < 0 || remaining > 99) return { ok: false, error: "Antal klipp ska vara 0–99" };
+    let card = store.tencards.find((c) => c.card_id === cardId);
+    if (!card) {
+      card = { card_id: cardId, remaining, status: demoTencardStatus_(remaining), last_clipped_at: payload.last_clipped_at || null, name: String(payload.name || "") };
+      store.tencards.push(card);
+    } else {
+      card.remaining = remaining;
+      card.status = payload.status || demoTencardStatus_(remaining);
+      if (payload.name != null) card.name = String(payload.name);
+      if (payload.last_clipped_at != null) card.last_clipped_at = payload.last_clipped_at;
+    }
+    saveDemoDb_(store);
+    return { ok: true, card_id: cardId, card: Object.assign({ kind: "tencard" }, card) };
+  }
+  if (action === "clipTencard") {
+    const cardId = demoNormalizeCardId_(payload.card_id || payload.cardId || payload);
+    const card = store.tencards.find((c) => c.card_id === cardId);
+    if (!card) return { ok: false, error: "Kortet finns inte" };
+    if (!(Number(card.remaining) > 0)) return { ok: false, error: "Inga klipp kvar", card: Object.assign({ kind: "tencard" }, card) };
+    card.remaining -= 1;
+    card.status = demoTencardStatus_(card.remaining);
+    card.last_clipped_at = demoTencardNow_();
+    saveDemoDb_(store);
+    return { ok: true, card_id: cardId, remaining: card.remaining, card: Object.assign({ kind: "tencard" }, card) };
+  }
+  if (action === "deleteTencard") {
+    const cardId = demoNormalizeCardId_(payload.card_id || payload.cardId || payload);
+    const before = store.tencards.length;
+    store.tencards = store.tencards.filter((c) => c.card_id !== cardId);
+    if (store.tencards.length === before) return { ok: false, error: "Kortet finns inte" };
+    saveDemoDb_(store);
+    return { ok: true, card_id: cardId };
   }
   return { ok: false, error: "Okänd action: " + action };
 }
@@ -2561,6 +2691,9 @@ function demoApi_(action, args) {
       if (action === "getVerifApp" || action === "saveVerifSettings" || action === "submitVerification") {
         return ok(demoVerifApi_(store, action, args));
       }
+      if (action === "listTencards" || action === "lookupTencard" || action === "saveTencard" || action === "clipTencard" || action === "deleteTencard") {
+        return ok(demoTencardApi_(store, action, args));
+      }
       return fail("Okänd action: " + action);
     }, 80);
   });
@@ -2679,6 +2812,10 @@ function canReportLedbygg_() { return hasWallflowAccess_(); }
 function canReportHallvard_() { return hasAppRole_("hallvard"); }
 function canTreasurer_() { return userRole_() === "superadmin" || hasAppRole_("kassor"); }
 function canTimeAdmin_() { return userRole_() === "superadmin"; }
+function canManageTencards_() {
+  const r = userRole_();
+  return r === "superadmin" || r === "admin" || hasAppRole_("hallvard");
+}
 function canOpenAdministration_() {
   return canManageUsersRole() || canManageRouteStructureRole() || canManageLifetimeRole() || canTimeAdmin_();
 }
@@ -2703,6 +2840,9 @@ function renderAccountMenu_() {
       `<button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>`,
       `<button type="button" role="menuitem" onclick="openVerifToolFromMenu_()">Utlägg och verifikation</button>`
     );
+  if (canManageTencards_()) {
+    items.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
+  }
   if (canOpenAdministration_()) {
     items.push(`<button type="button" role="menuitem" onclick="openAdministrationFromMenu_()">Administration</button>`);
   }
@@ -2794,10 +2934,10 @@ function adminRoleHelpSv_() {
   return `
     <ul class="small mb-0 ps-3" style="color:var(--muted); line-height:1.45;">
       <li><strong style="color:var(--text);">Ledbyggare</strong> — redigera befintliga leder (färg, byggare, datum, anteckningar, bild). Kan även kryssas som hallvärd och får då två sätt att rapportera tid.</li>
-      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus lägga till/hantera ledbyggare (inte admin eller superadmin) och Wall reset.</li>
+      <li><strong style="color:var(--text);">Admin</strong> — samma som Ledbyggare, plus lägga till/hantera ledbyggare (inte admin eller superadmin), Wall reset och 10-kort.</li>
       <li><strong style="color:var(--text);">Superadmin</strong> — allt ovan, plus lägga till/ta bort leder, styra livslängd, arvoden och hantera alla roller. Minst en superadmin måste alltid finnas.</li>
       <li><strong style="color:var(--text);">Kassör</strong> — slussas till tidverktyget och kan ta ut rapporter för alla inrapporterade.</li>
-      <li><strong style="color:var(--text);">Hallvärd</strong> — slussas direkt till tidverktyget vid inloggning (samma som kassör) och rapporterar pass (datum + engångsbelopp). Kan kombineras med kassör. Ledbyggare kan få hallvärd som tillägg.</li>
+      <li><strong style="color:var(--text);">Hallvärd</strong> — slussas direkt till tidverktyget vid inloggning (samma som kassör) och rapporterar pass (datum + engångsbelopp). Kan kombinera med kassör. Hanterar 10-kort tillsammans med admin och superadmin. Ledbyggare kan få hallvärd som tillägg.</li>
     </ul>`;
 }
 function showToast(msg) {
@@ -2896,6 +3036,7 @@ function showLoginGate_() {
   document.getElementById("app-public").classList.remove("ready");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
+  hideTencardOverlay_();
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("login-panel").classList.add("show");
   document.getElementById("login-error").style.display = "none";
@@ -2927,7 +3068,7 @@ function currentDisplayName_() {
 function hideAppChrome_() {
   const chrome = document.getElementById("app-chrome");
   if (chrome) chrome.classList.remove("ready");
-  document.body.classList.remove("time-open", "verif-open", "no-routes");
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "no-routes");
 }
 function showAppChrome_() {
   const chrome = document.getElementById("app-chrome");
@@ -2935,6 +3076,7 @@ function showAppChrome_() {
   document.body.classList.toggle("no-routes", !hasWallflowAccess_());
   document.body.classList.toggle("time-open", document.getElementById("app-time").classList.contains("show"));
   document.body.classList.toggle("verif-open", document.getElementById("app-verif").classList.contains("show"));
+  document.body.classList.toggle("tencard-open", !!(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")));
   renderAccountMenu_();
 }
 function onTopBrandClick_() {
@@ -2946,6 +3088,11 @@ function onTopBrandClick_() {
   if (hasWallflowAccess_()) {
     closeTimeTool();
     closeVerifTool();
+    closeTencardTool();
+  } else if (currentUser.authorized) {
+    closeVerifTool();
+    closeTencardTool();
+    openTimeTool();
   }
 }
 function showAppShell_() {
@@ -2963,7 +3110,8 @@ function showAppShell_() {
   }
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
-  document.body.classList.remove("time-open", "verif-open");
+  hideTencardOverlay_();
+  document.body.classList.remove("time-open", "verif-open", "tencard-open");
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
@@ -5201,6 +5349,7 @@ function openRoutesFromMenu_() {
   document.getElementById("app-admin").classList.remove("show");
   closeTimeTool();
   closeVerifTool();
+  closeTencardTool();
 }
 function openSettingsFromMenu_() {
   closeAccountMenu_();
@@ -5209,11 +5358,17 @@ function openSettingsFromMenu_() {
 function openTimeToolFromMenu_() {
   closeAccountMenu_();
   closeVerifTool();
+  hideTencardOverlay_();
   openTimeTool();
 }
 function openVerifToolFromMenu_() {
   closeAccountMenu_();
+  hideTencardOverlay_();
   openVerifTool();
+}
+function openTencardToolFromMenu_() {
+  closeAccountMenu_();
+  openTencardTool();
 }
 function openAdministrationFromMenu_() {
   closeAccountMenu_();
@@ -5474,6 +5629,7 @@ function logoutAdmin() {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
+  hideTencardOverlay_();
   closePanel();
   showLoginGate_();
   showToast("Utloggad");
@@ -5599,6 +5755,14 @@ function renderAdminHome() {
       <p class="small mb-3" style="color:var(--muted);">E-postadress som visas i verktyget och på PDF:en, dit medlemmen skickar underlaget.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="renderVerifSettingsFromAdmin_()">Bokföringsinkorg</button>
+      </div>
+    </div>` : ""}
+    ${canManageTencards_() ? `
+    <div class="admin-card">
+      <h3>10-kort</h3>
+      <p class="small mb-3" style="color:var(--muted);">Klipp, justera saldo, lägg till och ta bort 10-kort. Standard är sökrutan för kortläsaren.</p>
+      <div class="admin-actions">
+        <button class="btn btn-ghost" type="button" onclick="openTencardTool()">Öppna 10-kort</button>
       </div>
     </div>` : ""}`;
 }
@@ -6971,7 +7135,9 @@ function monthLabel_(ym) {
 function closeTimeTool() {
   document.getElementById("app-time").classList.remove("show");
   document.body.classList.remove("time-open");
-  if (hasWallflowAccess_()) {
+  const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
+  const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
+  if (hasWallflowAccess_() && !tencardOpen && !verifOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -6990,6 +7156,7 @@ function openTimeTool(view) {
   else if (timeToolState_.view === "settings") timeToolState_.view = "mine";
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
+  hideTencardOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
@@ -7610,7 +7777,7 @@ function closeVerifTool() {
     showLoginGate_();
     return;
   }
-  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show")) {
+  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show"))) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -7618,6 +7785,7 @@ function closeVerifTool() {
 function openVerifTool() {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
+  hideTencardOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
@@ -8254,6 +8422,289 @@ function saveVerifSettings_() {
       renderVerifSettings_(verifArchiveEmail_);
     })
     .saveVerifSettings({ archiveEmail });
+}
+
+function hideTencardOverlay_() {
+  const el = document.getElementById("app-tencard");
+  if (el) el.classList.remove("show");
+  document.body.classList.remove("tencard-open");
+}
+function closeTencardTool() {
+  hideTencardOverlay_();
+  const timeOpen = document.getElementById("app-time") && document.getElementById("app-time").classList.contains("show");
+  const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen) {
+    document.getElementById("app-public").classList.add("ready");
+    showAppChrome_();
+  } else {
+    showAppChrome_();
+  }
+}
+function openTencardTool() {
+  if (!currentUser.authorized) return showLoginGate_();
+  if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  if (!canManageTencards_()) return showToast("Saknar behörighet");
+  document.getElementById("app-admin").classList.remove("show");
+  document.getElementById("app-time").classList.remove("show");
+  document.getElementById("app-verif").classList.remove("show");
+  document.getElementById("app-public").classList.remove("ready");
+  if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
+  document.getElementById("app-tencard").classList.add("show");
+  showAppChrome_();
+  renderTencardTool_();
+}
+let tencardState_ = { query: "", result: null, list: null, showList: false, showCreate: false };
+
+function tencardJs_(id) {
+  return JSON.stringify(String(id));
+}
+function tencardNormalizeId_(raw) {
+  let text = String(raw == null ? "" : raw).trim().replace(/\s+/g, "");
+  if (text.endsWith(".0") && /^\d+\.0$/.test(text)) text = text.slice(0, -2);
+  const n = Number(text);
+  if (Number.isFinite(n) && Number.isInteger(n) && n >= 0) return String(n);
+  return text;
+}
+function tencardFocusSearch_() {
+  const el = document.getElementById("tencard-search");
+  if (!el) return;
+  el.focus();
+  el.select();
+}
+function tencardFormatWhen_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "—";
+  return s.replace("T", " ").slice(0, 19);
+}
+function renderTencardTool_() {
+  const main = document.getElementById("tencard-main");
+  if (!main) return;
+  const result = tencardState_.result;
+  const card = result && result.card;
+  const query = tencardState_.query || (result && result.card_id) || "";
+  let resultHtml = "";
+  if (result && result.pending) {
+    resultHtml = `<p class="mb-0" style="color:var(--muted);">Söker…</p>`;
+  } else if (result && result.error) {
+    resultHtml = `<p class="mb-0" style="color:#e8b4b4;">${escapeHtml_(result.error)}</p>`;
+  } else if (result && card && card.kind && card.kind !== "tencard") {
+    resultHtml = `
+      <p class="admin-kicker">Medlemskort</p>
+      <h3>${escapeHtml_(card.card_id)}</h3>
+      <p class="mb-0" style="color:var(--muted);">${escapeHtml_(card.name || "Namn saknas")} · ${escapeHtml_(card.status || "—")}. Detta är inte ett 10-kort.</p>`;
+  } else if (result && card) {
+    const remaining = Number(card.remaining);
+    const zero = !(remaining > 0);
+    resultHtml = `
+      <p class="admin-kicker">${escapeHtml_(card.status || "10-kort")}</p>
+      <h3>Kort ${escapeHtml_(card.card_id)}</h3>
+      <div class="tencard-remaining${zero ? " is-zero" : ""}">${escapeHtml_(String(remaining))}<span style="font-size:1rem; font-weight:600; color:var(--muted); margin-left:8px;">klipp kvar</span></div>
+      <p class="small mb-2" style="color:var(--muted);">Senast klippt: ${escapeHtml_(tencardFormatWhen_(card.last_clipped_at))}${card.name ? " · " + escapeHtml_(card.name) : ""}</p>
+      <div class="tencard-actions">
+        <button class="btn btn-accent" type="button" ${zero ? "disabled" : ""} onclick="clipTencard_(${tencardJs_(card.card_id)})">Klipp kort</button>
+        <button class="btn btn-ghost" type="button" onclick="adjustTencardPrompt_(${tencardJs_(card.card_id)}, ${remaining})">Justera antal</button>
+        <button class="btn btn-outline-danger" type="button" onclick="deleteTencard_(${tencardJs_(card.card_id)})">Ta bort kort</button>
+      </div>`;
+  } else if (result && result.found === false) {
+    const id = escapeHtml_(result.card_id);
+    resultHtml = `
+      <p class="mb-2">Kort <strong>${id}</strong> finns inte bland 10-korten.</p>
+      <div class="tencard-actions">
+        <button class="btn btn-accent" type="button" onclick="createTencard_(${tencardJs_(result.card_id)}, 10)">Lägg till som nytt 10-kort (10 klipp)</button>
+      </div>`;
+  }
+  const list = tencardState_.list;
+  let listHtml = "";
+  if (tencardState_.showList) {
+    if (!list) {
+      listHtml = `<p class="mb-0" style="color:var(--muted);">Laddar lista…</p>`;
+    } else if (!list.length) {
+      listHtml = `<p class="mb-0" style="color:var(--muted);">Inga 10-kort i databasen.</p>`;
+    } else {
+      const rows = list.map((c) => {
+        const id = escapeHtml_(c.card_id);
+        const jsId = tencardJs_(c.card_id);
+        const rem = Number(c.remaining) || 0;
+        return `<tr>
+          <td>${id}</td>
+          <td class="num"><input class="form-control tencard-rem-input" type="number" min="0" max="99" value="${rem}" data-card-id="${id}"></td>
+          <td>${escapeHtml_(c.status || "—")}</td>
+          <td>${escapeHtml_(tencardFormatWhen_(c.last_clipped_at))}</td>
+          <td class="tencard-row-actions">
+            <button class="btn btn-sm btn-accent" type="button" ${rem > 0 ? "" : "disabled"} onclick="clipTencard_(${jsId})">Klipp</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick="saveTencardRemaining_(${jsId})">Spara</button>
+            <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteTencard_(${jsId})">Ta bort</button>
+          </td>
+        </tr>`;
+      }).join("");
+      listHtml = `<div style="overflow-x:auto;"><table class="tencard-list">
+        <thead><tr><th>Kortnummer</th><th class="num">Klipp</th><th>Status</th><th>Senast klippt</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+    }
+  }
+  const createOpen = tencardState_.showCreate;
+  main.innerHTML = `
+    <div class="admin-card">
+      <p class="admin-kicker">10-kort</p>
+      <h3>Läs kort</h3>
+      <p class="small mb-3" style="color:var(--muted);">Kortläsaren matar in numret. Avsluta med Enter för att visa kortet.</p>
+      <form onsubmit="submitTencardSearch_(event)">
+        <input id="tencard-search" class="form-control tencard-search" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Kortnummer" value="${escapeHtml_(query)}" aria-label="Kortnummer">
+      </form>
+    </div>
+    ${resultHtml ? `<div class="admin-card tencard-result">${resultHtml}</div>` : ""}
+    <div class="admin-card">
+      <div class="tencard-actions">
+        <button class="btn btn-ghost" type="button" onclick="toggleTencardCreate_()">${createOpen ? "Dölj nytt kort" : "Lägg till nytt 10-kort"}</button>
+        <button class="btn btn-ghost" type="button" onclick="toggleTencardList_()">${tencardState_.showList ? "Dölj lista" : "Visa alla kort"}</button>
+      </div>
+      ${createOpen ? `
+      <form class="mt-3" onsubmit="submitNewTencard_(event)">
+        <label class="small d-block mb-1" style="color:var(--muted);">Kortnummer</label>
+        <input id="tencard-new-id" class="form-control mb-2" type="text" inputmode="numeric" autocomplete="off" required>
+        <label class="small d-block mb-1" style="color:var(--muted);">Antal klipp</label>
+        <input id="tencard-new-remaining" class="form-control mb-3" type="number" min="0" max="99" value="10">
+        <button class="btn btn-accent" type="submit">Spara 10-kort</button>
+      </form>` : ""}
+    </div>
+    ${tencardState_.showList ? `<div class="admin-card"><h3>Alla 10-kort</h3>${listHtml}</div>` : ""}`;
+  setTimeout(tencardFocusSearch_, 30);
+}
+function submitTencardSearch_(ev) {
+  if (ev) ev.preventDefault();
+  const el = document.getElementById("tencard-search");
+  const cardId = tencardNormalizeId_(el && el.value);
+  if (!cardId) {
+    showToast("Ange kortnummer");
+    tencardFocusSearch_();
+    return;
+  }
+  tencardState_.query = cardId;
+  tencardState_.result = { pending: true, card_id: cardId };
+  renderTencardTool_();
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        tencardState_.result = { error: (res && res.error) || "Kunde inte söka", card_id: cardId };
+      } else {
+        tencardState_.result = res;
+        tencardState_.query = res.card_id || cardId;
+      }
+      renderTencardTool_();
+    })
+    .withFailureHandler(() => {
+      tencardState_.result = { error: "Kunde inte söka", card_id: cardId };
+      renderTencardTool_();
+    })
+    .lookupTencard({ card_id: cardId });
+}
+function afterTencardMutation_(cardId) {
+  if (tencardState_.showList) loadTencardList_(true);
+  tencardState_.query = cardId || tencardState_.query;
+  if (cardId) {
+    google.script.run
+      .withSuccessHandler((res) => {
+        tencardState_.result = res && res.ok !== false ? res : { error: (res && res.error) || "Kunde inte hämta kort", card_id: cardId };
+        renderTencardTool_();
+      })
+      .lookupTencard({ card_id: cardId });
+  } else {
+    renderTencardTool_();
+  }
+}
+function clipTencard_(cardId) {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte klippa");
+      const left = res.remaining != null ? res.remaining : (res.card && res.card.remaining);
+      if (left === 0) showToast("Sista klippet — 0 kvar");
+      else showToast(left + " klipp kvar");
+      tencardState_.result = { ok: true, found: true, card_id: cardId, card: res.card };
+      afterTencardMutation_(cardId);
+    })
+    .clipTencard({ card_id: cardId });
+}
+function adjustTencardPrompt_(cardId, current) {
+  const raw = prompt("Nytt antal klipp för " + cardId, String(current));
+  if (raw == null) return;
+  const remaining = Math.trunc(Number(raw));
+  if (!Number.isFinite(remaining) || remaining < 0 || remaining > 99) return showToast("Antal klipp ska vara 0–99");
+  saveTencardValues_(cardId, remaining);
+}
+function saveTencardRemaining_(cardId) {
+  let el = null;
+  document.querySelectorAll("#tencard-main input.tencard-rem-input").forEach((node) => {
+    if (node.getAttribute("data-card-id") === String(cardId)) el = node;
+  });
+  const remaining = Math.trunc(Number(el && el.value));
+  if (!Number.isFinite(remaining) || remaining < 0 || remaining > 99) return showToast("Antal klipp ska vara 0–99");
+  saveTencardValues_(cardId, remaining);
+}
+function saveTencardValues_(cardId, remaining) {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+      showToast("Sparat");
+      tencardState_.result = { ok: true, found: true, card_id: cardId, card: res.card };
+      afterTencardMutation_(cardId);
+    })
+    .saveTencard({ card_id: cardId, remaining });
+}
+function createTencard_(cardId, remaining) {
+  saveTencardValues_(cardId, remaining == null ? 10 : remaining);
+}
+function submitNewTencard_(ev) {
+  if (ev) ev.preventDefault();
+  const cardId = tencardNormalizeId_(document.getElementById("tencard-new-id") && document.getElementById("tencard-new-id").value);
+  const remaining = Math.trunc(Number(document.getElementById("tencard-new-remaining") && document.getElementById("tencard-new-remaining").value));
+  if (!cardId) return showToast("Ange kortnummer");
+  if (!Number.isFinite(remaining) || remaining < 0 || remaining > 99) return showToast("Antal klipp ska vara 0–99");
+  tencardState_.showCreate = false;
+  tencardState_.query = cardId;
+  saveTencardValues_(cardId, remaining);
+}
+function deleteTencard_(cardId) {
+  if (!confirm("Ta bort 10-kort " + cardId + "?")) return;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ta bort");
+      showToast("Kort borttaget");
+      tencardState_.result = { found: false, card_id: cardId, card: null };
+      afterTencardMutation_(cardId);
+    })
+    .deleteTencard({ card_id: cardId });
+}
+function toggleTencardCreate_() {
+  tencardState_.showCreate = !tencardState_.showCreate;
+  renderTencardTool_();
+}
+function toggleTencardList_() {
+  tencardState_.showList = !tencardState_.showList;
+  if (tencardState_.showList) loadTencardList_();
+  else {
+    tencardState_.list = null;
+    renderTencardTool_();
+  }
+}
+function loadTencardList_(keepResult) {
+  if (!keepResult) renderTencardTool_();
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        showToast((res && res.error) || "Kunde inte lista kort");
+        tencardState_.list = [];
+      } else {
+        tencardState_.list = res.tencards || [];
+      }
+      renderTencardTool_();
+    })
+    .withFailureHandler(() => {
+      showToast("Kunde inte lista kort");
+      tencardState_.list = [];
+      renderTencardTool_();
+    })
+    .listTencards();
 }
 
 if (document.readyState === "loading") {

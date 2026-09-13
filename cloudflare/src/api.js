@@ -79,6 +79,13 @@ import {
   saveVerifSettingsAction,
   submitVerification
 } from "./verif.js";
+import {
+  clipTencardAction,
+  deleteTencardAction,
+  listTencardsAction,
+  lookupTencardAction,
+  saveTencardAction
+} from "./tencards.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -171,6 +178,16 @@ export async function dispatch(env, action, token, args, extras) {
       const me = await findUser(env, session.username);
       return submitVerification(env, args[0], session, me, extras && extras.origin);
     }
+    case "listTencards":
+      return listTencardsAction(env, session);
+    case "lookupTencard":
+      return lookupTencardAction(env, args[0], session);
+    case "saveTencard":
+      return saveTencardAction(env, args[0], session);
+    case "clipTencard":
+      return clipTencardAction(env, args[0], session);
+    case "deleteTencard":
+      return deleteTencardAction(env, args[0], session);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }

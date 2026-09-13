@@ -3,6 +3,7 @@
 import { todayStockholm } from "./db.js";
 import {
   allRolesOf,
+  canManageTencards,
   hasRole,
   isSuperadminRole,
   roleOf
@@ -536,6 +537,7 @@ export function publicSessionFlags(session) {
     reportLedbygg: canReportLedbygg(session),
     reportHallvard: canReportHallvard(session),
     treasurer: canTreasurerReport(session),
-    timeAdmin: canManageTimeSettings(session)
+    timeAdmin: canManageTimeSettings(session),
+    tencards: canManageTencards(session)
   };
 }

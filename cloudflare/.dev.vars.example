@@ -4,3 +4,5 @@
 APP_BASE_URL=https://wallflow.vastervikclimbing.se
 MAIL_WEBHOOK_URL=
 MAIL_WEBHOOK_SECRET=
+KIOSK_API_URL=https://vkc-kiosk.muddy-rice-38d4.workers.dev
+ADMIN_TOKEN=

@@ -103,6 +103,12 @@ export function isAdminActor(session) {
   return roleOf(session) === "admin";
 }
 
+/** Admin, superadmin och hallvärd (primär eller extra roll) kan hantera 10-kort. */
+export function canManageTencards(session) {
+  const r = roleOf(session);
+  return r === "superadmin" || r === "admin" || hasRole(session, "hallvard");
+}
+
 export function isFirstLogin(v) {
   const s = String(v == null ? "" : v).trim().toLowerCase();
   return s === "true" || s === "1" || s === "yes" || s === "ja";

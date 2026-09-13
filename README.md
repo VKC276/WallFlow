@@ -120,9 +120,16 @@ WallFlow kräver inloggning direkt. Med **Kom ihåg mig** sparas sessionen på e
 ## Roller
 
 - **Ledbyggare** (`scout`) — redigera befintliga leder (färg, byggare, datum, anteckningar, bild)
-- **Admin** — samma som Ledbyggare, plus lägga till/hantera **ledbyggare** (inte admin eller superadmin)
+- **Admin** — samma som Ledbyggare, plus lägga till/hantera **ledbyggare** (inte admin eller superadmin), Wall reset och **10-kort**
 - **Superadmin** — allt ovan, plus lägga till/ta bort leder, styra livslängd och hantera alla roller
+- **Hallvärd** — tidrapportering för pass, plus **10-kort** (samma hantering som admin)
 
 **Failsafe:** sista superadmin kan inte raderas eller nedgraderas — minst en superadmin måste alltid finnas.
+
+## 10-kort
+
+Admin, superadmin och hallvärd öppnar **10-kort** i kontomenyn. Standardvyn är en sökruta där kortläsaren matar in kortnummer och avslutar med Enter. Därifrån går det att klippa, justera antal klipp, lägga till nytt 10-kort eller ta bort. Alla kort kan listas med samma åtgärder.
+
+WallFlow-Workern anropar kioskens **admin-API** med `ADMIN_TOKEN` (samma secret som på kiosk-Workern). Den används för att lista, lägga till, redigera, klippa och ta bort 10-kort från appen. `KIOSK_TOKEN` ska inte in i WallFlow — den finns bara på Pi:n och får bara klippa via `/api/clip`. Sätt secret: `npx wrangler secret put ADMIN_TOKEN` i `cloudflare/`-mappen. Webbläsaren får aldrig token.
 
 Nya eller borttagna leder i det fasta antalet görs av superadmin (eller manuellt i sheetet).
