@@ -8586,7 +8586,6 @@ function renderTencardTool_(opts) {
     </div>
     ${tencardState_.showList ? `<div class="admin-card"><h3>Alla 10-kort</h3>${listHtml}</div>` : ""}`;
   bindTencardClicks_(main);
-  if (!(opts && opts.keepFocus)) setTimeout(tencardFocusSearch_, 30);
 }
 function submitTencardSearch_(ev) {
   if (ev) ev.preventDefault();
@@ -8627,7 +8626,7 @@ function openTencardFromList_(cardId) {
     card_id: row.card_id,
     card: Object.assign({ kind: "tencard" }, row)
   };
-  renderTencardTool_({ keepFocus: true });
+  renderTencardTool_();
   const panel = document.querySelector(".tencard-result");
   if (panel && panel.scrollIntoView) panel.scrollIntoView({ block: "nearest" });
 }
