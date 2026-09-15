@@ -86,6 +86,12 @@ import {
   lookupTencardAction,
   saveTencardAction
 } from "./tencards.js";
+import {
+  emailWellnessReceipt,
+  getWellnessApp,
+  issueWellnessReceipt,
+  saveWellnessReceiptPdf
+} from "./friskvard.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -188,6 +194,14 @@ export async function dispatch(env, action, token, args, extras) {
       return clipTencardAction(env, args[0], session);
     case "deleteTencard":
       return deleteTencardAction(env, args[0], session);
+    case "getWellnessApp":
+      return getWellnessApp(env, session, extras && extras.origin);
+    case "issueWellnessReceipt":
+      return issueWellnessReceipt(env, args[0], session, extras && extras.origin);
+    case "saveWellnessReceiptPdf":
+      return saveWellnessReceiptPdf(env, args[0], session, extras && extras.origin);
+    case "emailWellnessReceipt":
+      return emailWellnessReceipt(env, args[0], session, extras && extras.origin);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }

@@ -563,14 +563,14 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #app-time, #app-verif, #app-tencard { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #app-time, #app-verif, #app-tencard, #app-wellness { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show { display: flex; }
     body.time-open .filters-block,
     body.time-open .search-toggle,
     body.time-open .search-wrap,
@@ -580,12 +580,16 @@
     body.tencard-open .filters-block,
     body.tencard-open .search-toggle,
     body.tencard-open .search-wrap,
+    body.wellness-open .filters-block,
+    body.wellness-open .search-toggle,
+    body.wellness-open .search-wrap,
     body.no-routes .filters-block,
     body.no-routes .search-toggle,
     body.no-routes .search-wrap { display: none !important; }
     body.time-open .topbar,
     body.verif-open .topbar,
     body.tencard-open .topbar,
+    body.wellness-open .topbar,
     body.no-routes .topbar {
       grid-template-areas: "brand actions";
     }
@@ -906,6 +910,17 @@
     .tencard-list tbody tr.is-selected {
       background: color-mix(in srgb, var(--accent) 16%, transparent);
     }
+    .wellness-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .wellness-chips .btn { min-height: 40px; }
+    .wellness-chips .btn.is-on {
+      background: var(--accent); color: var(--accent-ink); border-color: transparent;
+    }
+    .wellness-step {
+      display: inline-block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted); font-weight: 700; margin-bottom: 6px;
+    }
+    .wellness-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .wellness-actions .btn { min-height: 48px; flex: 1 1 160px; }
     .wall-reset-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .wall-reset-list {
       max-height: 340px; overflow-y: auto; border: 1px solid var(--line);
@@ -1644,6 +1659,9 @@
     <div id="app-tencard">
       <div class="admin-shell wide" id="tencard-main"></div>
     </div>
+    <div id="app-wellness">
+      <div class="admin-shell wide" id="wellness-main"></div>
+    </div>
   </div>
 
   <div id="panel-backdrop" class="panel-backdrop" aria-hidden="true" onclick="onPanelBackdropClick_(event)"></div>
@@ -1931,7 +1949,8 @@ function seedDemoDb_() {
       { card_id: "623662933", remaining: 7, status: "Aktivt", last_clipped_at: "2026-09-10 12:14:02", name: "" },
       { card_id: "1443137877", remaining: 1, status: "Aktivt", last_clipped_at: "2026-09-12 18:02:11", name: "" },
       { card_id: "999000010", remaining: 0, status: "Inga besök kvar", last_clipped_at: "2026-08-01 09:00:00", name: "" }
-    ]
+    ],
+    wellnessReceipts: []
   };
 }
 function loadDemoDb_() {
@@ -1945,6 +1964,7 @@ function loadDemoDb_() {
         if (!parsed.timeEntrySeq) parsed.timeEntrySeq = 1;
         if (!parsed.verifArchiveEmail) parsed.verifArchiveEmail = "inbox.ver.1624638@arkivplats.se";
         if (!Array.isArray(parsed.tencards)) parsed.tencards = seedDemoDb_().tencards;
+        if (!Array.isArray(parsed.wellnessReceipts)) parsed.wellnessReceipts = [];
         (parsed.users || []).forEach((u) => { if (!u.extraRoles) u.extraRoles = []; });
         return parsed;
       }
@@ -2223,6 +2243,105 @@ function demoVerifApi_(store, action, args) {
       filename: payload.clubCard ? "verifikation-klubbkort.pdf" : "utlagg.pdf",
       demo: true
     };
+  }
+  return { ok: false, error: "Okänd action: " + action };
+}
+
+function demoWellnessOrg_() {
+  return {
+    orgName: "Västerviks klätterklubb",
+    orgNr: "802431-5718",
+    orgAddress: "Klätterhallen, Västervik",
+    orgLegal: "Ideell förening som inte är momsregistrerad",
+    orgVat: "Moms utgår inte. Beloppet avser 0 kr moms."
+  };
+}
+function demoMapWellness_(row) {
+  return Object.assign({
+    id: row.id,
+    receiptNo: row.receiptNo,
+    issuedAt: row.issuedAt,
+    purchaseDate: row.purchaseDate,
+    recipientName: row.recipientName,
+    recipientEmail: row.recipientEmail || "",
+    recipientIdnr: row.recipientIdnr || "",
+    description: row.description,
+    period: row.period || "",
+    amount: Number(row.amount) || 0,
+    issuerUsername: row.issuerUsername,
+    issuerName: row.issuerName,
+    signedAt: row.signedAt,
+    hasPdf: !!row.hasPdf,
+    emailedAt: row.emailedAt || "",
+    downloadUrl: "",
+    filename: "friskvardskvitto-" + String(row.receiptNo || "") + ".pdf"
+  }, demoWellnessOrg_());
+}
+function demoWellnessApi_(store, action, args) {
+  if (!demoCanManageTencards_()) return { ok: false, error: "Saknar behörighet" };
+  const payload = args[0] || {};
+  if (!Array.isArray(store.wellnessReceipts)) store.wellnessReceipts = [];
+  if (action === "getWellnessApp") {
+    return Object.assign({
+      ok: true,
+      today: currentYmd_(),
+      receipts: store.wellnessReceipts.slice().reverse().map(demoMapWellness_)
+    }, demoWellnessOrg_());
+  }
+  if (action === "issueWellnessReceipt") {
+    const me = (store.users || []).find((x) => x.username === currentUser.username);
+    if (!me) return { ok: false, error: "Användaren hittades inte" };
+    if (!payload.password) return { ok: false, error: "Ange ditt lösenord för att signera kvittot" };
+    if (me.password !== String(payload.password)) return { ok: false, error: "Fel lösenord" };
+    const recipientName = String(payload.recipientName || payload.name || "").trim();
+    if (!recipientName) return { ok: false, error: "Ange vem kvittot gäller" };
+    const description = String(payload.description || "").trim();
+    if (!description) return { ok: false, error: "Ange vad som har köpts" };
+    const amount = Math.round((Number(payload.amount) || 0) * 100) / 100;
+    if (!(amount > 0)) return { ok: false, error: "Ange ett belopp större än 0 kr" };
+    const year = String((payload.purchaseDate || currentYmd_()).slice(0, 4));
+    const seq = store.wellnessReceipts.filter((r) => String(r.receiptNo || "").indexOf("FV-" + year + "-") === 0).length + 1;
+    const now = new Date().toISOString();
+    const row = {
+      id: "demo-" + Date.now(),
+      receiptNo: "FV-" + year + "-" + String(seq).padStart(4, "0"),
+      issuedAt: now,
+      purchaseDate: String(payload.purchaseDate || currentYmd_()).slice(0, 10),
+      recipientName,
+      recipientEmail: String(payload.recipientEmail || payload.email || "").trim().toLowerCase(),
+      recipientIdnr: String(payload.recipientIdnr || payload.personnummer || "").trim(),
+      description,
+      period: String(payload.period || "").trim(),
+      amount,
+      issuerUsername: me.username,
+      issuerName: me.name || me.username,
+      signedAt: now,
+      hasPdf: false,
+      emailedAt: "",
+      pdfBase64: ""
+    };
+    store.wellnessReceipts.push(row);
+    saveDemoDb_(store);
+    return { ok: true, receipt: demoMapWellness_(row) };
+  }
+  if (action === "saveWellnessReceiptPdf") {
+    const row = store.wellnessReceipts.find((x) => x.id === payload.id);
+    if (!row) return { ok: false, error: "Kvittot hittades inte" };
+    if (!payload.pdfBase64) return { ok: false, error: "PDF saknas" };
+    row.hasPdf = true;
+    row.pdfBase64 = String(payload.pdfBase64);
+    saveDemoDb_(store);
+    return { ok: true, receipt: demoMapWellness_(row) };
+  }
+  if (action === "emailWellnessReceipt") {
+    const row = store.wellnessReceipts.find((x) => x.id === payload.id);
+    if (!row) return { ok: false, error: "Kvittot hittades inte" };
+    const to = String(payload.email || row.recipientEmail || "").trim().toLowerCase();
+    if (!to || to.indexOf("@") < 1) return { ok: false, error: "Ange en giltig e-postadress" };
+    row.recipientEmail = to;
+    row.emailedAt = new Date().toISOString();
+    saveDemoDb_(store);
+    return { ok: true, receipt: demoMapWellness_(row), demo: true };
   }
   return { ok: false, error: "Okänd action: " + action };
 }
@@ -2698,6 +2817,9 @@ function demoApi_(action, args) {
       if (action === "listTencards" || action === "lookupTencard" || action === "saveTencard" || action === "clipTencard" || action === "deleteTencard") {
         return ok(demoTencardApi_(store, action, args));
       }
+      if (action === "getWellnessApp" || action === "issueWellnessReceipt" || action === "saveWellnessReceiptPdf" || action === "emailWellnessReceipt") {
+        return ok(demoWellnessApi_(store, action, args));
+      }
       return fail("Okänd action: " + action);
     }, 80);
   });
@@ -2820,6 +2942,9 @@ function canManageTencards_() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || hasAppRole_("hallvard");
 }
+function canIssueWellnessReceipt_() {
+  return canManageTencards_();
+}
 function canOpenAdministration_() {
   return canManageUsersRole() || canManageRouteStructureRole() || canManageLifetimeRole() || canTimeAdmin_();
 }
@@ -2846,6 +2971,9 @@ function renderAccountMenu_() {
     );
   if (canManageTencards_()) {
     items.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
+  }
+  if (canIssueWellnessReceipt_()) {
+    items.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdskvitto</button>`);
   }
   if (canOpenAdministration_()) {
     items.push(`<button type="button" role="menuitem" onclick="openAdministrationFromMenu_()">Administration</button>`);
@@ -3041,6 +3169,7 @@ function showLoginGate_() {
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
+  hideWellnessOverlay_();
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("login-panel").classList.add("show");
   document.getElementById("login-error").style.display = "none";
@@ -3072,7 +3201,7 @@ function currentDisplayName_() {
 function hideAppChrome_() {
   const chrome = document.getElementById("app-chrome");
   if (chrome) chrome.classList.remove("ready");
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "no-routes");
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "no-routes");
 }
 function showAppChrome_() {
   const chrome = document.getElementById("app-chrome");
@@ -3081,6 +3210,7 @@ function showAppChrome_() {
   document.body.classList.toggle("time-open", document.getElementById("app-time").classList.contains("show"));
   document.body.classList.toggle("verif-open", document.getElementById("app-verif").classList.contains("show"));
   document.body.classList.toggle("tencard-open", !!(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")));
+  document.body.classList.toggle("wellness-open", !!(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")));
   renderAccountMenu_();
 }
 function onTopBrandClick_() {
@@ -3093,9 +3223,11 @@ function onTopBrandClick_() {
     closeTimeTool();
     closeVerifTool();
     closeTencardTool();
+    closeWellnessTool();
   } else if (currentUser.authorized) {
     closeVerifTool();
     closeTencardTool();
+    closeWellnessTool();
     openTimeTool();
   }
 }
@@ -3115,7 +3247,8 @@ function showAppShell_() {
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
-  document.body.classList.remove("time-open", "verif-open", "tencard-open");
+  hideWellnessOverlay_();
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open");
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
@@ -5354,6 +5487,7 @@ function openRoutesFromMenu_() {
   closeTimeTool();
   closeVerifTool();
   closeTencardTool();
+  closeWellnessTool();
 }
 function openSettingsFromMenu_() {
   closeAccountMenu_();
@@ -5363,16 +5497,22 @@ function openTimeToolFromMenu_() {
   closeAccountMenu_();
   closeVerifTool();
   hideTencardOverlay_();
+  hideWellnessOverlay_();
   openTimeTool();
 }
 function openVerifToolFromMenu_() {
   closeAccountMenu_();
   hideTencardOverlay_();
+  hideWellnessOverlay_();
   openVerifTool();
 }
 function openTencardToolFromMenu_() {
   closeAccountMenu_();
   openTencardTool();
+}
+function openWellnessToolFromMenu_() {
+  closeAccountMenu_();
+  openWellnessTool();
 }
 function openAdministrationFromMenu_() {
   closeAccountMenu_();
@@ -5767,6 +5907,14 @@ function renderAdminHome() {
       <p class="small mb-3" style="color:var(--muted);">Klipp, justera saldo, lägg till och ta bort 10-kort. Standard är sökrutan för kortläsaren.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="openTencardTool()">Öppna 10-kort</button>
+      </div>
+    </div>` : ""}
+    ${canIssueWellnessReceipt_() ? `
+    <div class="admin-card">
+      <h3>Friskvårdskvitto</h3>
+      <p class="small mb-3" style="color:var(--muted);">Utfärda kvitto för medlemskap och annan friskvård. Signeras med lösenord och kan mejlas eller skrivas ut.</p>
+      <div class="admin-actions">
+        <button class="btn btn-ghost" type="button" onclick="openWellnessTool()">Öppna friskvårdskvitto</button>
       </div>
     </div>` : ""}`;
 }
@@ -7140,8 +7288,9 @@ function closeTimeTool() {
   document.getElementById("app-time").classList.remove("show");
   document.body.classList.remove("time-open");
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
+  const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
-  if (hasWallflowAccess_() && !tencardOpen && !verifOpen) {
+  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -7161,6 +7310,7 @@ function openTimeTool(view) {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
+  hideWellnessOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
@@ -7781,7 +7931,7 @@ function closeVerifTool() {
     showLoginGate_();
     return;
   }
-  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show"))) {
+  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show"))) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -7790,6 +7940,7 @@ function openVerifTool() {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
   hideTencardOverlay_();
+  hideWellnessOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
@@ -8437,7 +8588,8 @@ function closeTencardTool() {
   hideTencardOverlay_();
   const timeOpen = document.getElementById("app-time") && document.getElementById("app-time").classList.contains("show");
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen) {
+  const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -8451,6 +8603,7 @@ function openTencardTool() {
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
+  hideWellnessOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-tencard").classList.add("show");
@@ -8757,6 +8910,377 @@ function loadTencardList_(keepResult) {
       renderTencardTool_();
     })
     .listTencards();
+}
+
+const WELLNESS_PRODUCTS_ = [
+  { id: "membership", label: "Årsmedlemskap" },
+  { id: "family", label: "Familjemedlemskap" },
+  { id: "tencard", label: "10-kort" },
+  { id: "term", label: "Terminskort" },
+  { id: "entry", label: "Engångsklättring" },
+  { id: "other", label: "Annat" }
+];
+let wellnessState_ = { step: 1, product: "membership", receipt: null, pdfBytes: null, receipts: [], today: "" };
+
+function hideWellnessOverlay_() {
+  const el = document.getElementById("app-wellness");
+  if (el) el.classList.remove("show");
+  document.body.classList.remove("wellness-open");
+}
+function closeWellnessTool() {
+  hideWellnessOverlay_();
+  const timeOpen = document.getElementById("app-time") && document.getElementById("app-time").classList.contains("show");
+  const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
+  const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen) {
+    document.getElementById("app-public").classList.add("ready");
+    showAppChrome_();
+  } else {
+    showAppChrome_();
+  }
+}
+function openWellnessTool() {
+  if (!currentUser.authorized) return showLoginGate_();
+  if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  if (!canIssueWellnessReceipt_()) return showToast("Saknar behörighet");
+  document.getElementById("app-admin").classList.remove("show");
+  document.getElementById("app-time").classList.remove("show");
+  document.getElementById("app-verif").classList.remove("show");
+  hideTencardOverlay_();
+  document.getElementById("app-public").classList.remove("ready");
+  if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
+  document.getElementById("app-wellness").classList.add("show");
+  showAppChrome_();
+  if (!wellnessState_.receipt) wellnessState_.step = 1;
+  loadWellnessTool_();
+}
+function wellnessProductLabel_(id) {
+  const hit = WELLNESS_PRODUCTS_.find((p) => p.id === id);
+  return hit ? hit.label : "Friskvård";
+}
+function wellnessFormatWhen_(iso) {
+  const s = String(iso || "").trim();
+  if (!s) return "";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s.replace("T", " ").slice(0, 16);
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Stockholm",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(d);
+}
+function loadWellnessTool_() {
+  const main = document.getElementById("wellness-main");
+  if (!main) return;
+  main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        main.innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte öppna verktyget")}</p></div>`;
+        return;
+      }
+      wellnessState_.today = res.today || currentYmd_();
+      wellnessState_.receipts = res.receipts || [];
+      renderWellnessTool_();
+    })
+    .withFailureHandler(() => {
+      wellnessState_.today = currentYmd_();
+      renderWellnessTool_();
+    })
+    .getWellnessApp();
+}
+function wellnessPickProduct_(id) {
+  wellnessState_.product = id;
+  const desc = document.getElementById("wellness-desc");
+  if (desc && id !== "other") desc.value = wellnessProductLabel_(id);
+  const chips = document.querySelector(".wellness-chips");
+  if (!chips) return;
+  chips.querySelectorAll(".btn").forEach((btn, i) => {
+    const p = WELLNESS_PRODUCTS_[i];
+    const on = p && p.id === id;
+    btn.classList.toggle("btn-accent", on);
+    btn.classList.toggle("is-on", on);
+    btn.classList.toggle("btn-ghost", !on);
+  });
+}
+function renderWellnessTool_(keepForm) {
+  const main = document.getElementById("wellness-main");
+  if (!main) return;
+  const draft = keepForm ? {
+    name: val_("wellness-name"),
+    email: val_("wellness-email"),
+    idnr: val_("wellness-idnr"),
+    desc: val_("wellness-desc"),
+    period: val_("wellness-period"),
+    amount: val_("wellness-amount"),
+    date: val_("wellness-date")
+  } : null;
+  if (wellnessState_.step === 2 && wellnessState_.receipt) {
+    main.innerHTML = renderWellnessStep2_();
+    return;
+  }
+  const product = wellnessState_.product || "membership";
+  const chips = WELLNESS_PRODUCTS_.map((p) =>
+    `<button type="button" class="btn btn-sm ${p.id === product ? "btn-accent is-on" : "btn-ghost"}" onclick="wellnessPickProduct_('${p.id}')">${escapeHtml_(p.label)}</button>`
+  ).join("");
+  const defaultDesc = product === "other" ? "" : wellnessProductLabel_(product);
+  const year = String((wellnessState_.today || currentYmd_()).slice(0, 4));
+  const recent = (wellnessState_.receipts || []).slice(0, 8).map((r) =>
+    `<tr>
+      <td>${escapeHtml_(r.receiptNo)}</td>
+      <td>${escapeHtml_(r.recipientName)}</td>
+      <td>${escapeHtml_(formatSek_(r.amount))}</td>
+      <td>${escapeHtml_(r.purchaseDate || "")}</td>
+    </tr>`
+  ).join("");
+  main.innerHTML = `
+    <div class="admin-card">
+      <p class="admin-kicker">Friskvård</p>
+      <span class="wellness-step">Steg 1 av 2</span>
+      <h3>Utfärda kvitto</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Kvittot följer Skatteverkets krav för friskvårdsbidrag: vad som köpts, belopp, säljarens identitet
+        och att Västerviks klätterklubb är en ideell förening som inte betalar moms.
+        Du signerar med ditt lösenord.
+      </p>
+      <div class="wellness-chips">${chips}</div>
+      <label class="form-label" for="wellness-name">Köpare (namn)</label>
+      <input id="wellness-name" class="form-control mb-2" autocomplete="name" placeholder="För- och efternamn" value="${escapeHtml_((draft && draft.name) || "")}">
+      <label class="form-label" for="wellness-email">E-post (för utskick)</label>
+      <input id="wellness-email" type="email" class="form-control mb-2" autocomplete="email" placeholder="namn@exempel.se" value="${escapeHtml_((draft && draft.email) || "")}">
+      <label class="form-label" for="wellness-idnr">Personnummer (valfritt)</label>
+      <input id="wellness-idnr" class="form-control mb-2" inputmode="numeric" autocomplete="off" placeholder="ÅÅMMDD-XXXX" value="${escapeHtml_((draft && draft.idnr) || "")}">
+      <label class="form-label" for="wellness-desc">Vad som har köpts</label>
+      <input id="wellness-desc" class="form-control mb-2" placeholder="T.ex. årsmedlemskap" value="${escapeHtml_((draft && draft.desc) || defaultDesc)}">
+      <label class="form-label" for="wellness-period">Period (valfritt)</label>
+      <input id="wellness-period" class="form-control mb-2" placeholder="t.ex. kalenderåret ${escapeHtml_(year)}" value="${escapeHtml_((draft && draft.period) || "")}">
+      <div class="row g-2">
+        <div class="col-6">
+          <label class="form-label" for="wellness-amount">Belopp (kr)</label>
+          <input id="wellness-amount" class="form-control mb-2" inputmode="decimal" placeholder="0" value="${escapeHtml_((draft && draft.amount) || "")}">
+        </div>
+        <div class="col-6">
+          <label class="form-label" for="wellness-date">Köpdatum</label>
+          <input id="wellness-date" type="date" class="form-control mb-2" value="${escapeHtml_((draft && draft.date) || wellnessState_.today || currentYmd_())}">
+        </div>
+      </div>
+      <label class="form-label" for="wellness-pw">Signera med ditt lösenord</label>
+      <input id="wellness-pw" type="password" class="form-control mb-3" autocomplete="current-password" placeholder="Ditt lösenord">
+      <button class="btn btn-accent w-100" type="button" id="wellness-sign-btn" onclick="signWellnessReceipt_()">Utfärda och signera</button>
+    </div>
+    ${recent ? `<div class="admin-card">
+      <p class="admin-kicker">Senaste kvitton</p>
+      <div style="overflow-x:auto;"><table class="tencard-list">
+        <thead><tr><th>Nr</th><th>Köpare</th><th>Belopp</th><th>Datum</th></tr></thead>
+        <tbody>${recent}</tbody>
+      </table></div>
+    </div>` : ""}`;
+}
+function renderWellnessStep2_() {
+  const r = wellnessState_.receipt;
+  const emailed = r.emailedAt ? `<p class="small mb-2" style="color:var(--muted);">Skickat ${escapeHtml_(wellnessFormatWhen_(r.emailedAt))}.</p>` : "";
+  return `
+    <div class="admin-card">
+      <p class="admin-kicker">Friskvård</p>
+      <span class="wellness-step">Steg 2 av 2</span>
+      <h3>Kvitto ${escapeHtml_(r.receiptNo)}</h3>
+      <p class="mb-2">${escapeHtml_(r.recipientName)} · ${escapeHtml_(r.description)}${r.period ? " (" + escapeHtml_(r.period) + ")" : ""}</p>
+      <p class="mb-3"><strong>${escapeHtml_(formatSek_(r.amount))}</strong> · moms 0 kr</p>
+      ${emailed}
+      <label class="form-label" for="wellness-send-email">E-post till köparen</label>
+      <input id="wellness-send-email" type="email" class="form-control mb-3" value="${escapeHtml_(r.recipientEmail || "")}" placeholder="namn@exempel.se">
+      <div class="wellness-actions mb-3">
+        <button class="btn btn-accent" type="button" id="wellness-mail-btn" onclick="emailWellnessReceipt_()">Skicka e-post</button>
+        <button class="btn btn-ghost" type="button" onclick="printWellnessReceipt_()">Skriv ut</button>
+        <button class="btn btn-ghost" type="button" onclick="downloadWellnessReceipt_()">Ladda ner PDF</button>
+      </div>
+      <button class="btn btn-ghost w-100" type="button" onclick="resetWellnessForm_()">Nytt kvitto</button>
+    </div>`;
+}
+function resetWellnessForm_() {
+  wellnessState_.step = 1;
+  wellnessState_.receipt = null;
+  wellnessState_.pdfBytes = null;
+  loadWellnessTool_();
+}
+function signWellnessReceipt_() {
+  const payload = {
+    recipientName: val_("wellness-name"),
+    recipientEmail: val_("wellness-email"),
+    recipientIdnr: val_("wellness-idnr"),
+    description: val_("wellness-desc"),
+    period: val_("wellness-period"),
+    amount: Number(String(val_("wellness-amount")).replace(/\s/g, "").replace(",", ".")),
+    purchaseDate: val_("wellness-date"),
+    password: val_("wellness-pw")
+  };
+  if (!payload.recipientName) return showToast("Ange köparens namn");
+  if (!payload.description) return showToast("Ange vad som har köpts");
+  if (!(payload.amount > 0)) return showToast("Ange belopp");
+  if (!payload.password) return showToast("Ange ditt lösenord för att signera");
+  const btn = document.getElementById("wellness-sign-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Signerar…"; }
+  google.script.run
+    .withSuccessHandler(async (res) => {
+      if (!res || res.ok === false) {
+        if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
+        return showToast((res && res.error) || "Kunde inte utfärda kvitto");
+      }
+      try {
+        const pdf = await buildWellnessPdf_(res.receipt);
+        wellnessState_.pdfBytes = pdf.bytes;
+        google.script.run
+          .withSuccessHandler((saved) => {
+            if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
+            if (!saved || saved.ok === false) {
+              showToast((saved && saved.error) || "Kvittot skapades men PDF kunde inte sparas");
+            }
+            wellnessState_.receipt = (saved && saved.receipt) || res.receipt;
+            wellnessState_.step = 2;
+            renderWellnessTool_();
+          })
+          .withFailureHandler((err) => {
+            if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
+            wellnessState_.receipt = res.receipt;
+            wellnessState_.step = 2;
+            renderWellnessTool_();
+            showToast(String(err && err.message ? err.message : "PDF skapad lokalt, men kunde inte sparas"));
+          })
+          .saveWellnessReceiptPdf({ id: res.receipt.id, pdfBase64: pdf.base64 });
+      } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
+        showToast(String(err && err.message ? err.message : err));
+      }
+    })
+    .withFailureHandler((err) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
+      showToast(String(err && err.message ? err.message : err));
+    })
+    .issueWellnessReceipt(payload);
+}
+async function buildWellnessPdf_(receipt) {
+  const { PDFDocument, StandardFonts, rgb, PageSizes } = pdfLib_();
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const pageW = PageSizes.A4[0];
+  const pageH = PageSizes.A4[1];
+  const margin = 48;
+  const page = doc.addPage([pageW, pageH]);
+  let y = pageH - margin;
+  function drawText(text, x, yy, size, bold, color) {
+    const safe = String(text || "")
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u00a0/g, " ")
+      .replace(/[^\x20-\x7E\u00C0-\u00FF]/g, "");
+    page.drawText(safe, {
+      x, y: yy, size, font: bold ? fontBold : font, color: color || rgb(0.12, 0.14, 0.16)
+    });
+  }
+  function block(lines, size, gap) {
+    lines.forEach((ln) => {
+      const wrapped = wrapPdfText_(font, ln, size, pageW - margin * 2);
+      wrapped.forEach((w) => {
+        drawText(w, margin, y, size, false);
+        y -= gap;
+      });
+    });
+  }
+  drawText(receipt.orgName || "Västerviks klätterklubb", margin, y, 12, true, rgb(0.05, 0.43, 0.43));
+  y -= 16;
+  drawText("Org.nr " + (receipt.orgNr || "802431-5718"), margin, y, 10, false, rgb(0.35, 0.4, 0.45));
+  y -= 14;
+  drawText(receipt.orgAddress || "Klätterhallen, Västervik", margin, y, 10, false, rgb(0.35, 0.4, 0.45));
+  y -= 28;
+  drawText("Friskvårdskvitto", margin, y, 22, true);
+  y -= 16;
+  drawText("Kvitto nr " + (receipt.receiptNo || ""), margin, y, 11, true, rgb(0.05, 0.43, 0.43));
+  y -= 28;
+  const facts = [
+    ["Köpare", receipt.recipientName],
+    receipt.recipientIdnr ? ["Personnr", receipt.recipientIdnr] : null,
+    receipt.recipientEmail ? ["E-post", receipt.recipientEmail] : null,
+    ["Köpdatum", receipt.purchaseDate],
+    ["Vad", receipt.description + (receipt.period ? " (" + receipt.period + ")" : "")],
+    ["Belopp", formatSek_(receipt.amount).replace(/\s/g, " ")],
+    ["Moms", "0,00 kr"]
+  ].filter(Boolean);
+  facts.forEach((row) => {
+    drawText(row[0], margin, y, 9, true, rgb(0.4, 0.45, 0.5));
+    const wrapped = wrapPdfText_(font, row[1], 11, pageW - margin * 2 - 90);
+    wrapped.forEach((ln, i) => drawText(ln, margin + 90, y - i * 13, 11, false));
+    y -= Math.max(18, wrapped.length * 13 + 6);
+  });
+  y -= 8;
+  page.drawLine({ start: { x: margin, y: y + 10 }, end: { x: pageW - margin, y: y + 10 }, thickness: 1, color: rgb(0.8, 0.82, 0.84) });
+  y -= 8;
+  drawText(receipt.orgLegal || "Ideell förening som inte är momsregistrerad", margin, y, 11, true);
+  y -= 16;
+  block([
+    receipt.orgVat || "Moms utgår inte. Beloppet avser 0 kr moms.",
+    "Kvittot avser motion och annan friskvård enligt inkomstskattelagen och Skatteverkets regler om friskvårdsbidrag. Det kan lämnas till arbetsgivaren som underlag."
+  ], 10, 13);
+  y -= 10;
+  drawText("Digital underskrift", margin, y, 11, true);
+  y -= 16;
+  block([
+    "Undertecknat elektroniskt av " + (receipt.issuerName || "") +
+    " (" + (receipt.issuerUsername || "") + ") genom bekräftelse med inloggningslösenord " +
+    wellnessFormatWhen_(receipt.signedAt) + "."
+  ], 10, 13);
+  const bytes = await doc.save();
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+  }
+  return { bytes: u8, base64: btoa(binary), filename: receipt.filename || "friskvardskvitto.pdf" };
+}
+function downloadWellnessReceipt_() {
+  if (wellnessState_.pdfBytes) {
+    downloadBytes_(wellnessState_.pdfBytes, (wellnessState_.receipt && wellnessState_.receipt.filename) || "friskvardskvitto.pdf");
+    return;
+  }
+  showToast("PDF saknas");
+}
+function printWellnessReceipt_() {
+  if (!wellnessState_.pdfBytes) return showToast("PDF saknas");
+  const blob = new Blob([wellnessState_.pdfBytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
+  if (!w) {
+    downloadBytes_(wellnessState_.pdfBytes, (wellnessState_.receipt && wellnessState_.receipt.filename) || "friskvardskvitto.pdf");
+    showToast("Tillat popup eller öppna den nedladdade PDF:en och skriv ut");
+    return;
+  }
+  setTimeout(() => {
+    try { w.focus(); w.print(); } catch (_) {}
+  }, 700);
+}
+function emailWellnessReceipt_() {
+  const r = wellnessState_.receipt;
+  if (!r) return;
+  const email = val_("wellness-send-email") || r.recipientEmail;
+  if (!email || email.indexOf("@") < 1) return showToast("Ange e-postadress");
+  const btn = document.getElementById("wellness-mail-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Skickar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Skicka e-post"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte skicka");
+      wellnessState_.receipt = res.receipt || r;
+      renderWellnessTool_();
+      showToast(res.demo ? "Demoläge: mejl skickas inte på riktigt" : "Kvitto skickat");
+    })
+    .withFailureHandler((err) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Skicka e-post"; }
+      showToast(String(err && err.message ? err.message : err));
+    })
+    .emailWellnessReceipt({ id: r.id, email });
 }
 
 if (document.readyState === "loading") {

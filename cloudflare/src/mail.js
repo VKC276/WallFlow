@@ -218,6 +218,40 @@ export async function mailVerification(env, opts) {
   await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
 }
 
+export async function mailWellnessReceipt(env, opts) {
+  const meta = opts.meta || {};
+  const composed = compose({
+    name: opts.name,
+    subject: "friskvårdskvitto " + String(meta.receiptNo || ""),
+    intro:
+      "Här är ditt kvitto för friskvård från Västerviks klätterklubb. Kvittot kan lämnas till arbetsgivaren som underlag för friskvårdsbidrag.",
+    rows: [
+      { label: "Kvitto nr", value: String(meta.receiptNo || "") },
+      { label: "Vad", value: String(meta.description || "") },
+      { label: "Belopp", value: formatSekSv(meta.amount) },
+      { label: "Moms", value: "0,00 kr (ideell förening, inte momsregistrerad)" },
+      { label: "Köpdatum", value: String(meta.purchaseDate || "") }
+    ],
+    notes: [
+      "PDF:en ligger bifogad i det här mejlet.",
+      "Föreningen är en ideell förening som inte betalar moms."
+    ],
+    ctaLabel: "Öppna PDF",
+    ctaUrl: opts.downloadUrl
+  });
+  const attachments = [];
+  if (opts.pdfBytes && opts.filename) {
+    attachments.push({
+      filename: String(opts.filename),
+      name: String(opts.filename),
+      mimeType: "application/pdf",
+      type: "application/pdf",
+      content: bytesToBase64(opts.pdfBytes)
+    });
+  }
+  await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
+}
+
 export function clipInviteMessage(raw) {
   const next = String(raw == null ? "" : raw).replace(/\r\n/g, "\n").trim();
   if (!next) return "";

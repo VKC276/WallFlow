@@ -4,6 +4,7 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS wellness_receipts;
 DROP TABLE IF EXISTS time_entries;
 DROP TABLE IF EXISTS routes;
 DROP TABLE IF EXISTS grades;
@@ -55,6 +56,24 @@ CREATE TABLE settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE wellness_receipts (
+  id TEXT PRIMARY KEY,
+  receipt_no TEXT NOT NULL UNIQUE,
+  issued_at TEXT NOT NULL,
+  purchase_date TEXT NOT NULL,
+  recipient_name TEXT NOT NULL,
+  recipient_email TEXT NOT NULL DEFAULT '',
+  recipient_idnr TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL,
+  period TEXT NOT NULL DEFAULT '',
+  amount REAL NOT NULL,
+  issuer_username TEXT NOT NULL,
+  issuer_name TEXT NOT NULL,
+  signed_at TEXT NOT NULL,
+  pdf_key TEXT NOT NULL DEFAULT '',
+  emailed_at TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX idx_routes_gradering ON routes (gradering);
 CREATE INDEX idx_grades_order ON grades (sort_order);
 CREATE INDEX idx_users_role ON users (role);
@@ -62,6 +81,8 @@ CREATE UNIQUE INDEX idx_users_email ON users (email COLLATE NOCASE) WHERE email 
 CREATE INDEX idx_time_entries_user_date ON time_entries (username, work_date);
 CREATE INDEX idx_time_entries_date ON time_entries (work_date);
 CREATE INDEX idx_time_entries_kind ON time_entries (kind);
+CREATE INDEX idx_wellness_issued ON wellness_receipts (issued_at DESC);
+CREATE INDEX idx_wellness_receipt_no ON wellness_receipts (receipt_no);
 
 INSERT INTO settings (key, value) VALUES ('timeLedbyggHourlyRate', '0');
 INSERT INTO settings (key, value) VALUES ('timeMinPayout', '0');
