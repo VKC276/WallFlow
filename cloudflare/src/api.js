@@ -89,6 +89,7 @@ import {
 import {
   emailWellnessReceipt,
   getWellnessApp,
+  getWellnessReceipt,
   getWellnessSettings,
   issueWellnessReceipt,
   saveWellnessSettings
@@ -197,6 +198,8 @@ export async function dispatch(env, action, token, args, extras) {
       return deleteTencardAction(env, args[0], session);
     case "getWellnessApp":
       return getWellnessApp(env, session, extras && extras.origin);
+    case "getWellnessReceipt":
+      return getWellnessReceipt(env, args[0], session, extras && extras.origin);
     case "getWellnessSettings":
       return getWellnessSettings(env, session);
     case "saveWellnessSettings":

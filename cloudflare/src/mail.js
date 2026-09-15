@@ -166,9 +166,9 @@ function toMessage(to, composed, attachments) {
 function bytesToBase64(bytes) {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
   let binary = "";
-  const chunk = 0x8000;
+  const chunk = 0x2000;
   for (let i = 0; i < u8.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+    binary += String.fromCharCode.apply(null, Array.from(u8.subarray(i, i + chunk)));
   }
   return btoa(binary);
 }
@@ -238,13 +238,15 @@ export async function mailWellnessReceipt(env, opts) {
     ]
   });
   const attachments = [];
-  if (opts.pdfBytes && opts.filename) {
+  const b64 = String(opts.pdfBase64 || "").replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "")
+    || (opts.pdfBytes ? bytesToBase64(opts.pdfBytes) : "");
+  if (b64 && opts.filename) {
     attachments.push({
       filename: String(opts.filename),
       name: String(opts.filename),
       mimeType: "application/pdf",
       type: "application/pdf",
-      content: bytesToBase64(opts.pdfBytes)
+      content: b64
     });
   }
   await sendMessages(env, [toMessage(opts.to, composed, attachments)]);

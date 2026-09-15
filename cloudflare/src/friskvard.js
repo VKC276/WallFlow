@@ -166,7 +166,7 @@ async function nextReceiptNo(env, year) {
 
 async function listRecent(env, origin, org) {
   const { results } = await env.DB.prepare(
-    "SELECT * FROM wellness_receipts ORDER BY issued_at DESC LIMIT 40"
+    "SELECT * FROM wellness_receipts ORDER BY issued_at DESC LIMIT 80"
   ).all();
   return (results || []).map((row) => mapRow(row, env, origin, org));
 }
@@ -192,6 +192,14 @@ export async function getWellnessApp(env, session, origin) {
     canManage: canManageWellnessSettings(session),
     ...org
   };
+}
+
+export async function getWellnessReceipt(env, payload, session, origin) {
+  if (!canIssueWellnessReceipt(session)) return deny();
+  const org = await readOrgProfile(env);
+  const row = await getRow(env, payload && (payload.id || payload.receiptId));
+  if (!row) return { ok: false, error: "Kvittot hittades inte" };
+  return { ok: true, receipt: mapRow(row, env, origin, org) };
 }
 
 export async function getWellnessSettings(env, session) {
@@ -301,7 +309,7 @@ export async function emailWellnessReceipt(env, payload, session, origin) {
   to = check.email;
 
   const pdfRaw = String(payload.pdfBase64 || "");
-  if (!pdfRaw) return { ok: false, error: "PDF saknas — stanna på kvittot och skicka direkt efter utfärdandet" };
+  if (!pdfRaw) return { ok: false, error: "PDF saknas — öppna kvittot igen och skicka" };
   if (pdfRaw.length > MAX_PDF_BASE64_CHARS) {
     return { ok: false, error: "PDF:en är för stor" };
   }
@@ -327,6 +335,7 @@ export async function emailWellnessReceipt(env, payload, session, origin) {
       to,
       name: row.recipient_name,
       filename: mapped.filename,
+      pdfBase64: pdfRaw,
       pdfBytes: bytes,
       meta: mapped
     });
