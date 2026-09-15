@@ -89,8 +89,9 @@ import {
 import {
   emailWellnessReceipt,
   getWellnessApp,
+  getWellnessSettings,
   issueWellnessReceipt,
-  saveWellnessReceiptPdf
+  saveWellnessSettings
 } from "./friskvard.js";
 
 export async function dispatch(env, action, token, args, extras) {
@@ -196,10 +197,12 @@ export async function dispatch(env, action, token, args, extras) {
       return deleteTencardAction(env, args[0], session);
     case "getWellnessApp":
       return getWellnessApp(env, session, extras && extras.origin);
+    case "getWellnessSettings":
+      return getWellnessSettings(env, session);
+    case "saveWellnessSettings":
+      return saveWellnessSettings(env, args[0], session);
     case "issueWellnessReceipt":
       return issueWellnessReceipt(env, args[0], session, extras && extras.origin);
-    case "saveWellnessReceiptPdf":
-      return saveWellnessReceiptPdf(env, args[0], session, extras && extras.origin);
     case "emailWellnessReceipt":
       return emailWellnessReceipt(env, args[0], session, extras && extras.origin);
     default:

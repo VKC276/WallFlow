@@ -648,6 +648,12 @@
       cursor: pointer; font-family: inherit;
     }
     .account-menu button:hover { background: var(--surface-2); }
+    .account-menu button.account-menu-logout {
+      margin-top: 4px;
+      border-top: 1px solid var(--line);
+      border-radius: 0 0 8px 8px;
+      color: #e8b4b4;
+    }
     .time-banner {
       border-radius: 12px; padding: 10px 12px; font-size: 0.88rem; font-weight: 600; margin-bottom: 12px;
     }
@@ -1945,6 +1951,16 @@ function seedDemoDb_() {
     timeEntries: [],
     timeEntrySeq: 1,
     verifArchiveEmail: "inbox.ver.1624638@arkivplats.se",
+    wellnessOrg: {
+      orgName: "Västerviks klätterklubb",
+      orgNr: "802431-5718",
+      orgStreet: "",
+      orgPostal: "",
+      orgCity: "Västervik",
+      orgLegal: "Ideell förening som inte är momsregistrerad",
+      orgVat: "Moms utgår inte. Beloppet avser 0 kr moms.",
+      retentionDays: 90
+    },
     tencards: [
       { card_id: "623662933", remaining: 7, status: "Aktivt", last_clipped_at: "2026-09-10 12:14:02", name: "" },
       { card_id: "1443137877", remaining: 1, status: "Aktivt", last_clipped_at: "2026-09-12 18:02:11", name: "" },
@@ -1963,6 +1979,7 @@ function loadDemoDb_() {
         if (!parsed.timeEntries) parsed.timeEntries = [];
         if (!parsed.timeEntrySeq) parsed.timeEntrySeq = 1;
         if (!parsed.verifArchiveEmail) parsed.verifArchiveEmail = "inbox.ver.1624638@arkivplats.se";
+        if (!parsed.wellnessOrg) parsed.wellnessOrg = seedDemoDb_().wellnessOrg;
         if (!Array.isArray(parsed.tencards)) parsed.tencards = seedDemoDb_().tencards;
         if (!Array.isArray(parsed.wellnessReceipts)) parsed.wellnessReceipts = [];
         (parsed.users || []).forEach((u) => { if (!u.extraRoles) u.extraRoles = []; });
@@ -2247,16 +2264,26 @@ function demoVerifApi_(store, action, args) {
   return { ok: false, error: "Okänd action: " + action };
 }
 
-function demoWellnessOrg_() {
-  return {
+function demoWellnessOrg_(store) {
+  const fallback = {
     orgName: "Västerviks klätterklubb",
     orgNr: "802431-5718",
-    orgAddress: "Klätterhallen, Västervik",
+    orgStreet: "",
+    orgPostal: "",
+    orgCity: "Västervik",
     orgLegal: "Ideell förening som inte är momsregistrerad",
-    orgVat: "Moms utgår inte. Beloppet avser 0 kr moms."
+    orgVat: "Moms utgår inte. Beloppet avser 0 kr moms.",
+    retentionDays: 90
   };
+  const raw = (store && store.wellnessOrg) || {};
+  const street = String(raw.orgStreet || "").trim();
+  const postal = String(raw.orgPostal || "").trim();
+  const city = String(raw.orgCity || fallback.orgCity).trim();
+  const line2 = [postal, city].filter(Boolean).join(" ");
+  const orgAddress = [street, line2].filter(Boolean).join(", ") || "Klätterhallen, Västervik";
+  return Object.assign({}, fallback, raw, { orgAddress, retentionDays: Math.max(14, Math.min(730, Number(raw.retentionDays) || 90)) });
 }
-function demoMapWellness_(row) {
+function demoMapWellness_(row, store) {
   return Object.assign({
     id: row.id,
     receiptNo: row.receiptNo,
@@ -2275,18 +2302,56 @@ function demoMapWellness_(row) {
     emailedAt: row.emailedAt || "",
     downloadUrl: "",
     filename: "friskvardskvitto-" + String(row.receiptNo || "") + ".pdf"
-  }, demoWellnessOrg_());
+  }, demoWellnessOrg_(store));
 }
 function demoWellnessApi_(store, action, args) {
-  if (!demoCanManageTencards_()) return { ok: false, error: "Saknar behörighet" };
   const payload = args[0] || {};
   if (!Array.isArray(store.wellnessReceipts)) store.wellnessReceipts = [];
+  if (action === "getWellnessSettings" || action === "saveWellnessSettings") {
+    if (String(currentUser.role) !== "superadmin") {
+      return { ok: false, error: "Bara superadmin kan ändra föreningsuppgifter" };
+    }
+  } else if (!demoCanManageTencards_()) {
+    return { ok: false, error: "Saknar behörighet" };
+  }
+  if (action === "getWellnessSettings") {
+    return Object.assign({ ok: true }, demoWellnessOrg_(store));
+  }
+  if (action === "saveWellnessSettings") {
+    const orgName = String(payload.orgName || "").trim();
+    const orgNr = String(payload.orgNr || "").trim();
+    if (!orgName) return { ok: false, error: "Ange föreningens namn" };
+    if (!orgNr) return { ok: false, error: "Ange organisationsnummer" };
+    let days = Math.round(Number(payload.retentionDays) || 90);
+    if (days < 14) days = 14;
+    if (days > 730) days = 730;
+    store.wellnessOrg = {
+      orgName,
+      orgNr,
+      orgStreet: String(payload.orgStreet || "").trim(),
+      orgPostal: String(payload.orgPostal || "").trim(),
+      orgCity: String(payload.orgCity || "").trim(),
+      orgLegal: String(payload.orgLegal || "").trim() || "Ideell förening som inte är momsregistrerad",
+      orgVat: String(payload.orgVat || "").trim() || "Moms utgår inte. Beloppet avser 0 kr moms.",
+      retentionDays: days
+    };
+    saveDemoDb_(store);
+    return Object.assign({ ok: true }, demoWellnessOrg_(store));
+  }
+  const org = demoWellnessOrg_(store);
+  const cutoff = Date.now() - org.retentionDays * 24 * 60 * 60 * 1000;
+  store.wellnessReceipts = store.wellnessReceipts.filter((r) => {
+    const t = Date.parse(r.issuedAt);
+    return !(Number.isFinite(t) && t < cutoff);
+  });
+  saveDemoDb_(store);
   if (action === "getWellnessApp") {
     return Object.assign({
       ok: true,
       today: currentYmd_(),
-      receipts: store.wellnessReceipts.slice().reverse().map(demoMapWellness_)
-    }, demoWellnessOrg_());
+      receipts: store.wellnessReceipts.slice().reverse().map((row) => demoMapWellness_(row, store)),
+      canManage: String(currentUser.role) === "superadmin"
+    }, org);
   }
   if (action === "issueWellnessReceipt") {
     const me = (store.users || []).find((x) => x.username === currentUser.username);
@@ -2322,26 +2387,18 @@ function demoWellnessApi_(store, action, args) {
     };
     store.wellnessReceipts.push(row);
     saveDemoDb_(store);
-    return { ok: true, receipt: demoMapWellness_(row) };
-  }
-  if (action === "saveWellnessReceiptPdf") {
-    const row = store.wellnessReceipts.find((x) => x.id === payload.id);
-    if (!row) return { ok: false, error: "Kvittot hittades inte" };
-    if (!payload.pdfBase64) return { ok: false, error: "PDF saknas" };
-    row.hasPdf = true;
-    row.pdfBase64 = String(payload.pdfBase64);
-    saveDemoDb_(store);
-    return { ok: true, receipt: demoMapWellness_(row) };
+    return { ok: true, receipt: demoMapWellness_(row, store) };
   }
   if (action === "emailWellnessReceipt") {
     const row = store.wellnessReceipts.find((x) => x.id === payload.id);
     if (!row) return { ok: false, error: "Kvittot hittades inte" };
+    if (!payload.pdfBase64) return { ok: false, error: "PDF saknas — stanna på kvittot och skicka direkt efter utfärdandet" };
     const to = String(payload.email || row.recipientEmail || "").trim().toLowerCase();
     if (!to || to.indexOf("@") < 1) return { ok: false, error: "Ange en giltig e-postadress" };
     row.recipientEmail = to;
     row.emailedAt = new Date().toISOString();
     saveDemoDb_(store);
-    return { ok: true, receipt: demoMapWellness_(row), demo: true };
+    return { ok: true, receipt: demoMapWellness_(row, store), demo: true };
   }
   return { ok: false, error: "Okänd action: " + action };
 }
@@ -2817,7 +2874,7 @@ function demoApi_(action, args) {
       if (action === "listTencards" || action === "lookupTencard" || action === "saveTencard" || action === "clipTencard" || action === "deleteTencard") {
         return ok(demoTencardApi_(store, action, args));
       }
-      if (action === "getWellnessApp" || action === "issueWellnessReceipt" || action === "saveWellnessReceiptPdf" || action === "emailWellnessReceipt") {
+      if (action === "getWellnessApp" || action === "issueWellnessReceipt" || action === "emailWellnessReceipt" || action === "getWellnessSettings" || action === "saveWellnessSettings") {
         return ok(demoWellnessApi_(store, action, args));
       }
       return fail("Okänd action: " + action);
@@ -2978,6 +3035,7 @@ function renderAccountMenu_() {
   if (canOpenAdministration_()) {
     items.push(`<button type="button" role="menuitem" onclick="openAdministrationFromMenu_()">Administration</button>`);
   }
+  items.push(`<button type="button" role="menuitem" class="account-menu-logout" onclick="closeAccountMenu_(); logoutAdmin()">Logga ut</button>`);
   menu.innerHTML = items.join("");
 }
 function adminRoleLabelSv(role) {
@@ -5774,6 +5832,7 @@ function logoutAdmin() {
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
+  hideWellnessOverlay_();
   closePanel();
   showLoginGate_();
   showToast("Utloggad");
@@ -5915,6 +5974,7 @@ function renderAdminHome() {
       <p class="small mb-3" style="color:var(--muted);">Utfärda kvitto för årskort, halvårskort, 10-kort eller engångsklättring. Signeras med lösenord och kan mejlas eller skrivas ut.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="openWellnessTool()">Öppna friskvårdskvitto</button>
+        ${canTimeAdmin_() ? `<button class="btn btn-ghost" type="button" onclick="renderWellnessSettingsFromAdmin_()">Föreningsuppgifter</button>` : ""}
       </div>
     </div>` : ""}`;
 }
@@ -8579,6 +8639,80 @@ function saveVerifSettings_() {
     .saveVerifSettings({ archiveEmail });
 }
 
+function renderWellnessSettingsFromAdmin_() {
+  if (!canTimeAdmin_()) return showToast("Bara superadmin");
+  setAdminChrome_("Administration");
+  document.getElementById("app-admin").classList.add("show");
+  document.getElementById("admin-main").innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        document.getElementById("admin-main").innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte hämta")}</p></div>`;
+        return;
+      }
+      renderWellnessSettings_(res);
+    })
+    .getWellnessSettings();
+}
+function renderWellnessSettings_(data) {
+  const d = data || {};
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <p class="admin-kicker">Administration · Friskvård</p>
+      <h3>Föreningsuppgifter</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Uppgifterna skrivs ut på friskvårdskvittot. PDF:en mejlas som bilaga och skrivs ut i hallen — den sparas inte i Cloudflare. Äldre registerrader rensas automatiskt.
+      </p>
+      <label class="form-label" for="wf-org-name">Föreningens namn</label>
+      <input id="wf-org-name" class="form-control mb-2" value="${escapeHtml_(d.orgName || "")}" autocomplete="organization">
+      <label class="form-label" for="wf-org-nr">Organisationsnummer</label>
+      <input id="wf-org-nr" class="form-control mb-2" value="${escapeHtml_(d.orgNr || "")}" placeholder="802431-5718">
+      <label class="form-label" for="wf-org-street">Adress</label>
+      <input id="wf-org-street" class="form-control mb-2" value="${escapeHtml_(d.orgStreet || "")}" placeholder="Gatuadress">
+      <div class="row g-2">
+        <div class="col-5">
+          <label class="form-label" for="wf-org-postal">Postnummer</label>
+          <input id="wf-org-postal" class="form-control mb-2" value="${escapeHtml_(d.orgPostal || "")}">
+        </div>
+        <div class="col-7">
+          <label class="form-label" for="wf-org-city">Ort</label>
+          <input id="wf-org-city" class="form-control mb-2" value="${escapeHtml_(d.orgCity || "")}">
+        </div>
+      </div>
+      <label class="form-label" for="wf-org-legal">Juridisk form</label>
+      <input id="wf-org-legal" class="form-control mb-2" value="${escapeHtml_(d.orgLegal || "")}">
+      <label class="form-label" for="wf-org-vat">Moms</label>
+      <input id="wf-org-vat" class="form-control mb-2" value="${escapeHtml_(d.orgVat || "")}">
+      <label class="form-label" for="wf-org-keep">Spara kvitton (dagar)</label>
+      <input id="wf-org-keep" class="form-control mb-3" inputmode="numeric" value="${escapeHtml_(String(d.retentionDays || 90))}">
+      <p class="small mb-3" style="color:var(--muted);">14–730 dagar. Standard 90. Registerposten tas bort efter tiden. PDF skickas bara som mejlbilaga.</p>
+      <button class="btn btn-accent w-100" type="button" id="wf-org-save" onclick="saveWellnessSettings_()">Spara</button>
+    </div>`;
+}
+function saveWellnessSettings_() {
+  const payload = {
+    orgName: val_("wf-org-name"),
+    orgNr: val_("wf-org-nr"),
+    orgStreet: val_("wf-org-street"),
+    orgPostal: val_("wf-org-postal"),
+    orgCity: val_("wf-org-city"),
+    orgLegal: val_("wf-org-legal"),
+    orgVat: val_("wf-org-vat"),
+    retentionDays: Number(val_("wf-org-keep"))
+  };
+  const btn = document.getElementById("wf-org-save");
+  if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+      showToast("Sparat");
+      renderWellnessSettings_(res);
+    })
+    .saveWellnessSettings(payload);
+}
+
 function hideTencardOverlay_() {
   const el = document.getElementById("app-tencard");
   if (el) el.classList.remove("show");
@@ -8918,7 +9052,7 @@ const WELLNESS_PRODUCTS_ = [
   { id: "tencard", label: "10-kort" },
   { id: "entry", label: "Engångsklättring" }
 ];
-let wellnessState_ = { step: 1, product: "yearcard", receipt: null, pdfBytes: null, receipts: [], today: "" };
+let wellnessState_ = { step: 1, product: "yearcard", receipt: null, pdfBytes: null, pdfBase64: "", receipts: [], today: "", org: null };
 
 function hideWellnessOverlay_() {
   const el = document.getElementById("app-wellness");
@@ -8982,6 +9116,7 @@ function loadWellnessTool_() {
       }
       wellnessState_.today = res.today || currentYmd_();
       wellnessState_.receipts = res.receipts || [];
+      wellnessState_.org = res;
       renderWellnessTool_();
     })
     .withFailureHandler(() => {
@@ -9034,15 +9169,17 @@ function renderWellnessTool_(keepForm) {
       <td>${escapeHtml_(r.purchaseDate || "")}</td>
     </tr>`
   ).join("");
+  const org = wellnessState_.org || {};
+  const keepDays = Number(org.retentionDays) || 90;
   main.innerHTML = `
     <div class="admin-card">
       <p class="admin-kicker">Friskvård</p>
       <span class="wellness-step">Steg 1 av 2</span>
       <h3>Utfärda kvitto</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Kvittot följer Skatteverkets krav för friskvårdsbidrag: vad som köpts, belopp, säljarens identitet
-        och att Västerviks klätterklubb är en ideell förening som inte betalar moms.
-        Du signerar med ditt lösenord.
+        Kvittot följer Skatteverkets krav för friskvårdsbidrag: vad som köpts, belopp och säljarens identitet.
+        ${escapeHtml_(org.orgName || "Föreningen")} anges som ${escapeHtml_(org.orgLegal || "ideell förening som inte betalar moms")}.
+        Du signerar med ditt lösenord. Utfärdade kvitton rensas efter ${escapeHtml_(String(keepDays))} dagar.
       </p>
       <div class="wellness-chips">${chips}</div>
       <label class="form-label" for="wellness-name">Köpare (namn)</label>
@@ -9102,6 +9239,7 @@ function resetWellnessForm_() {
   wellnessState_.step = 1;
   wellnessState_.receipt = null;
   wellnessState_.pdfBytes = null;
+  wellnessState_.pdfBase64 = "";
   loadWellnessTool_();
 }
 function signWellnessReceipt_() {
@@ -9130,24 +9268,11 @@ function signWellnessReceipt_() {
       try {
         const pdf = await buildWellnessPdf_(res.receipt);
         wellnessState_.pdfBytes = pdf.bytes;
-        google.script.run
-          .withSuccessHandler((saved) => {
-            if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
-            if (!saved || saved.ok === false) {
-              showToast((saved && saved.error) || "Kvittot skapades men PDF kunde inte sparas");
-            }
-            wellnessState_.receipt = (saved && saved.receipt) || res.receipt;
-            wellnessState_.step = 2;
-            renderWellnessTool_();
-          })
-          .withFailureHandler((err) => {
-            if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
-            wellnessState_.receipt = res.receipt;
-            wellnessState_.step = 2;
-            renderWellnessTool_();
-            showToast(String(err && err.message ? err.message : "PDF skapad lokalt, men kunde inte sparas"));
-          })
-          .saveWellnessReceiptPdf({ id: res.receipt.id, pdfBase64: pdf.base64 });
+        wellnessState_.pdfBase64 = pdf.base64;
+        wellnessState_.receipt = res.receipt;
+        wellnessState_.step = 2;
+        if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
+        renderWellnessTool_();
       } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
         showToast(String(err && err.message ? err.message : err));
@@ -9264,6 +9389,7 @@ function emailWellnessReceipt_() {
   if (!r) return;
   const email = val_("wellness-send-email") || r.recipientEmail;
   if (!email || email.indexOf("@") < 1) return showToast("Ange e-postadress");
+  if (!wellnessState_.pdfBase64) return showToast("PDF saknas — skicka direkt efter utfärdandet");
   const btn = document.getElementById("wellness-mail-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Skickar…"; }
   google.script.run
@@ -9272,13 +9398,13 @@ function emailWellnessReceipt_() {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte skicka");
       wellnessState_.receipt = res.receipt || r;
       renderWellnessTool_();
-      showToast(res.demo ? "Demoläge: mejl skickas inte på riktigt" : "Kvitto skickat");
+      showToast(res.demo ? "Demoläge: mejl skickas inte på riktigt" : "Kvitto skickat som PDF-bilaga");
     })
     .withFailureHandler((err) => {
       if (btn) { btn.disabled = false; btn.textContent = "Skicka e-post"; }
       showToast(String(err && err.message ? err.message : err));
     })
-    .emailWellnessReceipt({ id: r.id, email });
+    .emailWellnessReceipt({ id: r.id, email, pdfBase64: wellnessState_.pdfBase64 });
 }
 
 if (document.readyState === "loading") {

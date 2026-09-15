@@ -4,14 +4,13 @@
  * POST / (eller /api)  → { action, token, args } JSON (text/plain eller application/json)
  * GET  /img/<key>      → R2-bild
  * GET  /verif/<uuid>.pdf → verifikations-PDF
- * GET  /friskvard/<uuid>.pdf → friskvårdskvitto
  * GET  /               → health
  */
 
 import { dispatch } from "./api.js";
 import { serveImage } from "./images.js";
 import { serveVerifPdf } from "./verif.js";
-import { serveWellnessPdf } from "./friskvard.js";
+import { purgeExpiredWellnessReceipts } from "./friskvard.js";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -57,15 +56,6 @@ export default {
       return new Response(res.body, { status: res.status, headers });
     }
 
-    if (request.method === "GET" && (url.pathname.startsWith("/friskvard/") || url.pathname.startsWith("/friskvard%2F"))) {
-      const key = url.pathname.replace(/^\/friskvard\/?/, "");
-      const res = await serveWellnessPdf(env, key);
-      if (!res) return new Response("Not found", { status: 404, headers: CORS_HEADERS });
-      const headers = new Headers(res.headers);
-      for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
-      return new Response(res.body, { status: res.status, headers });
-    }
-
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/api")) {
       return jsonResponse({ ok: true, app: "WallFlow", backend: "cloudflare" });
     }
@@ -88,5 +78,9 @@ export default {
     }
 
     return new Response("Not found", { status: 404, headers: CORS_HEADERS });
+  },
+
+  async scheduled(_event, env) {
+    await purgeExpiredWellnessReceipts(env);
   }
 };

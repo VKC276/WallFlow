@@ -1,7 +1,7 @@
 /** Friskvårdskvitto: utfärda, lagra PDF, mejla. */
 
-import { canIssueWellnessReceipt, hashPassword, validateEmail } from "./auth.js";
-import { findUser, todayStockholm } from "./db.js";
+import { canIssueWellnessReceipt, hashPassword, isSuperadminRole, roleOf, validateEmail } from "./auth.js";
+import { findUser, getSetting, setSetting, todayStockholm } from "./db.js";
 import { roundMoney } from "./time.js";
 import { mailWellnessReceipt } from "./mail.js";
 
@@ -12,7 +12,62 @@ export const WELLNESS_ORG_LEGAL =
   "Ideell förening som inte är momsregistrerad";
 export const WELLNESS_ORG_VAT =
   "Moms utgår inte. Beloppet avser 0 kr moms.";
+export const DEFAULT_RETENTION_DAYS = 90;
+export const MIN_RETENTION_DAYS = 14;
+export const MAX_RETENTION_DAYS = 730;
 export const MAX_PDF_BASE64_CHARS = 9000000;
+
+export const WELLNESS_SETTING_KEYS = {
+  name: "wellnessOrgName",
+  orgNr: "wellnessOrgNr",
+  street: "wellnessOrgStreet",
+  postal: "wellnessOrgPostal",
+  city: "wellnessOrgCity",
+  legal: "wellnessOrgLegal",
+  vat: "wellnessOrgVat",
+  retentionDays: "wellnessRetentionDays"
+};
+
+export function canManageWellnessSettings(session) {
+  return isSuperadminRole(roleOf(session));
+}
+
+export function normalizeRetentionDays(raw) {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_RETENTION_DAYS;
+  if (n < MIN_RETENTION_DAYS) return MIN_RETENTION_DAYS;
+  if (n > MAX_RETENTION_DAYS) return MAX_RETENTION_DAYS;
+  return n;
+}
+
+function formatOrgAddress(street, postal, city) {
+  const line2 = [clipText(postal, 20), clipText(city, 80)].filter(Boolean).join(" ");
+  return [clipText(street, 120), line2].filter(Boolean).join(", ");
+}
+
+export async function readOrgProfile(env) {
+  const orgName = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.name, WELLNESS_ORG_NAME), 120) || WELLNESS_ORG_NAME;
+  const orgNr = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.orgNr, WELLNESS_ORG_NR), 20) || WELLNESS_ORG_NR;
+  const orgStreet = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.street, ""), 120);
+  const orgPostal = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.postal, ""), 20);
+  const orgCity = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.city, ""), 80);
+  const orgLegal = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.legal, WELLNESS_ORG_LEGAL), 200) || WELLNESS_ORG_LEGAL;
+  const orgVat = clipText(await getSetting(env, WELLNESS_SETTING_KEYS.vat, WELLNESS_ORG_VAT), 200) || WELLNESS_ORG_VAT;
+  const retentionDays = normalizeRetentionDays(
+    await getSetting(env, WELLNESS_SETTING_KEYS.retentionDays, String(DEFAULT_RETENTION_DAYS))
+  );
+  return {
+    orgName,
+    orgNr,
+    orgStreet,
+    orgPostal,
+    orgCity,
+    orgAddress: formatOrgAddress(orgStreet, orgPostal, orgCity) || WELLNESS_ORG_ADDRESS,
+    orgLegal,
+    orgVat,
+    retentionDays
+  };
+}
 
 function clipText(raw, max) {
   return String(raw == null ? "" : raw).replace(/\s+/g, " ").trim().slice(0, max);
@@ -66,33 +121,8 @@ function looksLikePdf(bytes) {
   return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
 }
 
-export function isWellnessPdfKey(key) {
-  return /^friskvard\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/i.test(
-    String(key || "").trim()
-  );
-}
-
-export function appWellnessUrl(env, key, origin) {
-  const fromEnv = String((env && env.API_PUBLIC_URL) || "").trim().replace(/\/+$/, "");
-  const fromReq = String(origin || "").trim().replace(/\/+$/, "");
-  const base = fromReq || fromEnv || "https://wallflow.muddy-rice-38d4.workers.dev";
-  const leaf = String(key || "").replace(/^friskvard\//, "");
-  return base + "/friskvard/" + encodeURIComponent(leaf);
-}
-
-function orgMeta() {
-  return {
-    orgName: WELLNESS_ORG_NAME,
-    orgNr: WELLNESS_ORG_NR,
-    orgAddress: WELLNESS_ORG_ADDRESS,
-    orgLegal: WELLNESS_ORG_LEGAL,
-    orgVat: WELLNESS_ORG_VAT
-  };
-}
-
-function mapRow(row, env, origin) {
+function mapRow(row, env, origin, org) {
   if (!row) return null;
-  const hasPdf = !!String(row.pdf_key || "").trim();
   return {
     id: row.id,
     receiptNo: row.receipt_no,
@@ -107,11 +137,10 @@ function mapRow(row, env, origin) {
     issuerUsername: row.issuer_username,
     issuerName: row.issuer_name,
     signedAt: row.signed_at,
-    hasPdf,
+    hasPdf: false,
     emailedAt: row.emailed_at || "",
-    downloadUrl: hasPdf ? appWellnessUrl(env, row.pdf_key, origin) : "",
     filename: "friskvardskvitto-" + String(row.receipt_no || "").replace(/\s+/g, "") + ".pdf",
-    ...orgMeta()
+    ...(org || {})
   };
 }
 
@@ -135,21 +164,68 @@ async function nextReceiptNo(env, year) {
   return prefix + String(n).padStart(4, "0");
 }
 
-async function listRecent(env, origin) {
+async function listRecent(env, origin, org) {
   const { results } = await env.DB.prepare(
     "SELECT * FROM wellness_receipts ORDER BY issued_at DESC LIMIT 40"
   ).all();
-  return (results || []).map((row) => mapRow(row, env, origin));
+  return (results || []).map((row) => mapRow(row, env, origin, org));
+}
+
+export async function purgeExpiredWellnessReceipts(env) {
+  const org = await readOrgProfile(env);
+  const cutoff = new Date(Date.now() - org.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const del = await env.DB.prepare("DELETE FROM wellness_receipts WHERE issued_at < ?").bind(cutoff).run();
+  const deleted = Number((del && del.meta && del.meta.changes) || 0);
+  return { ok: true, deleted, cutoff, retentionDays: org.retentionDays };
 }
 
 export async function getWellnessApp(env, session, origin) {
   if (!canIssueWellnessReceipt(session)) return deny();
+  try {
+    await purgeExpiredWellnessReceipts(env);
+  } catch (_) { /* rensning får inte blockera utfärdandet */ }
+  const org = await readOrgProfile(env);
   return {
     ok: true,
     today: todayStockholm(),
-    receipts: await listRecent(env, origin),
-    ...orgMeta()
+    receipts: await listRecent(env, origin, org),
+    canManage: canManageWellnessSettings(session),
+    ...org
   };
+}
+
+export async function getWellnessSettings(env, session) {
+  if (!canManageWellnessSettings(session)) {
+    return { ok: false, error: "Bara superadmin kan ändra föreningsuppgifter" };
+  }
+  const org = await readOrgProfile(env);
+  return { ok: true, ...org };
+}
+
+export async function saveWellnessSettings(env, payload, session) {
+  if (!canManageWellnessSettings(session)) {
+    return { ok: false, error: "Bara superadmin kan ändra föreningsuppgifter" };
+  }
+  payload = payload && typeof payload === "object" ? payload : {};
+  const orgName = clipText(payload.orgName || payload.name, 120);
+  const orgNr = clipText(payload.orgNr, 20);
+  if (!orgName) return { ok: false, error: "Ange föreningens namn" };
+  if (!orgNr) return { ok: false, error: "Ange organisationsnummer" };
+  const orgStreet = clipText(payload.orgStreet || payload.street, 120);
+  const orgPostal = clipText(payload.orgPostal || payload.postalCode, 20);
+  const orgCity = clipText(payload.orgCity || payload.city, 80);
+  const orgLegal = clipText(payload.orgLegal || payload.legal, 200) || WELLNESS_ORG_LEGAL;
+  const orgVat = clipText(payload.orgVat || payload.vat, 200) || WELLNESS_ORG_VAT;
+  const retentionDays = normalizeRetentionDays(payload.retentionDays);
+  await setSetting(env, WELLNESS_SETTING_KEYS.name, orgName);
+  await setSetting(env, WELLNESS_SETTING_KEYS.orgNr, orgNr);
+  await setSetting(env, WELLNESS_SETTING_KEYS.street, orgStreet);
+  await setSetting(env, WELLNESS_SETTING_KEYS.postal, orgPostal);
+  await setSetting(env, WELLNESS_SETTING_KEYS.city, orgCity);
+  await setSetting(env, WELLNESS_SETTING_KEYS.legal, orgLegal);
+  await setSetting(env, WELLNESS_SETTING_KEYS.vat, orgVat);
+  await setSetting(env, WELLNESS_SETTING_KEYS.retentionDays, String(retentionDays));
+  return { ok: true, ...(await readOrgProfile(env)) };
 }
 
 export async function issueWellnessReceipt(env, payload, session, origin) {
@@ -157,6 +233,7 @@ export async function issueWellnessReceipt(env, payload, session, origin) {
   payload = payload && typeof payload === "object" ? payload : {};
   const pw = await verifySessionPassword(env, session, payload.password);
   if (!pw.ok) return pw;
+  const org = await readOrgProfile(env);
 
   const recipientName = clipText(payload.recipientName || payload.name, 120);
   if (!recipientName) return { ok: false, error: "Ange vem kvittot gäller" };
@@ -209,17 +286,22 @@ export async function issueWellnessReceipt(env, payload, session, origin) {
   ).run();
 
   const row = await getRow(env, id);
-  return { ok: true, receipt: mapRow(row, env, origin) };
+  return { ok: true, receipt: mapRow(row, env, origin, org) };
 }
 
-export async function saveWellnessReceiptPdf(env, payload, session, origin) {
+export async function emailWellnessReceipt(env, payload, session, origin) {
   if (!canIssueWellnessReceipt(session)) return deny();
   payload = payload && typeof payload === "object" ? payload : {};
   const row = await getRow(env, payload.id);
   if (!row) return { ok: false, error: "Kvittot hittades inte" };
 
+  let to = String(payload.email || row.recipient_email || "").trim().toLowerCase();
+  const check = validateEmail(to);
+  if (!check.ok) return { ok: false, error: "Ange en giltig e-postadress" };
+  to = check.email;
+
   const pdfRaw = String(payload.pdfBase64 || "");
-  if (!pdfRaw) return { ok: false, error: "PDF saknas" };
+  if (!pdfRaw) return { ok: false, error: "PDF saknas — stanna på kvittot och skicka direkt efter utfärdandet" };
   if (pdfRaw.length > MAX_PDF_BASE64_CHARS) {
     return { ok: false, error: "PDF:en är för stor" };
   }
@@ -236,37 +318,9 @@ export async function saveWellnessReceiptPdf(env, payload, session, origin) {
     return { ok: false, error: "PDF:en är för stor" };
   }
 
-  const key = "friskvard/" + row.id + ".pdf";
-  await env.BILDER.put(key, bytes, {
-    httpMetadata: { contentType: "application/pdf" },
-    customMetadata: {
-      username: String(session.username || ""),
-      receipt: String(row.receipt_no || "")
-    }
-  });
-  await env.DB.prepare("UPDATE wellness_receipts SET pdf_key = ? WHERE id = ?").bind(key, row.id).run();
-  const next = await getRow(env, row.id);
-  return { ok: true, receipt: mapRow(next, env, origin) };
-}
-
-export async function emailWellnessReceipt(env, payload, session, origin) {
-  if (!canIssueWellnessReceipt(session)) return deny();
-  payload = payload && typeof payload === "object" ? payload : {};
-  const row = await getRow(env, payload.id);
-  if (!row) return { ok: false, error: "Kvittot hittades inte" };
-  if (!row.pdf_key) return { ok: false, error: "PDF saknas — signera kvittot igen" };
-
-  let to = String(payload.email || row.recipient_email || "").trim().toLowerCase();
-  const check = validateEmail(to);
-  if (!check.ok) return { ok: false, error: "Ange en giltig e-postadress" };
-  to = check.email;
-
-  const obj = await env.BILDER.get(row.pdf_key);
-  if (!obj) return { ok: false, error: "PDF:en saknas i lagringen" };
-  const bytes = new Uint8Array(await obj.arrayBuffer());
-  const mapped = mapRow(row, env, origin);
+  const org = await readOrgProfile(env);
+  const mapped = mapRow(row, env, origin, org);
   mapped.recipientEmail = to;
-  mapped.downloadUrl = appWellnessUrl(env, row.pdf_key, origin);
 
   try {
     await mailWellnessReceipt(env, {
@@ -274,7 +328,6 @@ export async function emailWellnessReceipt(env, payload, session, origin) {
       name: row.recipient_name,
       filename: mapped.filename,
       pdfBytes: bytes,
-      downloadUrl: mapped.downloadUrl,
       meta: mapped
     });
   } catch (err) {
@@ -290,19 +343,5 @@ export async function emailWellnessReceipt(env, payload, session, origin) {
     "UPDATE wellness_receipts SET recipient_email = ?, emailed_at = ? WHERE id = ?"
   ).bind(to, emailedAt, row.id).run();
   const next = await getRow(env, row.id);
-  return { ok: true, receipt: mapRow(next, env, origin) };
-}
-
-export async function serveWellnessPdf(env, idOrKey) {
-  let key = decodeURIComponent(String(idOrKey || "").trim()).replace(/^\/+/, "");
-  if (!key.startsWith("friskvard/")) key = "friskvard/" + key;
-  if (!key.toLowerCase().endsWith(".pdf")) key += ".pdf";
-  if (!isWellnessPdfKey(key)) return null;
-  const obj = await env.BILDER.get(key);
-  if (!obj) return null;
-  const headers = new Headers();
-  headers.set("Content-Type", "application/pdf");
-  headers.set("Content-Disposition", 'inline; filename="friskvardskvitto.pdf"');
-  headers.set("Cache-Control", "private, max-age=86400");
-  return new Response(obj.body, { headers });
+  return { ok: true, receipt: mapRow(next, env, origin, org) };
 }

@@ -235,9 +235,7 @@ export async function mailWellnessReceipt(env, opts) {
     notes: [
       "PDF:en ligger bifogad i det här mejlet.",
       "Föreningen är en ideell förening som inte betalar moms."
-    ],
-    ctaLabel: "Öppna PDF",
-    ctaUrl: opts.downloadUrl
+    ]
   });
   const attachments = [];
   if (opts.pdfBytes && opts.filename) {
