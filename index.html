@@ -8413,6 +8413,15 @@ async function submitVerif_() {
   }
   if (btn) { btn.disabled = false; btn.textContent = "Skapa och ladda ner PDF"; }
 }
+function uint8ToBase64_(raw) {
+  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw || []);
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+  }
+  return btoa(binary);
+}
 function downloadBytes_(bytes, filename) {
   const blob = new Blob([bytes], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
@@ -9356,12 +9365,7 @@ async function buildWellnessPdf_(receipt) {
   ], 10, 13);
   const bytes = await doc.save();
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < u8.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
-  }
-  return { bytes: u8, base64: btoa(binary), filename: receipt.filename || "friskvardskvitto.pdf" };
+  return { bytes: u8, base64: uint8ToBase64_(u8), filename: receipt.filename || "friskvardskvitto.pdf" };
 }
 function downloadWellnessReceipt_() {
   if (wellnessState_.pdfBytes) {
@@ -9389,7 +9393,16 @@ function emailWellnessReceipt_() {
   if (!r) return;
   const email = val_("wellness-send-email") || r.recipientEmail;
   if (!email || email.indexOf("@") < 1) return showToast("Ange e-postadress");
-  if (!wellnessState_.pdfBase64) return showToast("PDF saknas — skicka direkt efter utfärdandet");
+  let b64 = String(wellnessState_.pdfBase64 || "").trim();
+  if (!b64 && wellnessState_.pdfBytes) {
+    try {
+      b64 = uint8ToBase64_(wellnessState_.pdfBytes);
+      wellnessState_.pdfBase64 = b64;
+    } catch (err) {
+      return showToast("Kunde inte läsa PDF:en för mejl");
+    }
+  }
+  if (!b64) return showToast("PDF saknas — skicka direkt efter utfärdandet");
   const btn = document.getElementById("wellness-mail-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Skickar…"; }
   google.script.run
@@ -9404,7 +9417,7 @@ function emailWellnessReceipt_() {
       if (btn) { btn.disabled = false; btn.textContent = "Skicka e-post"; }
       showToast(String(err && err.message ? err.message : err));
     })
-    .emailWellnessReceipt({ id: r.id, email, pdfBase64: wellnessState_.pdfBase64 });
+    .emailWellnessReceipt({ id: r.id, email, pdfBase64: b64 });
 }
 
 if (document.readyState === "loading") {
