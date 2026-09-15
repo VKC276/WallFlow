@@ -5912,7 +5912,7 @@ function renderAdminHome() {
     ${canIssueWellnessReceipt_() ? `
     <div class="admin-card">
       <h3>Friskvårdskvitto</h3>
-      <p class="small mb-3" style="color:var(--muted);">Utfärda kvitto för medlemskap och annan friskvård. Signeras med lösenord och kan mejlas eller skrivas ut.</p>
+      <p class="small mb-3" style="color:var(--muted);">Utfärda kvitto för årskort, halvårskort, 10-kort eller engångsklättring. Signeras med lösenord och kan mejlas eller skrivas ut.</p>
       <div class="admin-actions">
         <button class="btn btn-ghost" type="button" onclick="openWellnessTool()">Öppna friskvårdskvitto</button>
       </div>
@@ -8913,14 +8913,12 @@ function loadTencardList_(keepResult) {
 }
 
 const WELLNESS_PRODUCTS_ = [
-  { id: "membership", label: "Årsmedlemskap" },
-  { id: "family", label: "Familjemedlemskap" },
+  { id: "yearcard", label: "Årskort" },
+  { id: "halfyear", label: "Halvårskort" },
   { id: "tencard", label: "10-kort" },
-  { id: "term", label: "Terminskort" },
-  { id: "entry", label: "Engångsklättring" },
-  { id: "other", label: "Annat" }
+  { id: "entry", label: "Engångsklättring" }
 ];
-let wellnessState_ = { step: 1, product: "membership", receipt: null, pdfBytes: null, receipts: [], today: "" };
+let wellnessState_ = { step: 1, product: "yearcard", receipt: null, pdfBytes: null, receipts: [], today: "" };
 
 function hideWellnessOverlay_() {
   const el = document.getElementById("app-wellness");
@@ -8995,7 +8993,7 @@ function loadWellnessTool_() {
 function wellnessPickProduct_(id) {
   wellnessState_.product = id;
   const desc = document.getElementById("wellness-desc");
-  if (desc && id !== "other") desc.value = wellnessProductLabel_(id);
+  if (desc) desc.value = wellnessProductLabel_(id);
   const chips = document.querySelector(".wellness-chips");
   if (!chips) return;
   chips.querySelectorAll(".btn").forEach((btn, i) => {
@@ -9022,11 +9020,11 @@ function renderWellnessTool_(keepForm) {
     main.innerHTML = renderWellnessStep2_();
     return;
   }
-  const product = wellnessState_.product || "membership";
+  const product = wellnessState_.product || "yearcard";
   const chips = WELLNESS_PRODUCTS_.map((p) =>
     `<button type="button" class="btn btn-sm ${p.id === product ? "btn-accent is-on" : "btn-ghost"}" onclick="wellnessPickProduct_('${p.id}')">${escapeHtml_(p.label)}</button>`
   ).join("");
-  const defaultDesc = product === "other" ? "" : wellnessProductLabel_(product);
+  const defaultDesc = wellnessProductLabel_(product);
   const year = String((wellnessState_.today || currentYmd_()).slice(0, 4));
   const recent = (wellnessState_.receipts || []).slice(0, 8).map((r) =>
     `<tr>
@@ -9054,7 +9052,7 @@ function renderWellnessTool_(keepForm) {
       <label class="form-label" for="wellness-idnr">Personnummer (valfritt)</label>
       <input id="wellness-idnr" class="form-control mb-2" inputmode="numeric" autocomplete="off" placeholder="ÅÅMMDD-XXXX" value="${escapeHtml_((draft && draft.idnr) || "")}">
       <label class="form-label" for="wellness-desc">Vad som har köpts</label>
-      <input id="wellness-desc" class="form-control mb-2" placeholder="T.ex. årsmedlemskap" value="${escapeHtml_((draft && draft.desc) || defaultDesc)}">
+      <input id="wellness-desc" class="form-control mb-2" placeholder="T.ex. årskort" value="${escapeHtml_((draft && draft.desc) || defaultDesc)}">
       <label class="form-label" for="wellness-period">Period (valfritt)</label>
       <input id="wellness-period" class="form-control mb-2" placeholder="t.ex. kalenderåret ${escapeHtml_(year)}" value="${escapeHtml_((draft && draft.period) || "")}">
       <div class="row g-2">
