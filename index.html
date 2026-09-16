@@ -9089,6 +9089,8 @@ const WELLNESS_PRODUCTS_ = [
   { id: "tencard", label: "10-kort" },
   { id: "entry", label: "Engångsklättring" }
 ];
+const WELLNESS_MEMBERSHIP_NOTE_ =
+  "Ersättning för medlemskap omfattas inte enligt Skatteverkets regler.";
 let wellnessState_ = { step: 1, product: "yearcard", receipt: null, pdfBytes: null, pdfBase64: "", receipts: [], today: "", org: null, fromArchive: false };
 
 function hideWellnessOverlay_() {
@@ -9216,6 +9218,7 @@ function renderWellnessTool_(keepForm) {
       <p class="small mb-3" style="color:var(--muted);">
         Kvittot följer Skatteverkets krav för friskvårdsbidrag: vad som köpts, belopp och säljarens identitet.
         ${escapeHtml_(org.orgName || "Föreningen")} anges som ${escapeHtml_(org.orgLegal || "ideell förening som inte betalar moms")}.
+        ${escapeHtml_(WELLNESS_MEMBERSHIP_NOTE_)}
         Du signerar med ditt lösenord. Utfärdade kvitton rensas efter ${escapeHtml_(String(keepDays))} dagar.
       </p>
       <div class="wellness-chips">${chips}</div>
@@ -9226,7 +9229,8 @@ function renderWellnessTool_(keepForm) {
       <label class="form-label" for="wellness-idnr">Personnummer (valfritt)</label>
       <input id="wellness-idnr" class="form-control mb-2" inputmode="numeric" autocomplete="off" placeholder="ÅÅMMDD-XXXX" value="${escapeHtml_((draft && draft.idnr) || "")}">
       <label class="form-label" for="wellness-desc">Vad som har köpts</label>
-      <input id="wellness-desc" class="form-control mb-2" placeholder="T.ex. årskort" value="${escapeHtml_((draft && draft.desc) || defaultDesc)}">
+      <input id="wellness-desc" class="form-control mb-1" placeholder="T.ex. årskort" value="${escapeHtml_((draft && draft.desc) || defaultDesc)}">
+      <p class="small mb-2" style="color:var(--muted);">${escapeHtml_(WELLNESS_MEMBERSHIP_NOTE_)}</p>
       <label class="form-label" for="wellness-period">Period (valfritt)</label>
       <input id="wellness-period" class="form-control mb-2" placeholder="t.ex. kalenderåret ${escapeHtml_(year)}" value="${escapeHtml_((draft && draft.period) || "")}">
       <div class="row g-2">
@@ -9272,6 +9276,7 @@ function wellnessFactRows_(r) {
     r.recipientIdnr ? ["Personnr", r.recipientIdnr] : null,
     r.recipientEmail ? ["E-post", r.recipientEmail] : null,
     ["Vad", r.description + (r.period ? " (" + r.period + ")" : "")],
+    ["Obs", WELLNESS_MEMBERSHIP_NOTE_],
     ["Belopp", formatSek_(r.amount)],
     ["Moms", "0,00 kr"],
     ["Köpdatum", r.purchaseDate || ""],
@@ -9457,6 +9462,7 @@ async function buildWellnessPdf_(receipt) {
     receipt.recipientEmail ? ["E-post", receipt.recipientEmail] : null,
     ["Köpdatum", receipt.purchaseDate],
     ["Vad", receipt.description + (receipt.period ? " (" + receipt.period + ")" : "")],
+    ["Obs", WELLNESS_MEMBERSHIP_NOTE_],
     ["Belopp", formatSek_(receipt.amount).replace(/\s/g, " ")],
     ["Moms", "0,00 kr"]
   ].filter(Boolean);
@@ -9473,7 +9479,7 @@ async function buildWellnessPdf_(receipt) {
   y -= 16;
   block([
     receipt.orgVat || "Moms utgår inte. Beloppet avser 0 kr moms.",
-    "Kvittot avser motion och annan friskvård enligt inkomstskattelagen och Skatteverkets regler om friskvårdsbidrag. Det kan lämnas till arbetsgivaren som underlag."
+    "Kvittot avser motion och annan friskvård enligt inkomstskattelagen och Skatteverkets regler om friskvårdsbidrag. Det kan lämnas till arbetsgivaren som underlag. " + WELLNESS_MEMBERSHIP_NOTE_
   ], 10, 13);
   y -= 10;
   drawText("Digital underskrift", margin, y, 11, true);

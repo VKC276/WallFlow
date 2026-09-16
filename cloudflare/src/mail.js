@@ -224,7 +224,7 @@ export async function mailWellnessReceipt(env, opts) {
     name: opts.name,
     subject: "friskvårdskvitto " + String(meta.receiptNo || ""),
     intro:
-      "Här är ditt kvitto för friskvård från Västerviks klätterklubb. Kvittot kan lämnas till arbetsgivaren som underlag för friskvårdsbidrag.",
+      "Här är ditt kvitto för friskvård från Västerviks klätterklubb. Kvittot kan lämnas till arbetsgivaren som underlag för friskvårdsbidrag. Ersättning för medlemskap omfattas inte enligt Skatteverkets regler.",
     rows: [
       { label: "Kvitto nr", value: String(meta.receiptNo || "") },
       { label: "Vad", value: String(meta.description || "") },
@@ -234,7 +234,8 @@ export async function mailWellnessReceipt(env, opts) {
     ],
     notes: [
       "PDF:en ligger bifogad i det här mejlet.",
-      "Föreningen är en ideell förening som inte betalar moms."
+      "Föreningen är en ideell förening som inte betalar moms.",
+      "Ersättning för medlemskap omfattas inte enligt Skatteverkets regler."
     ]
   });
   const attachments = [];
