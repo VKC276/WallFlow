@@ -936,6 +936,7 @@
     }
     .wellness-facts dt { color: var(--muted); margin: 0; }
     .wellness-facts dd { margin: 0; font-weight: 600; }
+    .wellness-delete { color: #b42318; border-color: color-mix(in srgb, #b42318 35%, var(--line)); }
     .wall-reset-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .wall-reset-list {
       max-height: 340px; overflow-y: auto; border: 1px solid var(--line);
@@ -2316,9 +2317,11 @@ function demoMapWellness_(row, store) {
 function demoWellnessApi_(store, action, args) {
   const payload = args[0] || {};
   if (!Array.isArray(store.wellnessReceipts)) store.wellnessReceipts = [];
-  if (action === "getWellnessSettings" || action === "saveWellnessSettings") {
+  if (action === "getWellnessSettings" || action === "saveWellnessSettings" || action === "deleteWellnessReceipt") {
     if (String(currentUser.role) !== "superadmin") {
-      return { ok: false, error: "Bara superadmin kan ändra föreningsuppgifter" };
+      return { ok: false, error: action === "deleteWellnessReceipt"
+        ? "Bara superadmin kan ta bort kvitton"
+        : "Bara superadmin kan ändra föreningsuppgifter" };
     }
   } else if (!demoCanManageTencards_()) {
     return { ok: false, error: "Saknar behörighet" };
@@ -2413,6 +2416,14 @@ function demoWellnessApi_(store, action, args) {
     row.emailedAt = new Date().toISOString();
     saveDemoDb_(store);
     return { ok: true, receipt: demoMapWellness_(row, store), demo: true };
+  }
+  if (action === "deleteWellnessReceipt") {
+    const idx = store.wellnessReceipts.findIndex((x) => String(x.id) === String(payload.id));
+    if (idx < 0) return { ok: false, error: "Kvittot hittades inte" };
+    const removed = store.wellnessReceipts[idx];
+    store.wellnessReceipts.splice(idx, 1);
+    saveDemoDb_(store);
+    return { ok: true, id: removed.id, receiptNo: removed.receiptNo };
   }
   return { ok: false, error: "Okänd action: " + action };
 }
@@ -2888,7 +2899,7 @@ function demoApi_(action, args) {
       if (action === "listTencards" || action === "lookupTencard" || action === "saveTencard" || action === "clipTencard" || action === "deleteTencard") {
         return ok(demoTencardApi_(store, action, args));
       }
-      if (action === "getWellnessApp" || action === "getWellnessReceipt" || action === "issueWellnessReceipt" || action === "emailWellnessReceipt" || action === "getWellnessSettings" || action === "saveWellnessSettings") {
+      if (action === "getWellnessApp" || action === "getWellnessReceipt" || action === "issueWellnessReceipt" || action === "emailWellnessReceipt" || action === "deleteWellnessReceipt" || action === "getWellnessSettings" || action === "saveWellnessSettings") {
         return ok(demoWellnessApi_(store, action, args));
       }
       return fail("Okänd action: " + action);
@@ -3015,6 +3026,9 @@ function canManageTencards_() {
 }
 function canIssueWellnessReceipt_() {
   return canManageTencards_();
+}
+function canDeleteWellnessReceipt_() {
+  return userRole_() === "superadmin" || !!(wellnessState_.org && wellnessState_.org.canManage);
 }
 function canOpenAdministration_() {
   return canManageUsersRole() || canManageRouteStructureRole() || canManageLifetimeRole() || canTimeAdmin_();
@@ -9287,6 +9301,7 @@ function renderWellnessStep2_() {
         <button class="btn btn-ghost" type="button" onclick="downloadWellnessReceipt_()">Ladda ner PDF</button>
       </div>
       <button class="btn btn-ghost w-100" type="button" onclick="resetWellnessForm_()">${fromArchive ? "Tillbaka till listan" : "Nytt kvitto"}</button>
+      ${canDeleteWellnessReceipt_() ? `<button class="btn btn-ghost wellness-delete w-100 mt-2" type="button" id="wellness-del-btn" onclick="deleteWellnessReceipt_()">Ta bort kvitto</button>` : ""}
     </div>`;
 }
 function resetWellnessForm_() {
@@ -9296,6 +9311,29 @@ function resetWellnessForm_() {
   wellnessState_.pdfBase64 = "";
   wellnessState_.fromArchive = false;
   loadWellnessTool_();
+}
+function deleteWellnessReceipt_() {
+  const r = wellnessState_.receipt;
+  if (!r) return;
+  if (!canDeleteWellnessReceipt_()) return showToast("Bara superadmin kan ta bort kvitton");
+  const who = r.recipientName ? " till " + r.recipientName : "";
+  if (!confirm("Ta bort kvitto " + (r.receiptNo || "") + who + "?\nDetta går inte att ångra.")) return;
+  const btn = document.getElementById("wellness-del-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Tar bort…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        if (btn) { btn.disabled = false; btn.textContent = "Ta bort kvitto"; }
+        return showToast((res && res.error) || "Kunde inte ta bort kvittot");
+      }
+      showToast("Kvitto " + (res.receiptNo || r.receiptNo || "") + " borttaget");
+      resetWellnessForm_();
+    })
+    .withFailureHandler((err) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Ta bort kvitto"; }
+      showToast(String(err && err.message ? err.message : err));
+    })
+    .deleteWellnessReceipt({ id: r.id });
 }
 function openWellnessReceipt_(id) {
   const key = String(id || "").trim();

@@ -202,6 +202,16 @@ export async function getWellnessReceipt(env, payload, session, origin) {
   return { ok: true, receipt: mapRow(row, env, origin, org) };
 }
 
+export async function deleteWellnessReceipt(env, payload, session) {
+  if (!canManageWellnessSettings(session)) {
+    return { ok: false, error: "Bara superadmin kan ta bort kvitton" };
+  }
+  const row = await getRow(env, payload && (payload.id || payload.receiptId));
+  if (!row) return { ok: false, error: "Kvittot hittades inte" };
+  await env.DB.prepare("DELETE FROM wellness_receipts WHERE id = ?").bind(row.id).run();
+  return { ok: true, id: row.id, receiptNo: row.receipt_no };
+}
+
 export async function getWellnessSettings(env, session) {
   if (!canManageWellnessSettings(session)) {
     return { ok: false, error: "Bara superadmin kan ändra föreningsuppgifter" };

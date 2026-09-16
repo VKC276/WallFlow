@@ -87,6 +87,7 @@ import {
   saveTencardAction
 } from "./tencards.js";
 import {
+  deleteWellnessReceipt,
   emailWellnessReceipt,
   getWellnessApp,
   getWellnessReceipt,
@@ -208,6 +209,8 @@ export async function dispatch(env, action, token, args, extras) {
       return issueWellnessReceipt(env, args[0], session, extras && extras.origin);
     case "emailWellnessReceipt":
       return emailWellnessReceipt(env, args[0], session, extras && extras.origin);
+    case "deleteWellnessReceipt":
+      return deleteWellnessReceipt(env, args[0], session);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }
