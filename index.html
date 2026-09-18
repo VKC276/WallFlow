@@ -8260,9 +8260,20 @@ function onVerifClubCardChange_() {
   }
   if (sum) sum.textContent = on ? "Summa inköp" : "Summa utlägg";
 }
-function renderVerifLines_() {
+function snapshotVerifLineValues_() {
+  return {
+    specs: [...document.querySelectorAll("[data-verif-spec]")].map((el) => el.value),
+    amounts: [...document.querySelectorAll("[data-verif-amount]")].map((el) => el.value)
+  };
+}
+function restoreVerifLineValues_(specs, amounts) {
+  [...document.querySelectorAll("[data-verif-spec]")].forEach((el, i) => { el.value = (specs && specs[i]) || ""; });
+  [...document.querySelectorAll("[data-verif-amount]")].forEach((el, i) => { el.value = (amounts && amounts[i]) || ""; });
+}
+function renderVerifLines_(keep) {
   const host = document.getElementById("verif-lines");
   if (!host) return;
+  const snap = keep || snapshotVerifLineValues_();
   const n = Math.max(1, verifLineCount_);
   const html = [];
   for (let i = 0; i < n; i++) {
@@ -8273,6 +8284,7 @@ function renderVerifLines_() {
     </div>`);
   }
   host.innerHTML = html.join("");
+  restoreVerifLineValues_(snap.specs, snap.amounts);
   updateVerifTotal_();
 }
 function addVerifLine_() {
@@ -8280,15 +8292,15 @@ function addVerifLine_() {
   renderVerifLines_();
 }
 function removeVerifLine_(idx) {
-  const specs = [...document.querySelectorAll("[data-verif-spec]")].map((el) => el.value);
-  const amounts = [...document.querySelectorAll("[data-verif-amount]")].map((el) => el.value);
-  specs.splice(idx, 1);
-  amounts.splice(idx, 1);
-  verifLineCount_ = Math.max(1, specs.length);
-  renderVerifLines_();
-  [...document.querySelectorAll("[data-verif-spec]")].forEach((el, i) => { el.value = specs[i] || ""; });
-  [...document.querySelectorAll("[data-verif-amount]")].forEach((el, i) => { el.value = amounts[i] || ""; });
-  updateVerifTotal_();
+  const snap = snapshotVerifLineValues_();
+  snap.specs.splice(idx, 1);
+  snap.amounts.splice(idx, 1);
+  if (!snap.specs.length) {
+    snap.specs = [""];
+    snap.amounts = [""];
+  }
+  verifLineCount_ = Math.max(1, snap.specs.length);
+  renderVerifLines_(snap);
 }
 function readVerifLines_() {
   const specs = [...document.querySelectorAll("[data-verif-spec]")];
