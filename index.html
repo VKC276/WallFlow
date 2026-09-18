@@ -677,17 +677,58 @@
     .verif-files { display: grid; gap: 8px; margin-top: 8px; }
     .verif-file {
       display: flex; justify-content: space-between; align-items: center; gap: 10px;
-      padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2);
+      padding: 6px 8px 6px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2);
       font-size: 0.88rem;
       min-width: 0;
     }
-    .verif-file span {
+    .verif-file-open {
+      display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto;
+      margin: 0; padding: 4px 6px; border: 0; background: transparent; color: inherit;
+      text-align: left; cursor: pointer; border-radius: 10px;
+    }
+    .verif-file-open:hover, .verif-file-open:focus-visible {
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      outline: none;
+    }
+    .verif-file-thumb {
+      flex: 0 0 auto; width: 44px; height: 44px; border-radius: 8px; object-fit: cover;
+      border: 1px solid var(--line); background: var(--img-stage);
+    }
+    .verif-file-pdf {
+      flex: 0 0 auto; width: 44px; height: 44px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.68rem; font-weight: 800; letter-spacing: .04em;
+      color: var(--accent); border: 1px solid var(--line); background: var(--surface);
+    }
+    .verif-file-meta { min-width: 0; display: grid; gap: 2px; }
+    .verif-file-name {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      font-weight: 600;
     }
+    .verif-file-hint { color: var(--muted); font-size: 0.75rem; }
     .verif-file .btn { flex: 0 0 auto; }
+    .verif-file-preview-card {
+      width: min(720px, 100%);
+      max-height: min(92vh, 920px);
+      display: flex;
+      flex-direction: column;
+    }
+    .verif-file-preview-body {
+      min-height: 0; flex: 1 1 auto;
+      background: var(--img-stage);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .verif-file-preview-body img,
+    .verif-file-preview-body iframe {
+      width: 100%; height: min(72vh, 640px); border: 0; background: #111;
+    }
+    .verif-file-preview-body img { object-fit: contain; }
+    .verif-file-preview-empty {
+      padding: 28px 18px; color: var(--muted); text-align: center;
+    }
     .time-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     .time-table th, .time-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     .time-table th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; }
@@ -1710,6 +1751,16 @@
         <button class="btn btn-ghost" type="button" onclick="manualQrInput_()">Mata in kod</button>
         <button class="btn btn-accent" type="button" onclick="closeQrScanner_()">Avbryt</button>
       </div>
+    </div>
+  </div>
+
+  <div id="verif-file-preview" class="qr-scan-overlay" aria-hidden="true" onclick="onVerifFilePreviewBackdrop_(event)">
+    <div class="qr-scan-card verif-file-preview-card" role="dialog" aria-modal="true" aria-labelledby="verif-file-preview-title" onclick="event.stopPropagation()">
+      <div class="qr-scan-head">
+        <strong id="verif-file-preview-title">Kvitto</strong>
+        <button class="icon-btn" type="button" onclick="closeVerifFilePreview_()" aria-label="Stäng förhandsvisning">✕</button>
+      </div>
+      <div class="verif-file-preview-body" id="verif-file-preview-body"></div>
     </div>
   </div>
 
@@ -6409,6 +6460,7 @@ document.addEventListener("keydown", (e) => {
     if (isInventoryOpen_()) return closeInventory_();
     if (isQuickInfoOpen_()) return closeQuickInfo_();
     if (isQrScannerOpen_()) return closeQrScanner_();
+    if (document.getElementById("verif-file-preview") && document.getElementById("verif-file-preview").classList.contains("open")) return closeVerifFilePreview_();
     if (isRouteImageLightboxOpen_()) return closeRouteImageLightbox_();
     if (routeImgEditor_ && routeImgEditor_.open) return cancelRouteImageMark_();
     if (isPanelOpen_()) return closePanel();
@@ -7979,6 +8031,8 @@ function saveTimeSettings_() {
 
 const VERIF_PROFILE_KEY_ = "wallflow_verif_profile_v1";
 let verifFiles_ = [];
+let verifFilePreviewUrls_ = [];
+let verifPreviewUrl_ = "";
 let verifLineCount_ = 1;
 let verifArchiveEmail_ = "inbox.ver.1624638@arkivplats.se";
 let verifCamState_ = { open: false, stream: null };
@@ -8008,6 +8062,8 @@ function openGuestVerifFromRoute_() {
   openVerifTool();
 }
 function closeVerifTool() {
+  closeVerifFilePreview_();
+  revokeVerifFilePreviewUrls_();
   closeVerifCamera_();
   const el = document.getElementById("app-verif");
   if (el) el.classList.remove("show");
@@ -8088,6 +8144,8 @@ function renderVerifForm_(data) {
   const profile = loadVerifProfile_();
   const today = escapeHtml_((data && data.today) || currentYmd_());
   const archive = String((data && data.archiveEmail) || verifArchiveEmail_);
+  closeVerifFilePreview_();
+  revokeVerifFilePreviewUrls_();
   verifFiles_ = [];
   verifLineCount_ = 1;
   document.getElementById("verif-main").innerHTML = `
@@ -8137,12 +8195,12 @@ function renderVerifForm_(data) {
       <input id="verif-date-payout" type="date" class="form-control" value="${today}">
     </div>
     <div class="admin-card">
-      <h3>Gjorda utlägg</h3>
-      <p class="small mb-3" style="color:var(--muted);">Specifikation och belopp i kronor, samma som på blanketten.</p>
+      <h3 id="verif-lines-heading">Gjorda utlägg</h3>
+      <p class="small mb-3" style="color:var(--muted);" id="verif-lines-hint">Specifikation och belopp i kronor, samma som på blanketten.</p>
       <div id="verif-lines"></div>
       <button class="btn btn-ghost btn-sm mt-1" type="button" onclick="addVerifLine_()">+ Lägg till rad</button>
       <div class="time-total">
-        <div class="time-total-row grand"><span>Summa utlägg</span><span class="num" id="verif-total">0,00 kr</span></div>
+        <div class="time-total-row grand"><span id="verif-sum-label">Summa utlägg</span><span class="num" id="verif-total">0,00 kr</span></div>
       </div>
     </div>
     <div class="admin-card" id="verif-bank-card">
@@ -8191,6 +8249,16 @@ function onVerifClubCardChange_() {
   if (bank) bank.style.display = on ? "none" : "";
   if (card) card.style.display = on ? "" : "none";
   if (payoutDate) payoutDate.style.display = on ? "none" : "";
+  const heading = document.getElementById("verif-lines-heading");
+  const hint = document.getElementById("verif-lines-hint");
+  const sum = document.getElementById("verif-sum-label");
+  if (heading) heading.textContent = on ? "Gjorda inköp" : "Gjorda utlägg";
+  if (hint) {
+    hint.textContent = on
+      ? "Specifikation och belopp i kronor för inköpen."
+      : "Specifikation och belopp i kronor, samma som på blanketten.";
+  }
+  if (sum) sum.textContent = on ? "Summa inköp" : "Summa utlägg";
 }
 function renderVerifLines_() {
   const host = document.getElementById("verif-lines");
@@ -8372,21 +8440,88 @@ function onVerifFiles_(ev) {
   ev.target.value = "";
   renderVerifFileList_();
 }
+function isVerifPdfFile_(file) {
+  const mime = String((file && file.type) || "").toLowerCase();
+  const name = String((file && file.name) || "").toLowerCase();
+  return mime === "application/pdf" || name.endsWith(".pdf");
+}
+function isVerifImageFile_(file) {
+  return String((file && file.type) || "").toLowerCase().startsWith("image/");
+}
+function revokeVerifFilePreviewUrls_() {
+  (verifFilePreviewUrls_ || []).forEach((u) => {
+    try { URL.revokeObjectURL(u); } catch (_) { /* ignore */ }
+  });
+  verifFilePreviewUrls_ = [];
+}
 function renderVerifFileList_() {
   const host = document.getElementById("verif-file-list");
   if (!host) return;
+  revokeVerifFilePreviewUrls_();
   if (!verifFiles_.length) {
     host.innerHTML = "";
     return;
   }
-  host.innerHTML = verifFiles_.map((f, i) =>
-    `<div class="verif-file"><span>Bild ${i + 1}</span>
-     <button class="btn btn-ghost btn-sm" type="button" onclick="removeVerifFile_(${i})">Ta bort</button></div>`
-  ).join("");
+  host.innerHTML = verifFiles_.map((f, i) => {
+    const label = escapeHtml_(f.name || ("Kvitto " + (i + 1)));
+    let thumb = `<span class="verif-file-pdf" aria-hidden="true">PDF</span>`;
+    if (isVerifImageFile_(f)) {
+      const url = URL.createObjectURL(f);
+      verifFilePreviewUrls_.push(url);
+      thumb = `<img class="verif-file-thumb" alt="" src="${url}">`;
+    } else if (!isVerifPdfFile_(f)) {
+      thumb = `<span class="verif-file-pdf" aria-hidden="true">FIL</span>`;
+    }
+    return `<div class="verif-file">
+      <button type="button" class="verif-file-open" onclick="openVerifFilePreview_(${i})">
+        ${thumb}
+        <span class="verif-file-meta">
+          <span class="verif-file-name">${label}</span>
+          <span class="verif-file-hint">Tryck för att visa</span>
+        </span>
+      </button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="removeVerifFile_(${i})">Ta bort</button>
+    </div>`;
+  }).join("");
 }
 function removeVerifFile_(i) {
   verifFiles_.splice(i, 1);
   renderVerifFileList_();
+}
+function onVerifFilePreviewBackdrop_(ev) {
+  if (ev && ev.target && ev.target.id === "verif-file-preview") closeVerifFilePreview_();
+}
+function closeVerifFilePreview_() {
+  const overlay = document.getElementById("verif-file-preview");
+  const body = document.getElementById("verif-file-preview-body");
+  if (overlay) {
+    overlay.classList.remove("open");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  if (body) body.innerHTML = "";
+  if (verifPreviewUrl_) {
+    try { URL.revokeObjectURL(verifPreviewUrl_); } catch (_) { /* ignore */ }
+    verifPreviewUrl_ = "";
+  }
+}
+function openVerifFilePreview_(i) {
+  const file = verifFiles_[i];
+  const overlay = document.getElementById("verif-file-preview");
+  const body = document.getElementById("verif-file-preview-body");
+  const title = document.getElementById("verif-file-preview-title");
+  if (!file || !overlay || !body) return;
+  closeVerifFilePreview_();
+  if (title) title.textContent = file.name || ("Kvitto " + (i + 1));
+  verifPreviewUrl_ = URL.createObjectURL(file);
+  if (isVerifImageFile_(file)) {
+    body.innerHTML = `<img alt="${escapeHtml_(file.name || "Kvitto")}" src="${verifPreviewUrl_}">`;
+  } else if (isVerifPdfFile_(file)) {
+    body.innerHTML = `<iframe title="${escapeHtml_(file.name || "PDF")}" src="${verifPreviewUrl_}"></iframe>`;
+  } else {
+    body.innerHTML = `<p class="verif-file-preview-empty mb-0">Kan inte förhandsgranska den här filtypen. Ta bort den om den är fel.</p>`;
+  }
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
 }
 function val_(id) {
   const el = document.getElementById(id);
@@ -8572,7 +8707,7 @@ async function buildVerifPdf_(payload, files) {
   });
   y -= 8;
   drawText("Nr", margin, y, 9, true, rgb(0.4, 0.45, 0.5));
-  drawText("Gjorda utlägg (specifikation)", margin + 28, y, 9, true, rgb(0.4, 0.45, 0.5));
+  drawText(clubCard ? "Gjorda inköp (specifikation)" : "Gjorda utlägg (specifikation)", margin + 28, y, 9, true, rgb(0.4, 0.45, 0.5));
   drawText("Kr", pageW - margin - 50, y, 9, true, rgb(0.4, 0.45, 0.5));
   y -= 14;
   lines.forEach((row, i) => {
@@ -8585,7 +8720,7 @@ async function buildVerifPdf_(payload, files) {
   });
   y -= 6;
   page.drawLine({ start: { x: margin, y: y + 10 }, end: { x: pageW - margin, y: y + 10 }, thickness: 1, color: rgb(0.8, 0.82, 0.84) });
-  drawText("Summa utlägg", margin, y - 4, 12, true);
+  drawText(clubCard ? "Summa inköp" : "Summa utlägg", margin, y - 4, 12, true);
   drawText(formatSek_(total).replace(/\s/g, " "), pageW - margin - 90, y - 4, 12, true);
   y -= 36;
   if (clubCard) {
