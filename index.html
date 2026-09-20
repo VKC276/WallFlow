@@ -1883,7 +1883,7 @@
     <div class="login-inner">
       <div class="login-card">
         <h2>WallFlow</h2>
-        <p class="login-lead" id="login-lead">Logga in för att se ledbyggnationen eller rapportera tid.</p>
+        <p class="login-lead" id="login-lead">Ange dina användaruppgifter för att logga in</p>
         <div id="login-form-main">
           <div class="mb-3"><input id="admin-user" class="form-control form-control-lg" placeholder="Användarnamn eller e-post" autocomplete="username"></div>
           <div class="mb-3"><input id="admin-pw" class="form-control form-control-lg" type="password" placeholder="Lösenord" autocomplete="current-password" onkeydown="if(event.key==='Enter')checkLogin()"></div>
@@ -1937,7 +1937,7 @@
           <button class="btn btn-ghost w-100" type="button" onclick="showLoginMode_('login')">Tillbaka till inloggning</button>
         </div>
         <div id="login-form-apply-done" style="display:none;">
-          <p class="mb-3" style="color:var(--login-lead); line-height:1.5;">Superadmin får ett mejl och aktiverar kontot. Du kan inte logga in förrän det är gjort — då skickas ett mejl till dig. Använd samma användarnamn och lösenord som du just valde.</p>
+          <p class="mb-3" style="color:var(--login-lead); line-height:1.5;">Administratören får ett mejl och aktiverar kontot. Du kan inte logga in förrän det är gjort — då skickas ett mejl till dig. Använd samma användarnamn och lösenord som du just valde.</p>
           <button class="btn btn-accent btn-lg w-100" type="button" onclick="showLoginMode_('login')">Tillbaka till inloggning</button>
         </div>
         <div id="login-status" role="status" aria-live="polite">
@@ -2627,7 +2627,7 @@ function demoApi_(action, args) {
           return (un === ident || (em && em === ident)) && x.password === String(pw || "");
         });
         if (!u) return ok({ authorized: false });
-        if (u.active === false) return ok({ authorized: false, error: "Kontot väntar på aktivering av superadmin." });
+        if (u.active === false) return ok({ authorized: false, error: "Kontot väntar på aktivering av administratören." });
         __sessionToken = "demo-token-admin";
         return ok({ authorized: true, token: __sessionToken, role: u.role, extraRoles: u.extraRoles || [], username: u.username, name: u.name, email: u.email || "", firstLogin: !!u.FirstLogin });
       }
@@ -5884,15 +5884,17 @@ function showLoginMode_(mode) {
   if (applyDone) applyDone.style.display = mode === "applyDone" ? "" : "none";
   if (applyLink) applyLink.style.display = mode === "login" ? "" : "none";
   if (lead) {
-    lead.textContent = mode === "forgot"
+    const text = mode === "forgot"
       ? "Ange användarnamn eller e-post så skickar vi en återställningslänk om kontot finns."
       : (mode === "reset"
         ? "Välj ett nytt lösenord för ditt konto."
         : (mode === "apply"
-          ? "Fyll i uppgifterna. Superadmin aktiverar kontot innan du kan logga in."
+          ? "Fyll i uppgifterna. Administratören aktiverar kontot innan du kan logga in."
           : (mode === "applyDone"
             ? "Ansökan är skickad."
-            : "Logga in för att se ledbyggnationen eller rapportera tid.")));
+            : "Ange dina användaruppgifter för att logga in")));
+    lead.textContent = text;
+    lead.style.display = "";
   }
   if (mode === "forgot") {
     const el = document.getElementById("forgot-login");
@@ -5909,7 +5911,7 @@ function showLoginMode_(mode) {
   if (mode === "apply") {
     const host = document.getElementById("apply-roles");
     if (host && !host.dataset.ready) {
-      host.innerHTML = roleCheckboxesHtml_("apply-role-", ["scout"], { applicant: true });
+      host.innerHTML = roleCheckboxesHtml_("apply-role-", [], { applicant: true });
       host.dataset.ready = "1";
     }
     setTimeout(() => {
@@ -7452,7 +7454,10 @@ function renderActivateUsers() {
               <div class="small" style="color:var(--muted);">${escapeHtml_(u.username)} · ${escapeHtml_(u.email || "")}</div>
               <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}</div>
             </div>
-            <button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'pending')">Aktivera användare</button>
+            <div class="d-flex flex-column gap-2">
+              <button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'pending')">Aktivera användare</button>
+              <button class="btn btn-sm btn-outline-danger" type="button" onclick="rejectPendingUser_('${escapeHtml_(u.username)}')">Ta bort ansökan</button>
+            </div>
           </div>
         </div>`;
       }).join("");
@@ -7474,6 +7479,20 @@ function activatePendingUser_(username, view) {
       else renderActivateUsers();
     })
     .activateUser(username);
+}
+
+function rejectPendingUser_(username) {
+  if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
+  const who = String(username || "").trim();
+  if (!who) return;
+  if (!confirm("Ta bort ansökan för " + who + "? Kontot raderas och personen kan inte logga in.")) return;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ta bort ansökan");
+      showToast("Ansökan borttagen");
+      renderActivateUsers();
+    })
+    .deleteUserAction(who);
 }
 
 function createUser() {

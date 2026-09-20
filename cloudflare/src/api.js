@@ -257,7 +257,7 @@ async function verifyAdminPassword(env, username, password) {
   const hash = await hashPassword(password, u.salt);
   if (hash !== u.passwordHash) return { authorized: false };
   if (!isUserActive(u)) {
-    return { authorized: false, error: "Kontot väntar på aktivering av superadmin." };
+    return { authorized: false, error: "Kontot väntar på aktivering av administratören." };
   }
 
   const token = crypto.randomUUID();
