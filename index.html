@@ -749,8 +749,8 @@
       #app-time .admin-shell { max-width: none; padding: 0; }
       .time-print-only { display: block !important; }
     }
-    .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .login-card { width: min(360px, 100%); transition: opacity .25s ease; }
+    .login-inner { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
+    .login-card { width: min(400px, 100%); transition: opacity .25s ease; }
     .login-card.is-busy .form-control,
     .login-card.is-busy .form-select { opacity: 0.55; }
     .login-card h2 {
@@ -773,6 +773,13 @@
       text-underline-offset: 2px; cursor: pointer;
     }
     .login-forgot:disabled { opacity: 0.55; cursor: wait; }
+    .login-apply {
+      display: block; margin: 16px 0 0; padding: 0; border: 0; background: none;
+      width: 100%; text-align: center;
+      color: var(--accent); font-size: 0.9rem; text-decoration: underline;
+      text-underline-offset: 2px; cursor: pointer;
+    }
+    .login-apply:disabled { opacity: 0.55; cursor: wait; }
     .login-card .form-control {
       background: var(--login-input-bg) !important;
       border: 1px solid var(--line) !important;
@@ -1900,11 +1907,37 @@
           <button id="reset-btn" class="btn btn-accent btn-lg w-100 mb-2" type="button" onclick="submitPasswordReset_()">Spara nytt lösenord</button>
           <button class="btn btn-ghost w-100" type="button" onclick="showLoginMode_('login')">Tillbaka till inloggning</button>
         </div>
+        <div id="login-form-apply" style="display:none;">
+          <div class="mb-2">
+            <label class="form-label" for="apply-user">Användarnamn</label>
+            <input id="apply-user" class="form-control form-control-sm" placeholder="t.ex. jesper" autocomplete="username">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="apply-name">Namn</label>
+            <input id="apply-name" class="form-control form-control-sm" placeholder="För- och efternamn" autocomplete="name">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="apply-email">E-post</label>
+            <input id="apply-email" type="email" class="form-control form-control-sm" placeholder="namn@exempel.se" autocomplete="email">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="apply-pw">Lösenord</label>
+            <input id="apply-pw" type="password" class="form-control form-control-sm" placeholder="Minst 6 tecken" autocomplete="new-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="apply-pw2">Upprepa lösenord</label>
+            <input id="apply-pw2" type="password" class="form-control form-control-sm" placeholder="Samma lösenord igen" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitAccountApplication_()">
+          </div>
+          <div id="apply-roles" class="mb-3 p-3" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);"></div>
+          <button id="apply-btn" class="btn btn-accent btn-lg w-100 mb-2" type="button" onclick="submitAccountApplication_()">Skicka ansökan</button>
+          <button class="btn btn-ghost w-100" type="button" onclick="showLoginMode_('login')">Tillbaka till inloggning</button>
+        </div>
         <div id="login-status" role="status" aria-live="polite">
           <span class="login-status-dot" aria-hidden="true"></span>
           <span id="login-status-text">Ansluter till servern…</span>
         </div>
         <div id="login-error" class="alert alert-danger mt-3 py-2 small" style="display:none;">Fel inloggningsuppgifter.</div>
+        <button class="login-apply" type="button" id="login-apply-link" onclick="showApplyAccount_()">Ansök om konto</button>
       </div>
     </div>
   </div>
@@ -2047,7 +2080,10 @@ function loadDemoDb_() {
         if (!parsed.wellnessOrg) parsed.wellnessOrg = seedDemoDb_().wellnessOrg;
         if (!Array.isArray(parsed.tencards)) parsed.tencards = seedDemoDb_().tencards;
         if (!Array.isArray(parsed.wellnessReceipts)) parsed.wellnessReceipts = [];
-        (parsed.users || []).forEach((u) => { if (!u.extraRoles) u.extraRoles = []; });
+        (parsed.users || []).forEach((u) => {
+          if (!u.extraRoles) u.extraRoles = [];
+          if (u.active == null) u.active = true;
+        });
         return parsed;
       }
     }
@@ -2583,6 +2619,7 @@ function demoApi_(action, args) {
           return (un === ident || (em && em === ident)) && x.password === String(pw || "");
         });
         if (!u) return ok({ authorized: false });
+        if (u.active === false) return ok({ authorized: false, error: "Kontot väntar på aktivering av superadmin." });
         __sessionToken = "demo-token-admin";
         return ok({ authorized: true, token: __sessionToken, role: u.role, extraRoles: u.extraRoles || [], username: u.username, name: u.name, email: u.email || "", firstLogin: !!u.FirstLogin });
       }
@@ -2594,6 +2631,7 @@ function demoApi_(action, args) {
           return un === ident || (em && em === ident);
         });
         if (u && u.email) {
+          if (u.active === false) return ok({ ok: true });
           store.resetToken = "demo-reset-" + Date.now();
           store.resetUsername = u.username;
           saveDemoDb_(store);
@@ -2616,6 +2654,42 @@ function demoApi_(action, args) {
         store.resetUsername = "";
         saveDemoDb_(store);
         return ok({ ok: true });
+      }
+      if (action === "applyForAccount") {
+        const payload = args[0] || {};
+        const username = String(payload.username || "").trim();
+        const name = String(payload.name || "").trim();
+        const email = String(payload.email || "").trim().toLowerCase();
+        const password = String(payload.password || "");
+        if (!username) return fail("Användarnamn saknas");
+        if (username.length < 2 || username.length > 40) return fail("Användarnamn ska vara 2–40 tecken");
+        if (!/^[a-zA-Z0-9._-]+$/.test(username)) return fail("Användarnamn: endast a–z, 0–9, punkt, _ och -");
+        if (!name) return fail("Namn saknas");
+        if (!email || email.indexOf("@") < 1) return fail("Ogiltig e-postadress");
+        if (!password || password.length < 6) return fail("Lösenordet måste vara minst 6 tecken");
+        const packed = packRolesFromChecks_([].concat(payload.role ? [payload.role] : [], payload.extraRoles || []).filter((r) => {
+          const n = String(r || "").toLowerCase();
+          return n === "scout" || n === "kassor" || n === "hallvard";
+        }));
+        if (!packed.ok) return fail(packed.error);
+        if ((store.users || []).some((u) => String(u.username || "").toLowerCase() === username.toLowerCase())) {
+          return fail("Användarnamnet är upptaget");
+        }
+        if ((store.users || []).some((u) => String(u.email || "").toLowerCase() === email)) {
+          return fail("E-postadressen används redan");
+        }
+        store.users.push({
+          username,
+          name,
+          email,
+          role: packed.role,
+          extraRoles: packed.extraRoles,
+          password,
+          FirstLogin: false,
+          active: false
+        });
+        saveDemoDb_(store);
+        return ok({ ok: true, mailSent: true, mailError: "" });
       }
       if (__sessionToken !== "demo-token-admin" && action !== "getAppData" && action !== "getVerifApp") return fail("Ej inloggad");
 
@@ -2757,7 +2831,7 @@ function demoApi_(action, args) {
       if (action === "getAllAdmins") {
         const role = String(currentUser.role || "").toLowerCase();
         if (role !== "superadmin" && role !== "admin") return ok([]);
-        let list = (store.users || []).map((u) => ({ username: u.username, name: u.name, email: u.email || "", role: u.role, extraRoles: u.extraRoles || [] }));
+        let list = (store.users || []).map((u) => ({ username: u.username, name: u.name, email: u.email || "", role: u.role, extraRoles: u.extraRoles || [], active: u.active !== false }));
         if (role === "admin") {
           list = list.filter((u) => {
             const r = String(u.role || "").toLowerCase();
@@ -2786,9 +2860,19 @@ function demoApi_(action, args) {
             if ((n === "kassor" || n === "hallvard") && extraRoles.indexOf(n) < 0) extraRoles.push(n);
           });
         }
-        store.users.push({ username: payload.username, name: payload.name || "", email, role: newRole, extraRoles, password: payload.password || "changeme", FirstLogin: true });
+        store.users.push({ username: payload.username, name: payload.name || "", email, role: newRole, extraRoles, password: payload.password || "changeme", FirstLogin: true, active: true });
         saveDemoDb_(store);
         return ok({ ok: true, mailSent: !!payload.sendInvite, mailError: payload.sendInvite ? "" : "" });
+      }
+      if (action === "activateUser") {
+        const meRole = String(currentUser.role || "").toLowerCase();
+        if (meRole !== "superadmin") return fail("Bara superadmin kan aktivera användare");
+        const username = String(args[0] || "").trim();
+        const u = (store.users || []).find((x) => x.username === username);
+        if (!u) return fail("Hittades inte");
+        u.active = true;
+        saveDemoDb_(store);
+        return ok({ ok: true, mailSent: true, mailError: "" });
       }
       if (action === "updateUserRole") {
         const meRole = String(currentUser.role || "").toLowerCase();
@@ -3158,8 +3242,8 @@ function packRolesFromChecks_(checked) {
   if (set.hallvard && primary !== "hallvard") extraRoles.push("hallvard");
   return { ok: true, role: primary, extraRoles };
 }
-function collectCheckedRoles_(idPrefix) {
-  return ["scout", "admin", "superadmin", "kassor", "hallvard"].filter((id) => {
+function collectCheckedRoles_(idPrefix, ids) {
+  return (ids || ["scout", "admin", "superadmin", "kassor", "hallvard"]).filter((id) => {
     const el = document.getElementById(idPrefix + id);
     return !!(el && el.checked);
   });
@@ -3169,13 +3253,19 @@ function roleCheckboxesHtml_(idPrefix, checkedRoles, opts) {
   const checked = checkedRoles || [];
   const lockSuper = !!opts.lockSuper;
   const onchange = opts.onchange ? ` onchange="${opts.onchange}"` : "";
-  const items = [
-    { id: "scout", label: "Ledbyggare" },
-    { id: "admin", label: "Admin" },
-    { id: "superadmin", label: "Superadmin" },
-    { id: "kassor", label: "Kassör" },
-    { id: "hallvard", label: "Hallvärd" }
-  ];
+  const items = opts.applicant
+    ? [
+        { id: "scout", label: "Ledbyggare" },
+        { id: "kassor", label: "Kassör" },
+        { id: "hallvard", label: "Hallvärd" }
+      ]
+    : [
+        { id: "scout", label: "Ledbyggare" },
+        { id: "admin", label: "Admin" },
+        { id: "superadmin", label: "Superadmin" },
+        { id: "kassor", label: "Kassör" },
+        { id: "hallvard", label: "Hallvärd" }
+      ];
   return `<div class="small mb-1" style="color:var(--muted);">Roller — kryssa alla som ska gälla</div>
     <div class="d-flex flex-wrap gap-3">
       ${items.map((it) => {
@@ -3187,7 +3277,8 @@ function roleCheckboxesHtml_(idPrefix, checkedRoles, opts) {
         </label>`;
       }).join("")}
     </div>
-    ${lockSuper ? `<p class="small mt-1 mb-0" style="color:var(--muted);">Sista superadmin måste behålla Superadmin.</p>` : ""}`;
+    ${lockSuper ? `<p class="small mt-1 mb-0" style="color:var(--muted);">Sista superadmin måste behålla Superadmin.</p>` : ""}
+    ${opts.applicant ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Admin och superadmin läggs till manuellt.</p>` : ""}`;
 }
 
 function isSuperadminRole_(role) {
@@ -5701,6 +5792,8 @@ function setLoginFormBusy_(busy, phase) {
   if (rememberEl) rememberEl.disabled = !!busy;
   const forgotBtn = document.getElementById("login-forgot-btn");
   if (forgotBtn) forgotBtn.disabled = !!busy;
+  const applyLink = document.getElementById("login-apply-link");
+  if (applyLink) applyLink.disabled = !!busy;
 }
 
 function clearLoginTimeout_() {
@@ -5751,18 +5844,24 @@ function showLoginMode_(mode) {
   const main = document.getElementById("login-form-main");
   const forgot = document.getElementById("login-form-forgot");
   const reset = document.getElementById("login-form-reset");
+  const apply = document.getElementById("login-form-apply");
+  const applyLink = document.getElementById("login-apply-link");
   const lead = document.getElementById("login-lead");
   const err = document.getElementById("login-error");
   if (err) err.style.display = "none";
   if (main) main.style.display = mode === "login" ? "" : "none";
   if (forgot) forgot.style.display = mode === "forgot" ? "" : "none";
   if (reset) reset.style.display = mode === "reset" ? "" : "none";
+  if (apply) apply.style.display = mode === "apply" ? "" : "none";
+  if (applyLink) applyLink.style.display = mode === "login" ? "" : "none";
   if (lead) {
     lead.textContent = mode === "forgot"
       ? "Ange användarnamn eller e-post så skickar vi en återställningslänk om kontot finns."
       : (mode === "reset"
         ? "Välj ett nytt lösenord för ditt konto."
-        : "Logga in för att se ledbyggnationen eller rapportera tid.");
+        : (mode === "apply"
+          ? "Fyll i uppgifterna. Superadmin aktiverar kontot innan du kan logga in."
+          : "Logga in för att se ledbyggnationen eller rapportera tid."));
   }
   if (mode === "forgot") {
     const el = document.getElementById("forgot-login");
@@ -5776,11 +5875,82 @@ function showLoginMode_(mode) {
       if (el) el.focus();
     }, 50);
   }
+  if (mode === "apply") {
+    const host = document.getElementById("apply-roles");
+    if (host && !host.dataset.ready) {
+      host.innerHTML = roleCheckboxesHtml_("apply-role-", ["scout"], { applicant: true });
+      host.dataset.ready = "1";
+    }
+    setTimeout(() => {
+      const el = document.getElementById("apply-user");
+      if (el) el.focus();
+    }, 50);
+  }
 }
 
 function showForgotPassword_() {
   if (loginInFlight_) return;
   showLoginMode_("forgot");
+}
+
+function showApplyAccount_() {
+  if (loginInFlight_) return;
+  showLoginMode_("apply");
+}
+
+function submitAccountApplication_() {
+  const err = document.getElementById("login-error");
+  if (err) err.style.display = "none";
+  const username = String((document.getElementById("apply-user") || {}).value || "").trim();
+  const name = String((document.getElementById("apply-name") || {}).value || "").trim();
+  const email = String((document.getElementById("apply-email") || {}).value || "").trim();
+  const p1 = String((document.getElementById("apply-pw") || {}).value || "");
+  const p2 = String((document.getElementById("apply-pw2") || {}).value || "");
+  const packed = packRolesFromChecks_(collectCheckedRoles_("apply-role-", ["scout", "kassor", "hallvard"]));
+  const showErr = (msg) => {
+    if (err) { err.textContent = msg; err.style.display = "block"; }
+  };
+  if (!username) return showErr("Användarnamn saknas.");
+  if (username.length < 2 || username.length > 40) return showErr("Användarnamn ska vara 2–40 tecken.");
+  if (!/^[a-zA-Z0-9._-]+$/.test(username)) return showErr("Användarnamn: endast a–z, 0–9, punkt, _ och -.");
+  if (!name) return showErr("Namn saknas.");
+  if (!email || email.indexOf("@") < 1) return showErr("Ogiltig e-postadress.");
+  if (!p1 || p1.length < 6) return showErr("Lösenordet måste vara minst 6 tecken.");
+  if (p1 !== p2) return showErr("Lösenorden matchar inte.");
+  if (!packed.ok) return showErr(packed.error);
+  const btn = document.getElementById("apply-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Skickar…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Skicka ansökan"; }
+      if (!res || res.ok === false) {
+        showErr((res && res.error) || "Kunde inte skicka ansökan.");
+        return;
+      }
+      ["apply-user", "apply-name", "apply-email", "apply-pw", "apply-pw2"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+      const host = document.getElementById("apply-roles");
+      if (host) {
+        host.dataset.ready = "";
+        host.innerHTML = "";
+      }
+      showLoginMode_("login");
+      showToast("Ansökan skickad. Superadmin aktiverar kontot.");
+    })
+    .withFailureHandler(() => {
+      if (btn) { btn.disabled = false; btn.textContent = "Skicka ansökan"; }
+      showErr("Kunde inte nå servern. Försök igen.");
+    })
+    .applyForAccount({
+      username,
+      name,
+      email,
+      password: p1,
+      role: packed.role,
+      extraRoles: packed.extraRoles
+    });
 }
 
 function submitForgotPassword_() {
@@ -5877,7 +6047,7 @@ function checkLogin() {
     .withSuccessHandler((res) => {
       if (!loginInFlight_) return; // timeout har redan låst upp
       if (!res || !res.authorized) {
-        endLoginAttempt_({ error: true });
+        endLoginAttempt_({ error: (res && res.error) || true });
         return;
       }
       currentUser = {
@@ -6000,13 +6170,14 @@ function renderAdminHome() {
       <h3>${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</h3>
       <p class="small mb-3" style="color:var(--muted);">
         ${userRole_() === "superadmin"
-          ? "Skapa WallFlow-konto, ren hallvärd eller kassör. Hantera befintliga konton separat."
+          ? "Skapa WallFlow-konto, ren hallvärd eller kassör. Ansökningar aktiveras under Aktivera användare."
           : "Skapa nya ledbyggare, eller hantera de som redan finns."}
       </p>
       <div class="admin-actions">
         <button class="btn btn-accent" type="button" onclick="renderCreateUser()">${userRole_() === "superadmin" ? "Skapa användare" : "Skapa ledbyggare"}</button>
         ${userRole_() === "superadmin" ? `<button class="btn btn-ghost" type="button" onclick="renderCreateUser('hallvard')">Skapa hallvärd</button>
-        <button class="btn btn-ghost" type="button" onclick="renderCreateUser('kassor')">Skapa kassör</button>` : ""}
+        <button class="btn btn-ghost" type="button" onclick="renderCreateUser('kassor')">Skapa kassör</button>
+        <button class="btn btn-ghost" type="button" onclick="renderActivateUsers()">Aktivera användare</button>` : ""}
         <button class="btn btn-ghost" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Hantera användare" : "Hantera ledbyggare"}</button>
       </div>
     </div>` : ""}
@@ -7175,6 +7346,7 @@ function renderUserManagement() {
         const isLastSuper = lastSuper && isSuperadminRole_(u.role);
         const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
         const roles = allRolesOfUser_(u);
+        const pending = u.active === false;
         const canDelete = !isSelf && (isSuper ? !isLastSuper : isLedbyggareRole_(u.role));
         const roleControls = isSuper
           ? `<div class="mt-2 p-2" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
@@ -7186,9 +7358,12 @@ function renderUserManagement() {
           <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
             <div>
               <strong>${escapeHtml_(u.username)}</strong>
-              <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}${isLastSuper ? " · sista superadmin" : ""}</div>
+              <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}${isLastSuper ? " · sista superadmin" : ""}${pending ? " · väntar på aktivering" : ""}</div>
             </div>
-            <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+            <div class="d-flex gap-2">
+              ${pending && isSuper ? `<button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'manage')">Aktivera användare</button>` : ""}
+              <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+            </div>
           </div>
           ${roleControls}
           <div class="d-flex gap-2 align-items-end">
@@ -7209,6 +7384,61 @@ function renderUserManagement() {
       }).join("") || `<div class="empty">${isSuper ? "Inga användare." : "Inga ledbyggare."}</div>`;
     })
     .getAllAdmins();
+}
+
+function renderActivateUsers() {
+  if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
+  document.getElementById("app-admin").classList.add("show");
+  setAdminChrome_("Administration");
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <p class="admin-kicker">Administration · Användare</p>
+      <h3>Aktivera användare</h3>
+      <p class="small mb-3" style="color:var(--muted);">Ansökningar från inloggningsskärmen. Ett klick aktiverar kontot och mejlar sökanden.</p>
+      <div id="admin-pending-list">Laddar…</div>
+    </div>`;
+  google.script.run
+    .withSuccessHandler((users) => {
+      const host = document.getElementById("admin-pending-list");
+      if (!host) return;
+      const pending = (users || []).filter((u) => u.active === false);
+      if (!pending.length) {
+        host.innerHTML = `<div class="empty">Inga ansökningar väntar.</div>`;
+        return;
+      }
+      host.innerHTML = pending.map((u) => {
+        const roles = allRolesOfUser_(u);
+        return `
+        <div class="py-2 border-bottom" style="border-color:var(--line)!important;">
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+              <strong>${escapeHtml_(u.name || u.username)}</strong>
+              <div class="small" style="color:var(--muted);">${escapeHtml_(u.username)} · ${escapeHtml_(u.email || "")}</div>
+              <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}</div>
+            </div>
+            <button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'pending')">Aktivera användare</button>
+          </div>
+        </div>`;
+      }).join("");
+    })
+    .getAllAdmins();
+}
+
+function activatePendingUser_(username, view) {
+  if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte aktivera");
+      let msg = "Användare aktiverad";
+      if (res.alreadyActive) msg = "Användaren var redan aktiv";
+      else if (res.mailSent) msg += " — mejl skickat";
+      else if (res.mailError) msg += " men mejlet gick inte: " + res.mailError;
+      showToast(msg);
+      if (view === "manage") renderUserManagement();
+      else renderActivateUsers();
+    })
+    .activateUser(username);
 }
 
 function createUser() {

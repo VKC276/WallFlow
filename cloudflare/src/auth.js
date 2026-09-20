@@ -5,6 +5,7 @@ export const SESSION_PREFIX = "wf_sess_";
 export const RESET_PREFIX = "wf_reset_";
 export const RESET_HOURS = 2;
 export const ALL_PRIMARY_ROLES = ["superadmin", "admin", "scout", "kassor", "hallvard"];
+export const APPLICANT_ROLES = ["scout", "kassor", "hallvard"];
 
 export function normalizeRole(role) {
   let r = String(role == null ? "" : role).trim().toLowerCase();
@@ -117,6 +118,38 @@ export function canIssueWellnessReceipt(session) {
 export function isFirstLogin(v) {
   const s = String(v == null ? "" : v).trim().toLowerCase();
   return s === "true" || s === "1" || s === "yes" || s === "ja";
+}
+
+/** Saknad kolumn / undefined räknas som aktiv (befintliga konton). */
+export function isUserActive(userOrFlag) {
+  const v = userOrFlag && typeof userOrFlag === "object" ? userOrFlag.active : userOrFlag;
+  if (v === false || v === 0) return false;
+  const s = String(v == null ? "1" : v).trim().toLowerCase();
+  return s !== "0" && s !== "false" && s !== "no" && s !== "nej";
+}
+
+/** Ansökan får bara ledbyggare, kassör och hallvärd — aldrig admin/superadmin. */
+export function packApplicantRoles(role, extraRoles) {
+  const set = {};
+  const add = (v) => {
+    const n = normalizeRole(v);
+    if (n === "scout" || n === "kassor" || n === "hallvard") set[n] = true;
+  };
+  if (Array.isArray(role)) role.forEach(add);
+  else add(role);
+  const extras = Array.isArray(extraRoles) ? extraRoles : parseExtraRoles(extraRoles);
+  extras.forEach(add);
+  let primary = "";
+  if (set.scout) primary = "scout";
+  else if (set.kassor) primary = "kassor";
+  else if (set.hallvard) primary = "hallvard";
+  if (!primary) {
+    return { ok: false, error: "Minst en roll måste vara ikryssad (ledbyggare, kassör eller hallvärd)" };
+  }
+  const extra = [];
+  if (set.kassor && primary !== "kassor") extra.push("kassor");
+  if (set.hallvard && primary !== "hallvard") extra.push("hallvard");
+  return { ok: true, role: primary, extraRoles: extra };
 }
 
 export function validateUsername(username) {

@@ -3,6 +3,8 @@
  * POST { action: 'relayMail', secret, messages: [{ to, subject, body, html, attachments? }] }
  */
 
+import { allRolesOf } from "./auth.js";
+
 const APP_NAME = "WallFlow";
 const DEFAULT_APP_BASE = "https://wallflow.vastervikclimbing.se";
 
@@ -275,6 +277,61 @@ export async function mailWelcome(env, user, password, message) {
     notes: ["Länken tar dig till inloggningen."],
     ctaLabel: "Öppna WallFlow",
     ctaUrl: url
+  });
+  await sendMessages(env, [toMessage(user.email, composed)]);
+}
+
+function roleLabelsSv(user) {
+  const map = {
+    scout: "Ledbyggare",
+    kassor: "Kassör",
+    hallvard: "Hallvärd",
+    admin: "Admin",
+    superadmin: "Superadmin"
+  };
+  return allRolesOf(user)
+    .map((r) => map[r] || r)
+    .join(", ");
+}
+
+export async function mailAccountApplication(env, applicant, superadmins) {
+  const roles = roleLabelsSv(applicant);
+  const messages = [];
+  for (const admin of superadmins || []) {
+    const to = String(admin.email || "").trim();
+    if (!to) continue;
+    const composed = compose({
+      name: admin.name || admin.username,
+      subject: "ny kontoansökan",
+      intro: "En person har ansökt om WallFlow-konto. Gå in under Administration → Användare och klicka på Aktivera användare.",
+      rows: [
+        { label: "Namn", value: applicant.name || applicant.username },
+        { label: "Användarnamn", value: applicant.username },
+        { label: "E-post", value: applicant.email || "" },
+        { label: "Roller", value: roles || "—" }
+      ],
+      notes: ["Kontot är inaktivt tills du aktiverar det. Sökanden har redan valt lösenord."],
+      ctaLabel: "Öppna WallFlow",
+      ctaUrl: loginUrl(env)
+    });
+    messages.push(toMessage(to, composed));
+  }
+  if (!messages.length) throw new Error("Ingen superadmin med e-post");
+  await sendMessages(env, messages);
+}
+
+export async function mailAccountActivated(env, user) {
+  const composed = compose({
+    name: user.name || user.username,
+    subject: "ditt konto är aktiverat",
+    intro: "Din ansökan är godkänd. Du kan nu logga in i WallFlow med det användarnamn och lösenord du valde.",
+    rows: [
+      { label: "Användarnamn", value: user.username },
+      { label: "E-post", value: user.email || "" }
+    ],
+    notes: ["Länken tar dig till inloggningen."],
+    ctaLabel: "Öppna WallFlow",
+    ctaUrl: loginUrl(env)
   });
   await sendMessages(env, [toMessage(user.email, composed)]);
 }

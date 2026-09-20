@@ -15,7 +15,9 @@ import {
   isFirstLogin,
   isLedbyggareRole,
   isSuperadminRole,
+  isUserActive,
   normalizeRole,
+  packApplicantRoles,
   parseExtraRoles,
   randomSalt,
   roleOf,
@@ -73,7 +75,7 @@ import {
   isR2ImageKey,
   uploadRouteImage
 } from "./images.js";
-import { clipInviteMessage, mailPasswordReset, mailWelcome } from "./mail.js";
+import { clipInviteMessage, mailAccountActivated, mailAccountApplication, mailPasswordReset, mailWelcome } from "./mail.js";
 import {
   getVerifApp,
   saveVerifSettingsAction,
@@ -103,6 +105,7 @@ export async function dispatch(env, action, token, args, extras) {
     verifyAdminPassword: true,
     requestPasswordReset: true,
     completePasswordReset: true,
+    applyForAccount: true,
     getVerifApp: true
   };
 
@@ -122,6 +125,8 @@ export async function dispatch(env, action, token, args, extras) {
       return requestPasswordReset(env, args[0]);
     case "completePasswordReset":
       return completePasswordReset(env, args[0], args[1]);
+    case "applyForAccount":
+      return applyForAccount(env, args[0]);
     case "finalizeUserPassword":
       return finalizeUserPassword(env, args[0], args[1], session);
     case "changeOwnPassword":
@@ -148,6 +153,8 @@ export async function dispatch(env, action, token, args, extras) {
       return getAllAdmins(env, session);
     case "createNewAdmin":
       return createNewAdmin(env, args[0], session);
+    case "activateUser":
+      return activateUser(env, args[0], session);
     case "updateUserRole":
       return updateUserRole(env, args[0], args[1], session);
     case "deleteUserAction":
@@ -249,6 +256,9 @@ async function verifyAdminPassword(env, username, password) {
   if (!u || !u.salt || !u.passwordHash) return { authorized: false };
   const hash = await hashPassword(password, u.salt);
   if (hash !== u.passwordHash) return { authorized: false };
+  if (!isUserActive(u)) {
+    return { authorized: false, error: "Kontot väntar på aktivering av superadmin." };
+  }
 
   const token = crypto.randomUUID();
   await saveSession(env, token, u.username, u.role, u.extraRoles);
@@ -311,7 +321,7 @@ async function requestPasswordReset(env, identifier) {
   const login = String(identifier || "").trim();
   if (!login) return generic;
   const u = await findUserByLogin(env, login);
-  if (!u || !u.email) return generic;
+  if (!u || !u.email || !isUserActive(u)) return generic;
   const token = crypto.randomUUID().replace(/-/g, "") + randomSalt().slice(0, 16);
   await savePasswordReset(env, token, u.username);
   try {
@@ -404,7 +414,8 @@ async function getAllAdmins(env, session) {
     name: u.name,
     email: u.email || "",
     role: u.role,
-    extraRoles: u.extraRoles || []
+    extraRoles: u.extraRoles || [],
+    active: isUserActive(u)
   }));
   if (isAdminActor(session)) {
     users = users.filter((u) => isLedbyggareRole(u.role));
@@ -461,7 +472,8 @@ async function createNewAdmin(env, payload, session) {
     name,
     email,
     FirstLogin: "TRUE",
-    first_login: true
+    first_login: true,
+    active: true
   };
   await upsertUser(env, created);
 
@@ -474,6 +486,87 @@ async function createNewAdmin(env, payload, session) {
     } catch (err) {
       mailError = String(err && err.message ? err.message : err);
       console.error("Kunde inte skicka välkomstmejl", mailError);
+    }
+  }
+  return { ok: true, mailSent, mailError };
+}
+
+async function applyForAccount(env, payload) {
+  const obj = payload && typeof payload === "object" ? payload : {};
+  const userCheck = validateUsername(obj.username);
+  if (!userCheck.ok) return userCheck;
+  const username = userCheck.username;
+  const name = String(obj.name || "").trim();
+  if (!name) return { ok: false, error: "Namn saknas" };
+  const emailCheck = validateEmail(obj.email);
+  if (!emailCheck.ok) return emailCheck;
+  const password = String(obj.password || "");
+  if (!password || password.length < 6) {
+    return { ok: false, error: "Lösenordet måste vara minst 6 tecken" };
+  }
+  const packed = packApplicantRoles(obj.role || obj.roles, obj.extraRoles || obj.extra_roles);
+  if (!packed.ok) return packed;
+
+  if (await findUser(env, username)) {
+    return { ok: false, error: "Användarnamnet är upptaget" };
+  }
+  if (await findUserByEmail(env, emailCheck.email)) {
+    return { ok: false, error: "E-postadressen används redan" };
+  }
+
+  const salt = randomSalt();
+  const created = {
+    username,
+    passwordHash: await hashPassword(password, salt),
+    salt,
+    role: packed.role,
+    extraRoles: packed.extraRoles,
+    name,
+    email: emailCheck.email,
+    FirstLogin: "FALSE",
+    first_login: false,
+    active: false
+  };
+  await upsertUser(env, created);
+
+  const supers = (await readUsers(env)).filter((u) => isSuperadminRole(u.role) && isUserActive(u) && u.email);
+  let mailSent = false;
+  let mailError = "";
+  if (!supers.length) {
+    mailError = "Ingen superadmin med e-post hittades";
+  } else {
+    try {
+      await mailAccountApplication(env, created, supers);
+      mailSent = true;
+    } catch (err) {
+      mailError = String(err && err.message ? err.message : err);
+      console.error("Kunde inte skicka ansökningsmejl", mailError);
+    }
+  }
+  return { ok: true, mailSent, mailError };
+}
+
+async function activateUser(env, username, session) {
+  if (!isSuperadminRole(roleOf(session))) {
+    return { ok: false, error: "Bara superadmin kan aktivera användare" };
+  }
+  const target = String(username || "").trim();
+  if (!target) return { ok: false, error: "Användarnamn saknas" };
+  const u = await findUser(env, target);
+  if (!u) return { ok: false, error: "Hittades inte" };
+  if (isUserActive(u)) return { ok: true, alreadyActive: true };
+
+  await upsertUser(env, { ...u, active: true });
+
+  let mailSent = false;
+  let mailError = "";
+  if (u.email) {
+    try {
+      await mailAccountActivated(env, { ...u, active: true });
+      mailSent = true;
+    } catch (err) {
+      mailError = String(err && err.message ? err.message : err);
+      console.error("Kunde inte skicka aktiveringsmejl", mailError);
     }
   }
   return { ok: true, mailSent, mailError };

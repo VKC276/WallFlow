@@ -34,7 +34,8 @@ CREATE TABLE users (
   extra_roles TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
-  first_login INTEGER NOT NULL DEFAULT 1 CHECK (first_login IN (0, 1))
+  first_login INTEGER NOT NULL DEFAULT 1 CHECK (first_login IN (0, 1)),
+  active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
 );
 
 CREATE TABLE time_entries (

@@ -1,6 +1,6 @@
 /** D1 helpers — routes, grades, users, settings + omräknade fält. */
 
-import { normalizeRole, isFirstLogin, parseExtraRoles, serializeExtraRoles } from "./auth.js";
+import { normalizeRole, isFirstLogin, isUserActive, parseExtraRoles, serializeExtraRoles } from "./auth.js";
 
 export const DEFAULT_ROUTE_LIFETIME_DAYS = 30;
 
@@ -151,7 +151,8 @@ export async function readUsers(env) {
     name: String(u.name || "").trim(),
     email: String(u.email || "").trim().toLowerCase(),
     FirstLogin: u.first_login ? "TRUE" : "FALSE",
-    first_login: !!u.first_login
+    first_login: !!u.first_login,
+    active: isUserActive(u)
   })).filter((u) => !!u.username);
 }
 
@@ -186,8 +187,8 @@ export async function findUserByEmail(env, email, exceptUsername) {
 
 export async function upsertUser(env, user) {
   await env.DB.prepare(
-    `INSERT INTO users (username, password_hash, salt, role, extra_roles, name, email, first_login)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO users (username, password_hash, salt, role, extra_roles, name, email, first_login, active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(username) DO UPDATE SET
        password_hash = excluded.password_hash,
        salt = excluded.salt,
@@ -195,7 +196,8 @@ export async function upsertUser(env, user) {
        extra_roles = excluded.extra_roles,
        name = excluded.name,
        email = excluded.email,
-       first_login = excluded.first_login`
+       first_login = excluded.first_login,
+       active = excluded.active`
   ).bind(
     user.username,
     user.passwordHash,
@@ -204,7 +206,8 @@ export async function upsertUser(env, user) {
     serializeExtraRoles(user.extraRoles != null ? user.extraRoles : user.extra_roles),
     user.name || "",
     String(user.email || "").trim().toLowerCase(),
-    isFirstLogin(user.FirstLogin) || user.first_login ? 1 : 0
+    isFirstLogin(user.FirstLogin) || user.first_login ? 1 : 0,
+    isUserActive(user) ? 1 : 0
   ).run();
 }
 
