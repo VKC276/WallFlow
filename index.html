@@ -6207,14 +6207,12 @@ function renderAdminHome() {
       <h3>${userRole_() === "superadmin" ? "Användare" : "Ledbyggare"}</h3>
       <p class="small mb-3" style="color:var(--muted);">
         ${userRole_() === "superadmin"
-          ? "Skapa WallFlow-konto, ren hallvärd eller kassör. Ansökningar aktiveras under Aktivera användare."
+          ? "Skapa konto och kryssa roller. Ansökningar aktiveras under Aktivera användare."
           : "Skapa nya ledbyggare, eller hantera de som redan finns."}
       </p>
       <div class="admin-actions">
         <button class="btn btn-accent" type="button" onclick="renderCreateUser()">${userRole_() === "superadmin" ? "Skapa användare" : "Skapa ledbyggare"}</button>
-        ${userRole_() === "superadmin" ? `<button class="btn btn-ghost" type="button" onclick="renderCreateUser('hallvard')">Skapa hallvärd</button>
-        <button class="btn btn-ghost" type="button" onclick="renderCreateUser('kassor')">Skapa kassör</button>
-        <button class="btn btn-ghost" type="button" onclick="renderActivateUsers()">Aktivera användare</button>` : ""}
+        ${userRole_() === "superadmin" ? `<button class="btn btn-ghost" type="button" onclick="renderActivateUsers()">Aktivera användare</button>` : ""}
         <button class="btn btn-ghost" type="button" onclick="renderUserManagement()">${userRole_() === "superadmin" ? "Hantera användare" : "Hantera ledbyggare"}</button>
       </div>
     </div>` : ""}
