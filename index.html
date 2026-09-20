@@ -921,6 +921,16 @@
     }
     .admin-shell { max-width: 820px; margin: 0 auto; width: 100%; padding: 16px 16px calc(40px + var(--safe-bottom)); overflow-y: auto; flex: 1; }
     .admin-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+    .admin-user-list { display: grid; gap: 12px; }
+    .admin-user-search { margin-bottom: 12px; }
+    .admin-user-card {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .admin-user-card + .admin-user-card { margin-top: 0; }
+    .admin-user-card .admin-user-meta { color: var(--muted); }
     .admin-card h3, .admin-card h4 { font-family: var(--font-display); letter-spacing: -0.02em; margin: 0 0 10px; color: var(--text); }
     #app-time .admin-card h3,
     #app-time .admin-card h4 {
@@ -7376,6 +7386,7 @@ function renderCreateUser(preset) {
 function renderUserManagement() {
   if (!canManageUsersRole()) return;
   const isSuper = userRole_() === "superadmin";
+  const keepQuery = String((adminUserListState_ && adminUserListState_.query) || "");
   document.getElementById("app-admin").classList.add("show");
   setAdminChrome_("Administration");
   document.getElementById("admin-main").innerHTML = `
@@ -7384,56 +7395,102 @@ function renderUserManagement() {
       <p class="admin-kicker">Administration · Användare</p>
       <h3>${isSuper ? "Hantera användare" : "Hantera ledbyggare"}</h3>
       <p class="small mb-3" style="color:var(--muted);">Ändra namn och kryssa roller på befintliga konton. Du behöver inte skapa om användaren för att lägga till t.ex. hallvärd.</p>
-      <div id="admin-user-list">Laddar…</div>
+      <div class="admin-user-search">
+        <label class="form-label" for="admin-user-search">Sök</label>
+        <input id="admin-user-search" class="form-control" type="search" placeholder="Namn, användarnamn, e-post eller roll" autocomplete="off" value="${escapeHtml_(keepQuery)}" oninput="filterAdminUserList_()">
+      </div>
+      <div id="admin-user-list" class="admin-user-list">Laddar…</div>
     </div>`;
   google.script.run
     .withSuccessHandler((users) => {
-      const host = document.getElementById("admin-user-list");
-      if (!host) return;
-      const list = users || [];
-      const lastSuper = countSuperadmins_(list) <= 1;
-      host.innerHTML = list.map((u) => {
-        const isLastSuper = lastSuper && isSuperadminRole_(u.role);
-        const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
-        const roles = allRolesOfUser_(u);
-        const pending = u.active === false;
-        const canDelete = !isSelf && (isSuper ? !isLastSuper : isLedbyggareRole_(u.role));
-        const roleControls = isSuper
-          ? `<div class="mt-2 p-2" style="border:1px solid var(--line); border-radius:12px; background:var(--surface-2);">
-              ${roleCheckboxesHtml_("ur-" + u.username + "-", roles, { lockSuper: isLastSuper, onchange: "saveUserRoles_('" + escapeHtml_(u.username) + "')" })}
-            </div>`
-          : `<span class="small" style="color:var(--muted);">Ledbyggare</span>`;
-        return `
-        <div class="py-2 border-bottom" style="border-color:var(--line)!important;">
-          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-            <div>
-              <strong>${escapeHtml_(u.username)}</strong>
-              <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}${isLastSuper ? " · sista superadmin" : ""}${pending ? " · väntar på aktivering" : ""}</div>
-            </div>
-            <div class="d-flex gap-2">
-              ${pending && isSuper ? `<button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'manage')">Aktivera användare</button>` : ""}
-              <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
-            </div>
-          </div>
-          ${roleControls}
-          <div class="d-flex gap-2 align-items-end">
-            <div class="flex-grow-1">
-              <label class="form-label small mb-1" for="dn-${escapeHtml_(u.username)}" style="color:var(--muted);">Visningsnamn</label>
-              <input id="dn-${escapeHtml_(u.username)}" class="form-control form-control-sm" value="${escapeHtml_(u.name || "")}" placeholder="För- och efternamn">
-            </div>
-            <button class="btn btn-sm btn-ghost" type="button" onclick="saveUserDisplayName('${escapeHtml_(u.username)}')">Spara namn</button>
-          </div>
-          <div class="d-flex gap-2 align-items-end mt-2">
-            <div class="flex-grow-1">
-              <label class="form-label small mb-1" for="em-${escapeHtml_(u.username)}" style="color:var(--muted);">E-post</label>
-              <input id="em-${escapeHtml_(u.username)}" type="email" class="form-control form-control-sm" value="${escapeHtml_(u.email || "")}" placeholder="namn@exempel.se">
-            </div>
-            <button class="btn btn-sm btn-ghost" type="button" onclick="saveUserEmail('${escapeHtml_(u.username)}')">Spara e-post</button>
-          </div>
-        </div>`;
-      }).join("") || `<div class="empty">${isSuper ? "Inga användare." : "Inga ledbyggare."}</div>`;
+      adminUserListState_ = { users: users || [], query: keepQuery };
+      paintAdminUserList_();
     })
     .getAllAdmins();
+}
+
+let adminUserListState_ = { users: [], query: "" };
+
+function filterAdminUserList_() {
+  const el = document.getElementById("admin-user-search");
+  adminUserListState_.query = String(el && el.value || "");
+  paintAdminUserList_();
+}
+
+function adminUserSearchHaystack_(u) {
+  const roles = allRolesOfUser_(u).map(adminRoleLabelSv);
+  return [
+    u.username,
+    u.name,
+    u.email,
+    roles.join(" "),
+    u.active === false ? "väntar på aktivering" : ""
+  ].join(" ").toLowerCase();
+}
+
+function paintAdminUserList_() {
+  const host = document.getElementById("admin-user-list");
+  if (!host) return;
+  const isSuper = userRole_() === "superadmin";
+  const list = adminUserListState_.users || [];
+  const q = String(adminUserListState_.query || "").trim().toLowerCase();
+  const shown = q ? list.filter((u) => adminUserSearchHaystack_(u).indexOf(q) >= 0) : list;
+  if (!list.length) {
+    host.innerHTML = `<div class="empty">${isSuper ? "Inga användare." : "Inga ledbyggare."}</div>`;
+    return;
+  }
+  if (!shown.length) {
+    host.innerHTML = `<div class="empty">Inga träffar för “${escapeHtml_(adminUserListState_.query.trim())}”.</div>`;
+    return;
+  }
+  const lastSuper = countSuperadmins_(list) <= 1;
+  host.innerHTML = shown.map((u) => {
+    const isLastSuper = lastSuper && isSuperadminRole_(u.role);
+    const isSelf = String(u.username || "").toLowerCase() === String(currentUser.username || "").toLowerCase();
+    const roles = allRolesOfUser_(u);
+    const pending = u.active === false;
+    const canDelete = !isSelf && (isSuper ? !isLastSuper : isLedbyggareRole_(u.role));
+    const titleName = String(u.name || "").trim() || u.username;
+    const meta = [
+      u.name ? u.username : "",
+      roles.map(adminRoleLabelSv).join(" · "),
+      isLastSuper ? "sista superadmin" : "",
+      pending ? "väntar på aktivering" : ""
+    ].filter(Boolean).join(" · ");
+    const roleControls = isSuper
+      ? `<div class="mt-2 p-2" style="border:1px solid var(--line); border-radius:12px; background:var(--surface);">
+          ${roleCheckboxesHtml_("ur-" + u.username + "-", roles, { lockSuper: isLastSuper, onchange: "saveUserRoles_('" + escapeHtml_(u.username) + "')" })}
+        </div>`
+      : `<span class="small admin-user-meta">Ledbyggare</span>`;
+    return `
+    <div class="admin-user-card">
+      <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+        <div>
+          <strong>${escapeHtml_(titleName)}</strong>
+          <div class="small admin-user-meta">${escapeHtml_(meta)}</div>
+        </div>
+        <div class="d-flex gap-2">
+          ${pending && isSuper ? `<button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'manage')">Aktivera användare</button>` : ""}
+          <button class="btn btn-sm btn-outline-danger" type="button" ${canDelete ? "" : "disabled title=\"" + (isSelf ? "Kan inte radera dig själv" : "Saknar behörighet") + "\""} onclick="deleteUser('${escapeHtml_(u.username)}')">Radera</button>
+        </div>
+      </div>
+      ${roleControls}
+      <div class="d-flex gap-2 align-items-end mt-2">
+        <div class="flex-grow-1">
+          <label class="form-label small mb-1" for="dn-${escapeHtml_(u.username)}" style="color:var(--muted);">Visningsnamn</label>
+          <input id="dn-${escapeHtml_(u.username)}" class="form-control form-control-sm" value="${escapeHtml_(u.name || "")}" placeholder="För- och efternamn">
+        </div>
+        <button class="btn btn-sm btn-ghost" type="button" onclick="saveUserDisplayName('${escapeHtml_(u.username)}')">Spara namn</button>
+      </div>
+      <div class="d-flex gap-2 align-items-end mt-2">
+        <div class="flex-grow-1">
+          <label class="form-label small mb-1" for="em-${escapeHtml_(u.username)}" style="color:var(--muted);">E-post</label>
+          <input id="em-${escapeHtml_(u.username)}" type="email" class="form-control form-control-sm" value="${escapeHtml_(u.email || "")}" placeholder="namn@exempel.se">
+        </div>
+        <button class="btn btn-sm btn-ghost" type="button" onclick="saveUserEmail('${escapeHtml_(u.username)}')">Spara e-post</button>
+      </div>
+    </div>`;
+  }).join("");
 }
 
 function renderActivateUsers() {
@@ -7446,7 +7503,7 @@ function renderActivateUsers() {
       <p class="admin-kicker">Administration · Användare</p>
       <h3>Aktivera användare</h3>
       <p class="small mb-3" style="color:var(--muted);">Ansökningar från inloggningsskärmen. Ett klick aktiverar kontot och mejlar sökanden.</p>
-      <div id="admin-pending-list">Laddar…</div>
+      <div id="admin-pending-list" class="admin-user-list">Laddar…</div>
     </div>`;
   google.script.run
     .withSuccessHandler((users) => {
@@ -7460,12 +7517,12 @@ function renderActivateUsers() {
       host.innerHTML = pending.map((u) => {
         const roles = allRolesOfUser_(u);
         return `
-        <div class="py-2 border-bottom" style="border-color:var(--line)!important;">
+        <div class="admin-user-card">
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               <strong>${escapeHtml_(u.name || u.username)}</strong>
-              <div class="small" style="color:var(--muted);">${escapeHtml_(u.username)} · ${escapeHtml_(u.email || "")}</div>
-              <div class="small" style="color:var(--muted);">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}</div>
+              <div class="small admin-user-meta">${escapeHtml_(u.username)} · ${escapeHtml_(u.email || "")}</div>
+              <div class="small admin-user-meta">${escapeHtml_(roles.map(adminRoleLabelSv).join(" · "))}</div>
             </div>
             <div class="d-flex flex-column gap-2">
               <button class="btn btn-sm btn-accent" type="button" onclick="activatePendingUser_('${escapeHtml_(u.username)}', 'pending')">Aktivera användare</button>
