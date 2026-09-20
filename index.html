@@ -1913,8 +1913,12 @@
             <input id="apply-user" class="form-control form-control-sm" placeholder="t.ex. jesper" autocomplete="username">
           </div>
           <div class="mb-2">
-            <label class="form-label" for="apply-name">Namn</label>
-            <input id="apply-name" class="form-control form-control-sm" placeholder="För- och efternamn" autocomplete="name">
+            <label class="form-label" for="apply-first">Förnamn</label>
+            <input id="apply-first" class="form-control form-control-sm" placeholder="Förnamn" autocomplete="given-name">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="apply-last">Efternamn</label>
+            <input id="apply-last" class="form-control form-control-sm" placeholder="Efternamn" autocomplete="family-name">
           </div>
           <div class="mb-2">
             <label class="form-label" for="apply-email">E-post</label>
@@ -2662,12 +2666,20 @@ function demoApi_(action, args) {
       if (action === "applyForAccount") {
         const payload = args[0] || {};
         const username = String(payload.username || "").trim();
-        const name = String(payload.name || "").trim();
+        const firstName = String(payload.firstName || payload.firstname || "").trim();
+        const lastName = String(payload.lastName || payload.lastname || "").trim();
+        const name = (firstName || lastName)
+          ? [firstName, lastName].filter(Boolean).join(" ")
+          : String(payload.name || "").trim();
         const email = String(payload.email || "").trim().toLowerCase();
         const password = String(payload.password || "");
         if (!username) return fail("Användarnamn saknas");
         if (username.length < 2 || username.length > 40) return fail("Användarnamn ska vara 2–40 tecken");
         if (!/^[a-zA-Z0-9._-]+$/.test(username)) return fail("Användarnamn: endast a–z, 0–9, punkt, _ och -");
+        if (firstName || lastName) {
+          if (!firstName) return fail("Förnamn saknas");
+          if (!lastName) return fail("Efternamn saknas");
+        }
         if (!name) return fail("Namn saknas");
         if (!email || email.indexOf("@") < 1) return fail("Ogiltig e-postadress");
         if (!password || password.length < 6) return fail("Lösenordet måste vara minst 6 tecken");
@@ -5921,7 +5933,9 @@ function submitAccountApplication_() {
   const err = document.getElementById("login-error");
   if (err) err.style.display = "none";
   const username = String((document.getElementById("apply-user") || {}).value || "").trim();
-  const name = String((document.getElementById("apply-name") || {}).value || "").trim();
+  const firstName = String((document.getElementById("apply-first") || {}).value || "").trim();
+  const lastName = String((document.getElementById("apply-last") || {}).value || "").trim();
+  const name = [firstName, lastName].filter(Boolean).join(" ");
   const email = String((document.getElementById("apply-email") || {}).value || "").trim();
   const p1 = String((document.getElementById("apply-pw") || {}).value || "");
   const p2 = String((document.getElementById("apply-pw2") || {}).value || "");
@@ -5932,7 +5946,8 @@ function submitAccountApplication_() {
   if (!username) return showErr("Användarnamn saknas.");
   if (username.length < 2 || username.length > 40) return showErr("Användarnamn ska vara 2–40 tecken.");
   if (!/^[a-zA-Z0-9._-]+$/.test(username)) return showErr("Användarnamn: endast a–z, 0–9, punkt, _ och -.");
-  if (!name) return showErr("Namn saknas.");
+  if (!firstName) return showErr("Förnamn saknas.");
+  if (!lastName) return showErr("Efternamn saknas.");
   if (!email || email.indexOf("@") < 1) return showErr("Ogiltig e-postadress.");
   if (!p1 || p1.length < 6) return showErr("Lösenordet måste vara minst 6 tecken.");
   if (p1 !== p2) return showErr("Lösenorden matchar inte.");
@@ -5946,7 +5961,7 @@ function submitAccountApplication_() {
         showErr((res && res.error) || "Kunde inte skicka ansökan.");
         return;
       }
-      ["apply-user", "apply-name", "apply-email", "apply-pw", "apply-pw2"].forEach((id) => {
+      ["apply-user", "apply-first", "apply-last", "apply-email", "apply-pw", "apply-pw2"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.value = "";
       });
@@ -5963,6 +5978,8 @@ function submitAccountApplication_() {
     })
     .applyForAccount({
       username,
+      firstName,
+      lastName,
       name,
       email,
       password: p1,

@@ -496,7 +496,16 @@ async function applyForAccount(env, payload) {
   const userCheck = validateUsername(obj.username);
   if (!userCheck.ok) return userCheck;
   const username = userCheck.username;
-  const name = String(obj.name || "").trim();
+  const firstName = String(obj.firstName || obj.firstname || "").trim();
+  const lastName = String(obj.lastName || obj.lastname || "").trim();
+  let name = "";
+  if (firstName || lastName) {
+    if (!firstName) return { ok: false, error: "Förnamn saknas" };
+    if (!lastName) return { ok: false, error: "Efternamn saknas" };
+    name = firstName + " " + lastName;
+  } else {
+    name = String(obj.name || "").trim();
+  }
   if (!name) return { ok: false, error: "Namn saknas" };
   const emailCheck = validateEmail(obj.email);
   if (!emailCheck.ok) return emailCheck;
