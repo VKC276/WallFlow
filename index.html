@@ -1932,6 +1932,10 @@
           <button id="apply-btn" class="btn btn-accent btn-lg w-100 mb-2" type="button" onclick="submitAccountApplication_()">Skicka ansökan</button>
           <button class="btn btn-ghost w-100" type="button" onclick="showLoginMode_('login')">Tillbaka till inloggning</button>
         </div>
+        <div id="login-form-apply-done" style="display:none;">
+          <p class="mb-3" style="color:var(--login-lead); line-height:1.5;">Superadmin får ett mejl och aktiverar kontot. Du kan inte logga in förrän det är gjort — då skickas ett mejl till dig. Använd samma användarnamn och lösenord som du just valde.</p>
+          <button class="btn btn-accent btn-lg w-100" type="button" onclick="showLoginMode_('login')">Tillbaka till inloggning</button>
+        </div>
         <div id="login-status" role="status" aria-live="polite">
           <span class="login-status-dot" aria-hidden="true"></span>
           <span id="login-status-text">Ansluter till servern…</span>
@@ -3248,11 +3252,23 @@ function collectCheckedRoles_(idPrefix, ids) {
     return !!(el && el.checked);
   });
 }
+/** Ledbyggare, admin och superadmin är primärroller — bara en i taget. Kassör/hallvärd kan kombineras. */
+function onRoleCheckboxChange_(idPrefix, el) {
+  const exclusive = ["scout", "admin", "superadmin"];
+  const id = String(el && el.id || "").slice(String(idPrefix || "").length);
+  if (exclusive.indexOf(id) < 0) return;
+  if (!el || !el.checked) return;
+  exclusive.forEach((rid) => {
+    if (rid === id) return;
+    const box = document.getElementById(idPrefix + rid);
+    if (box && !box.disabled) box.checked = false;
+  });
+}
 function roleCheckboxesHtml_(idPrefix, checkedRoles, opts) {
   opts = opts || {};
   const checked = checkedRoles || [];
   const lockSuper = !!opts.lockSuper;
-  const onchange = opts.onchange ? ` onchange="${opts.onchange}"` : "";
+  const onchange = ` onchange="onRoleCheckboxChange_('${escapeHtml_(idPrefix)}', this)${opts.onchange ? "; " + opts.onchange : ""}"`;
   const items = opts.applicant
     ? [
         { id: "scout", label: "Ledbyggare" },
@@ -3277,8 +3293,7 @@ function roleCheckboxesHtml_(idPrefix, checkedRoles, opts) {
         </label>`;
       }).join("")}
     </div>
-    ${lockSuper ? `<p class="small mt-1 mb-0" style="color:var(--muted);">Sista superadmin måste behålla Superadmin.</p>` : ""}
-    ${opts.applicant ? `<p class="small mt-2 mb-0" style="color:var(--muted);">Admin och superadmin läggs till manuellt.</p>` : ""}`;
+    ${lockSuper ? `<p class="small mt-1 mb-0" style="color:var(--muted);">Sista superadmin måste behålla Superadmin.</p>` : ""}`;
 }
 
 function isSuperadminRole_(role) {
@@ -5845,6 +5860,7 @@ function showLoginMode_(mode) {
   const forgot = document.getElementById("login-form-forgot");
   const reset = document.getElementById("login-form-reset");
   const apply = document.getElementById("login-form-apply");
+  const applyDone = document.getElementById("login-form-apply-done");
   const applyLink = document.getElementById("login-apply-link");
   const lead = document.getElementById("login-lead");
   const err = document.getElementById("login-error");
@@ -5853,6 +5869,7 @@ function showLoginMode_(mode) {
   if (forgot) forgot.style.display = mode === "forgot" ? "" : "none";
   if (reset) reset.style.display = mode === "reset" ? "" : "none";
   if (apply) apply.style.display = mode === "apply" ? "" : "none";
+  if (applyDone) applyDone.style.display = mode === "applyDone" ? "" : "none";
   if (applyLink) applyLink.style.display = mode === "login" ? "" : "none";
   if (lead) {
     lead.textContent = mode === "forgot"
@@ -5861,7 +5878,9 @@ function showLoginMode_(mode) {
         ? "Välj ett nytt lösenord för ditt konto."
         : (mode === "apply"
           ? "Fyll i uppgifterna. Superadmin aktiverar kontot innan du kan logga in."
-          : "Logga in för att se ledbyggnationen eller rapportera tid."));
+          : (mode === "applyDone"
+            ? "Ansökan är skickad."
+            : "Logga in för att se ledbyggnationen eller rapportera tid.")));
   }
   if (mode === "forgot") {
     const el = document.getElementById("forgot-login");
@@ -5936,8 +5955,7 @@ function submitAccountApplication_() {
         host.dataset.ready = "";
         host.innerHTML = "";
       }
-      showLoginMode_("login");
-      showToast("Ansökan skickad. Superadmin aktiverar kontot.");
+      showLoginMode_("applyDone");
     })
     .withFailureHandler(() => {
       if (btn) { btn.disabled = false; btn.textContent = "Skicka ansökan"; }
