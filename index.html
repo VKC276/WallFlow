@@ -1702,17 +1702,45 @@
     body.quickinfo-open { overflow: hidden; }
     .insp-lead {
       color: var(--muted);
-      font-size: 0.92rem;
-      line-height: 1.45;
-      margin: 0 0 14px;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      margin: 0 0 10px;
     }
-    .insp-slots { display: grid; gap: 10px; margin-bottom: 14px; }
+    #app-insp .admin-shell {
+      padding: 10px 16px calc(12px + var(--safe-bottom));
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #app-insp .admin-card {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 0;
+      padding: 12px;
+    }
+    #app-insp .admin-card h3 { margin-bottom: 6px; }
+    #app-insp .admin-kicker { margin-bottom: 2px; }
+    #app-insp .insp-lead,
+    #app-insp .insp-check,
+    #app-insp .admin-kicker,
+    #app-insp .admin-card h3,
+    #app-insp #insp-draw-btn { flex-shrink: 0; }
+    .insp-slots {
+      display: grid;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+      flex: 1;
+      min-height: 0;
+    }
     .insp-slot {
-      min-height: 108px;
-      border-radius: 18px;
+      min-height: 0;
+      border-radius: 16px;
       border: 1px solid var(--line);
       background: var(--bg-elevated);
-      padding: 16px 18px;
+      padding: 10px 14px;
       display: grid;
       align-content: center;
       overflow: hidden;
@@ -1730,9 +1758,9 @@
       margin: 0;
       font-family: var(--font-body);
       font-weight: 700;
-      font-size: clamp(1.2rem, 4.2vw, 1.7rem);
+      font-size: clamp(1.05rem, 3.6vw, 1.45rem);
       letter-spacing: -0.01em;
-      line-height: 1.3;
+      line-height: 1.28;
     }
     .insp-slot.is-spinning .insp-title {
       animation: insp-tick 0.16s ease;
@@ -1747,15 +1775,6 @@
     @keyframes insp-land {
       from { opacity: 0.55; filter: blur(6px); }
       to { opacity: 1; filter: blur(0); }
-    }
-    .insp-rule {
-      border-radius: 14px;
-      padding: 12px 14px;
-      background: var(--surface-2);
-      border: 1px solid var(--line);
-      font-weight: 600;
-      font-size: 0.92rem;
-      margin: 0 0 14px;
     }
     .insp-list {
       list-style: none;
@@ -1792,7 +1811,7 @@
       font-weight: 600;
       user-select: none;
     }
-    .insp-check { margin: 0 0 14px; font-size: 0.92rem; }
+    .insp-check { margin: 0 0 10px; font-size: 0.92rem; }
     .insp-list-check { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
     .insp-check input,
     .insp-list-check input,
@@ -10523,7 +10542,6 @@ function renderInspTool_() {
         Inkludera avancerade moves
       </label>
       <div class="insp-slots" id="insp-slots">${slots}</div>
-      <p class="insp-rule" ${landedCount === 3 ? "" : "hidden"}>Bygg in minst två av korten i leden.</p>
       <button class="btn btn-accent w-100" type="button" id="insp-draw-btn" onclick="startInspDraw_()">${drawLabel}</button>
     </div>`;
 }
@@ -10631,8 +10649,6 @@ function startInspDraw_() {
   inspState_.spinning = true;
   const btn = document.getElementById("insp-draw-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Drar kort…"; }
-  const rule = document.querySelector(".insp-rule");
-  if (rule) rule.hidden = true;
   beginInspSlotSpin_(0);
 }
 function beginInspSlotSpin_(i) {
@@ -10677,8 +10693,6 @@ function tickInspSpin_() {
       inspState_.spin = null;
       const btn = document.getElementById("insp-draw-btn");
       if (btn) { btn.disabled = false; btn.textContent = "Dra igen"; }
-      const rule = document.querySelector(".insp-rule");
-      if (rule) rule.hidden = false;
     }
     return;
   }
