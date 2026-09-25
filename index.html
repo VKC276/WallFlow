@@ -567,14 +567,14 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #app-time, #app-verif, #app-tencard, #app-wellness { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show { display: flex; }
     body.time-open .filters-block,
     body.time-open .search-toggle,
     body.time-open .search-wrap,
@@ -587,6 +587,9 @@
     body.wellness-open .filters-block,
     body.wellness-open .search-toggle,
     body.wellness-open .search-wrap,
+    body.insp-open .filters-block,
+    body.insp-open .search-toggle,
+    body.insp-open .search-wrap,
     body.no-routes .filters-block,
     body.no-routes .search-toggle,
     body.no-routes .search-wrap { display: none !important; }
@@ -594,6 +597,7 @@
     body.verif-open .topbar,
     body.tencard-open .topbar,
     body.wellness-open .topbar,
+    body.insp-open .topbar,
     body.no-routes .topbar {
       grid-template-areas: "brand actions";
     }
@@ -641,11 +645,29 @@
     .account-menu-btn[aria-expanded="true"] { background: var(--surface-3); }
     .account-menu {
       position: absolute; right: 0; top: calc(100% + 6px);
-      min-width: 168px; padding: 6px;
-      border-radius: 12px; border: 1px solid var(--line); background: var(--panel-bg);
+      min-width: 232px; max-height: min(72vh, 560px); overflow: auto;
+      padding: 8px;
+      border-radius: 14px; border: 1px solid var(--line); background: var(--panel-bg);
       box-shadow: 0 12px 28px rgba(0,0,0,0.22); display: none; z-index: 50;
     }
-    .account-menu-wrap.open .account-menu { display: grid; gap: 4px; }
+    .account-menu-wrap.open .account-menu { display: grid; gap: 2px; }
+    .account-menu-section {
+      display: grid;
+      gap: 2px;
+    }
+    .account-menu-section + .account-menu-section {
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+    .account-menu-heading {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 2px 12px 4px;
+    }
     .account-menu button {
       border: 0; border-radius: 8px; background: transparent; color: var(--text);
       text-align: left; font-size: 0.88rem; font-weight: 600; padding: 10px 12px;
@@ -653,7 +675,7 @@
     }
     .account-menu button:hover { background: var(--surface-2); }
     .account-menu button.account-menu-logout {
-      margin-top: 4px;
+      margin-top: 6px;
       padding-top: 12px;
       border-top: 1px solid var(--line);
       border-radius: 0 0 8px 8px;
@@ -1678,6 +1700,90 @@
     }
     .inventory-report .empty { padding: 16px 8px; }
     body.quickinfo-open { overflow: hidden; }
+    .insp-lead {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+      margin: 0 0 14px;
+    }
+    .insp-slots { display: grid; gap: 10px; margin-bottom: 14px; }
+    .insp-slot {
+      min-height: 108px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--bg-elevated);
+      padding: 16px 18px;
+      display: grid;
+      align-content: center;
+      overflow: hidden;
+    }
+    .insp-slot.is-wait { opacity: 0.55; }
+    .insp-kicker {
+      margin: 0 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .insp-title {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(1.35rem, 5.4vw, 2.05rem);
+      letter-spacing: -0.03em;
+      line-height: 1.12;
+    }
+    .insp-slot.is-spinning .insp-title {
+      animation: insp-tick 0.16s ease;
+    }
+    .insp-slot.is-landed .insp-title {
+      animation: insp-land 0.45s ease;
+    }
+    @keyframes insp-tick {
+      from { opacity: 0.35; filter: blur(4px); transform: translateY(0.12em); }
+      to { opacity: 1; filter: blur(0); transform: none; }
+    }
+    @keyframes insp-land {
+      from { opacity: 0.55; filter: blur(6px); }
+      to { opacity: 1; filter: blur(0); }
+    }
+    .insp-rule {
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      font-weight: 600;
+      font-size: 0.92rem;
+      margin: 0 0 14px;
+    }
+    .insp-list {
+      list-style: none;
+      margin: 0 0 12px;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .insp-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .insp-list strong { display: block; font-size: 0.92rem; }
+    .insp-list span { display: block; color: var(--muted); font-size: 0.78rem; }
+    .insp-add {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+    }
+    @media (max-width: 640px) {
+      .insp-add { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -1754,6 +1860,9 @@
     </div>
     <div id="app-wellness">
       <div class="admin-shell wide" id="wellness-main"></div>
+    </div>
+    <div id="app-insp">
+      <div class="admin-shell wide" id="insp-main"></div>
     </div>
   </div>
 
@@ -2113,6 +2222,7 @@ function loadDemoDb_() {
         if (!parsed.wellnessOrg) parsed.wellnessOrg = seedDemoDb_().wellnessOrg;
         if (!Array.isArray(parsed.tencards)) parsed.tencards = seedDemoDb_().tencards;
         if (!Array.isArray(parsed.wellnessReceipts)) parsed.wellnessReceipts = [];
+        if (!Array.isArray(parsed.builderMoves)) parsed.builderMoves = [];
         (parsed.users || []).forEach((u) => {
           if (!u.extraRoles) u.extraRoles = [];
           if (u.active == null) u.active = true;
@@ -3082,6 +3192,9 @@ function demoApi_(action, args) {
       if (action === "getWellnessApp" || action === "getWellnessReceipt" || action === "issueWellnessReceipt" || action === "emailWellnessReceipt" || action === "deleteWellnessReceipt" || action === "getWellnessSettings" || action === "saveWellnessSettings") {
         return ok(demoWellnessApi_(store, action, args));
       }
+      if (action === "getBuilderMoves" || action === "addBuilderMove" || action === "deleteBuilderMove") {
+        return ok(demoBuilderMovesApi_(store, action, args));
+      }
       return fail("Okänd action: " + action);
     }, 80);
   });
@@ -3217,34 +3330,47 @@ function setAdminChrome_(title) {
   const el = document.getElementById("admin-header-title");
   if (el) el.textContent = title || "Konto";
 }
+function menuSectionHtml_(label, buttons) {
+  if (!buttons || !buttons.length) return "";
+  return `<div class="account-menu-section" role="group" aria-label="${escapeHtml_(label)}">
+    <div class="account-menu-heading">${escapeHtml_(label)}</div>
+    ${buttons.join("")}
+  </div>`;
+}
 function renderAccountMenu_() {
   const menu = document.getElementById("account-menu");
   if (!menu) return;
-  const items = [];
   if (!currentUser.authorized) {
-    items.push(`<button type="button" role="menuitem" onclick="closeVerifTool()">Tillbaka till inloggning</button>`);
-    menu.innerHTML = items.join("");
+    menu.innerHTML = `<button type="button" role="menuitem" onclick="closeVerifTool()">Tillbaka till inloggning</button>`;
     return;
   }
+  const hall = [];
   if (hasWallflowAccess_()) {
-    items.push(`<button type="button" role="menuitem" onclick="openRoutesFromMenu_()">Ledbyggnation</button>`);
+    hall.push(`<button type="button" role="menuitem" onclick="openRoutesFromMenu_()">Ledbyggnation</button>`);
+    hall.push(`<button type="button" role="menuitem" onclick="openInspToolFromMenu_()">Inspirationskort</button>`);
   }
-    items.push(
-      `<button type="button" role="menuitem" onclick="openSettingsFromMenu_()">Konto</button>`,
-      `<button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>`,
-      `<button type="button" role="menuitem" onclick="openVerifToolFromMenu_()">Utlägg och verifikation</button>`
-    );
+  const ekonomi = [
+    `<button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>`,
+    `<button type="button" role="menuitem" onclick="openVerifToolFromMenu_()">Utlägg och verifikation</button>`
+  ];
   if (canManageTencards_()) {
-    items.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
+    ekonomi.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
   }
   if (canIssueWellnessReceipt_()) {
-    items.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdskvitto</button>`);
+    ekonomi.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdskvitto</button>`);
   }
+  const konto = [
+    `<button type="button" role="menuitem" onclick="openSettingsFromMenu_()">Konto</button>`
+  ];
   if (canOpenAdministration_()) {
-    items.push(`<button type="button" role="menuitem" onclick="openAdministrationFromMenu_()">Administration</button>`);
+    konto.push(`<button type="button" role="menuitem" onclick="openAdministrationFromMenu_()">Administration</button>`);
   }
-  items.push(`<button type="button" role="menuitem" class="account-menu-logout" onclick="closeAccountMenu_(); logoutAdmin()">Logga ut</button>`);
-  menu.innerHTML = items.join("");
+  menu.innerHTML = [
+    menuSectionHtml_("Hallen", hall),
+    menuSectionHtml_("Ekonomi", ekonomi),
+    menuSectionHtml_("Konto", konto),
+    `<button type="button" role="menuitem" class="account-menu-logout" onclick="closeAccountMenu_(); logoutAdmin()">Logga ut</button>`
+  ].join("");
 }
 function adminRoleLabelSv(role) {
   const r = normalizeRole_(role || userRole_());
@@ -3454,6 +3580,7 @@ function showLoginGate_() {
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  hideInspOverlay_();
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("login-panel").classList.add("show");
   document.getElementById("login-error").style.display = "none";
@@ -3485,7 +3612,7 @@ function currentDisplayName_() {
 function hideAppChrome_() {
   const chrome = document.getElementById("app-chrome");
   if (chrome) chrome.classList.remove("ready");
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "no-routes");
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "no-routes");
 }
 function showAppChrome_() {
   const chrome = document.getElementById("app-chrome");
@@ -3495,6 +3622,7 @@ function showAppChrome_() {
   document.body.classList.toggle("verif-open", document.getElementById("app-verif").classList.contains("show"));
   document.body.classList.toggle("tencard-open", !!(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")));
   document.body.classList.toggle("wellness-open", !!(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")));
+  document.body.classList.toggle("insp-open", !!(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")));
   renderAccountMenu_();
 }
 function onTopBrandClick_() {
@@ -3508,10 +3636,12 @@ function onTopBrandClick_() {
     closeVerifTool();
     closeTencardTool();
     closeWellnessTool();
+    closeInspTool();
   } else if (currentUser.authorized) {
     closeVerifTool();
     closeTencardTool();
     closeWellnessTool();
+    closeInspTool();
     openTimeTool();
   }
 }
@@ -3532,7 +3662,8 @@ function showAppShell_() {
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open");
+  hideInspOverlay_();
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open");
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
@@ -5772,6 +5903,7 @@ function openRoutesFromMenu_() {
   closeVerifTool();
   closeTencardTool();
   closeWellnessTool();
+  closeInspTool();
 }
 function openSettingsFromMenu_() {
   closeAccountMenu_();
@@ -5782,12 +5914,14 @@ function openTimeToolFromMenu_() {
   closeVerifTool();
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  hideInspOverlay_();
   openTimeTool();
 }
 function openVerifToolFromMenu_() {
   closeAccountMenu_();
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  hideInspOverlay_();
   openVerifTool();
 }
 function openTencardToolFromMenu_() {
@@ -5797,6 +5931,10 @@ function openTencardToolFromMenu_() {
 function openWellnessToolFromMenu_() {
   closeAccountMenu_();
   openWellnessTool();
+}
+function openInspToolFromMenu_() {
+  closeAccountMenu_();
+  openInspTool();
 }
 function openAdministrationFromMenu_() {
   closeAccountMenu_();
@@ -6148,6 +6286,7 @@ function logoutAdmin() {
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  hideInspOverlay_();
   closePanel();
   showLoginGate_();
   showToast("Utloggad");
@@ -7788,7 +7927,8 @@ function closeTimeTool() {
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
-  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen) {
+  const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
+  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen && !inspOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -7809,6 +7949,7 @@ function openTimeTool(view) {
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  hideInspOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
@@ -8433,7 +8574,7 @@ function closeVerifTool() {
     showLoginGate_();
     return;
   }
-  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show"))) {
+  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")) && !(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show"))) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -8443,6 +8584,7 @@ function openVerifTool() {
   document.getElementById("app-time").classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  hideInspOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
@@ -9265,7 +9407,8 @@ function closeTencardTool() {
   const timeOpen = document.getElementById("app-time") && document.getElementById("app-time").classList.contains("show");
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen) {
+  const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen && !inspOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -9280,6 +9423,7 @@ function openTencardTool() {
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
   hideWellnessOverlay_();
+  hideInspOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-tencard").classList.add("show");
@@ -9608,7 +9752,8 @@ function closeWellnessTool() {
   const timeOpen = document.getElementById("app-time") && document.getElementById("app-time").classList.contains("show");
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen) {
+  const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !inspOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -9623,6 +9768,7 @@ function openWellnessTool() {
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
+  hideInspOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-wellness").classList.add("show");
@@ -10068,6 +10214,314 @@ async function emailWellnessReceipt_() {
       showToast(String(err && err.message ? err.message : err));
     })
     .emailWellnessReceipt({ id: r.id, email, pdfBase64: b64 });
+}
+
+const DEFAULT_INSP_ROWS_ = [
+  ["Viktöverföring","Teknik"],["Högt fotsteg","Fotarbete"],["Fotbyte","Fotarbete"],
+  ["Handbyte","Teknik"],["Matcha händer","Teknik"],["Flagga","Balans"],
+  ["Enkel backstep","Fotarbete"],["Kroppen nära väggen","Kroppskontroll"],
+  ["Långt statiskt drag","Räckvidd"],["Flytta höften åt sidan","Kroppskontroll"],
+  ["Rotera höften","Kroppskontroll"],["Pressa genom foten","Fotarbete"],
+  ["Stå på liten fot","Balans"],["Sträcka ut kroppen","Räckvidd"],
+  ["Cross","Handteknik"],["Gaston","Handteknik"],["Undercling","Handteknik"],
+  ["Sidodrag","Handteknik"],["Drop knee","Kropp/fot"],["Backstep","Fotarbete"],
+  ["Enkel heel hook","Fot"],["Enkel toe hook","Fot"],["Layback","Kropp"],
+  ["Mantle","Teknik"],["Stor flagga","Balans"],["Långt cross","Räckvidd"],
+  ["Hand–fot-koordinering","Koordination"],["Heel hook för att nå","Fot"],
+  ["Smearing","Fotarbete"],["Rockover","Kropp"],
+  ["Avancerad heel hook","Fot"],["Toe hook","Fot"],["Heel-toe cam","Fot"],
+  ["Liten dyno","Dynamisk"],["Stor dyno","Dynamisk"],
+  ["Koordinationsrörelse","Koordination"],["Deadpoint","Dynamisk"],
+  ["Cut loose","Dynamisk"],["Paddle","Dynamisk"],["Stor cross","Handteknik"],
+  ["Dynamisk cross","Dynamisk"],["Compression","Kropp"],["Kneebar","Kropp"],
+  ["Stor höftrotation","Kropp"],["Dynamiskt fotbyte","Fot"],
+  ["Skicka fötterna högt","Fot"],["Heel hook → handflytt","Kombination"],
+  ["Cross → flagga","Kombination"],["Drop knee → långt drag","Kombination"],
+  ["Dyno → match","Dynamisk"],
+  ["Campusliknande flytt","Styrka"],["Campus 1-2-3","Styrka"],
+  ["Stor koordinationsdyno","Dynamisk"],["Paddle dyno","Dynamisk"],
+  ["One-arm move","Styrka"],["Avancerad compression","Styrka"],
+  ["Avancerad kneebar","Kropp"],["Cut loose → catch","Dynamisk"],
+  ["Dyno från dålig fot","Dynamisk"],["Dynamisk heel hook","Fot"],
+  ["Heel hook → dyno","Kombination"],["Toe hook → dynamisk flytt","Kombination"],
+  ["Paddle mellan dåliga grepp","Dynamisk"],["Stor deadpoint","Dynamisk"],
+  ["Deadpoint med kroppsvridning","Dynamisk"],["Campus + fot","Styrka"],
+  ["Cut feet → återtag","Dynamisk"],["Extremt högt fotsteg","Rörlighet"],
+  ["Compression → dynamisk flytt","Kombination"],["Stor lateral dyno","Dynamisk"],
+  ["Bathang","Avancerad"],["Bathang → handflytt","Kombination"],
+  ["One-arm dyno","Extrem"],["Stor koordinationssekvens","Koordination"],
+  ["Campus utan fötter","Styrka"],["Dubbel dyno","Dynamisk"],
+  ["Dyno → dyno","Dynamisk"],["Extrem compression","Styrka"],
+  ["Heel hook → dyno → catch","Kombination"],["Cut loose → dynamisk catch","Dynamisk"],
+  ["Paddle → paddle → catch","Koordination"],["Extrem lateral dyno","Dynamisk"],
+  ["One-arm lock-off → lång flytt","Styrka"],["Dynamisk rörelse från extrem fotposition","Kombination"],
+  ["Två tekniker i samma rörelse","Kombination"]
+];
+const INSP_SPIN_MS_ = 2200;
+let inspState_ = {
+  moves: [],
+  canManage: false,
+  spinning: false,
+  landed: [null, null, null],
+  picks: [],
+  spin: null,
+  raf: 0,
+  lastFrame: ""
+};
+
+function defaultInspMoves_() {
+  return DEFAULT_INSP_ROWS_.map((row, i) => ({ id: "d" + (i + 1), title: row[0], category: row[1] }));
+}
+function demoBuilderMovesApi_(store, action, args) {
+  if (!Array.isArray(store.builderMoves) || !store.builderMoves.length) {
+    store.builderMoves = defaultInspMoves_();
+    saveDemoDb_(store);
+  }
+  const canManage = userRole_() === "superadmin";
+  if (action === "getBuilderMoves") return { ok: true, moves: store.builderMoves.slice(), canManage };
+  if (!canManage) return { ok: false, error: "Bara superadmin kan ändra moment" };
+  const payload = args[0] || {};
+  if (action === "addBuilderMove") {
+    const title = String(payload.title || "").trim().replace(/\s+/g, " ").slice(0, 80);
+    const category = String(payload.category || "").trim().replace(/\s+/g, " ").slice(0, 40);
+    if (!title) return { ok: false, error: "Moment saknas" };
+    if (store.builderMoves.some((m) => String(m.title).toLowerCase() === title.toLowerCase())) {
+      return { ok: false, error: "Momentet finns redan" };
+    }
+    store.builderMoves.push({ id: "m" + Date.now(), title, category });
+    saveDemoDb_(store);
+    return { ok: true, moves: store.builderMoves.slice(), canManage: true };
+  }
+  if (action === "deleteBuilderMove") {
+    const id = String(payload.id || "").trim();
+    store.builderMoves = store.builderMoves.filter((m) => m.id !== id);
+    saveDemoDb_(store);
+    return { ok: true, moves: store.builderMoves.slice(), canManage: true };
+  }
+  return { ok: false, error: "Okänd action" };
+}
+function hideInspOverlay_() {
+  const el = document.getElementById("app-insp");
+  if (el) el.classList.remove("show");
+  document.body.classList.remove("insp-open");
+  if (inspState_.raf) cancelAnimationFrame(inspState_.raf);
+  inspState_.spinning = false;
+  inspState_.spin = null;
+}
+function closeInspTool() {
+  hideInspOverlay_();
+  const timeOpen = document.getElementById("app-time") && document.getElementById("app-time").classList.contains("show");
+  const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
+  const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
+  const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !wellnessOpen) {
+    document.getElementById("app-public").classList.add("ready");
+    showAppChrome_();
+  } else {
+    showAppChrome_();
+  }
+}
+function openInspTool() {
+  if (!currentUser.authorized) return showLoginGate_();
+  if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  if (!hasWallflowAccess_()) return showToast("Saknar behörighet");
+  document.getElementById("app-admin").classList.remove("show");
+  document.getElementById("app-time").classList.remove("show");
+  document.getElementById("app-verif").classList.remove("show");
+  hideTencardOverlay_();
+  hideWellnessOverlay_();
+  document.getElementById("app-public").classList.remove("ready");
+  if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
+  document.getElementById("app-insp").classList.add("show");
+  showAppChrome_();
+  loadInspTool_();
+}
+function loadInspTool_() {
+  const main = document.getElementById("insp-main");
+  if (!main) return;
+  main.innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        inspState_.moves = defaultInspMoves_();
+        inspState_.canManage = userRole_() === "superadmin";
+      } else {
+        inspState_.moves = res.moves || [];
+        inspState_.canManage = !!res.canManage;
+      }
+      if (!inspState_.moves.length) inspState_.moves = defaultInspMoves_();
+      renderInspTool_();
+    })
+    .withFailureHandler(() => {
+      inspState_.moves = defaultInspMoves_();
+      inspState_.canManage = userRole_() === "superadmin";
+      renderInspTool_();
+    })
+    .getBuilderMoves();
+}
+function inspSpinIndex_(startedAt, endsAt, now, count) {
+  if (count <= 1) return 0;
+  const duration = Math.max(1, endsAt - startedAt);
+  const t = Math.min(1, Math.max(0, (now - startedAt) / duration));
+  const eased = 1 - Math.pow(1 - t, 3);
+  return Math.min(count - 1, Math.floor(eased * count));
+}
+function inspBuildFrames_(moves, winnerTitle) {
+  const pool = (moves || []).map((m) => m.title).filter(Boolean);
+  if (!pool.length) return [winnerTitle];
+  const winner = pool.indexOf(winnerTitle) >= 0 ? winnerTitle : pool[0];
+  const count = Math.max(22, pool.length * 2);
+  const frames = [];
+  for (let i = 0; i < count - 1; i++) {
+    const avoid = frames[i - 1];
+    const choices = pool.filter((item) => item !== avoid);
+    frames.push(choices[Math.floor(Math.random() * choices.length)] || pool[0]);
+  }
+  frames.push(winner);
+  return frames;
+}
+function pickInspThree_(moves) {
+  const pool = moves.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = pool[i];
+    pool[i] = pool[j];
+    pool[j] = tmp;
+  }
+  return pool.slice(0, 3);
+}
+function inspSlotHtml_(i, move, mode) {
+  const n = i + 1;
+  if (!move) {
+    return `<div class="insp-slot is-wait" id="insp-slot-${i}" data-mode="wait">
+      <p class="insp-kicker">Kort ${n}</p>
+      <p class="insp-title">Väntar</p>
+    </div>`;
+  }
+  const cls = mode === "spin" ? "is-spinning" : "is-landed";
+  const kicker = mode === "spin" ? "Slumpar…" : (move.category || "Kort " + n);
+  return `<div class="insp-slot ${cls}" id="insp-slot-${i}" data-mode="${mode}">
+    <p class="insp-kicker">${escapeHtml_(kicker)}</p>
+    <p class="insp-title">${escapeHtml_(move.title)}</p>
+  </div>`;
+}
+function renderInspTool_() {
+  const main = document.getElementById("insp-main");
+  if (!main) return;
+  const landedCount = inspState_.landed.filter(Boolean).length;
+  const drawLabel = landedCount ? "Dra igen" : "Dra tre kort";
+  const slots = [0, 1, 2].map((i) => inspSlotHtml_(i, inspState_.landed[i], inspState_.landed[i] ? "land" : "wait")).join("");
+  const manage = inspState_.canManage ? renderInspManage_() : "";
+  main.innerHTML = `
+    <div class="admin-card">
+      <p class="admin-kicker">Ledbyggare</p>
+      <h3>Inspirationskort</h3>
+      <p class="insp-lead">Dra tre kort. Minst två av dem ska byggas in i leden du sätter.</p>
+      <div class="insp-slots" id="insp-slots">${slots}</div>
+      <p class="insp-rule" ${landedCount === 3 ? "" : "hidden"}>Bygg in minst två av korten i leden.</p>
+      <button class="btn btn-accent w-100" type="button" id="insp-draw-btn" onclick="startInspDraw_()">${drawLabel}</button>
+    </div>
+    ${manage}`;
+}
+function renderInspManage_() {
+  const items = (inspState_.moves || []).map((m) =>
+    `<li>
+      <div><strong>${escapeHtml_(m.title)}</strong><span>${escapeHtml_(m.category || "")}</span></div>
+      <button class="btn btn-sm btn-ghost" type="button" onclick='deleteInspMove_(${JSON.stringify(String(m.id))})'>Ta bort</button>
+    </li>`
+  ).join("");
+  return `<div class="admin-card">
+    <p class="admin-kicker">Superadmin</p>
+    <h3>Moment</h3>
+    <p class="insp-lead">Listan används när ledbyggare drar kort. Nya moment syns direkt.</p>
+    <ul class="insp-list">${items}</ul>
+    <div class="insp-add">
+      <input id="insp-new-title" class="form-control" maxlength="80" placeholder="Moment" autocomplete="off">
+      <input id="insp-new-cat" class="form-control" maxlength="40" placeholder="Kategori" autocomplete="off">
+      <button class="btn btn-accent" type="button" onclick="addInspMove_()">Lägg till</button>
+    </div>
+  </div>`;
+}
+function applyInspMoves_(res) {
+  if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+  inspState_.moves = res.moves || inspState_.moves;
+  renderInspTool_();
+}
+function addInspMove_() {
+  const title = val_("insp-new-title");
+  const category = val_("insp-new-cat");
+  google.script.run
+    .withSuccessHandler(applyInspMoves_)
+    .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+    .addBuilderMove({ title, category });
+}
+function deleteInspMove_(id) {
+  google.script.run
+    .withSuccessHandler(applyInspMoves_)
+    .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+    .deleteBuilderMove({ id });
+}
+function startInspDraw_() {
+  if (inspState_.spinning) return;
+  if ((inspState_.moves || []).length < 3) return showToast("Det behövs minst tre moment i listan");
+  const picks = pickInspThree_(inspState_.moves);
+  inspState_.picks = picks;
+  inspState_.landed = [null, null, null];
+  inspState_.spinning = true;
+  const btn = document.getElementById("insp-draw-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Drar kort…"; }
+  const rule = document.querySelector(".insp-rule");
+  if (rule) rule.hidden = true;
+  beginInspSlotSpin_(0);
+}
+function beginInspSlotSpin_(i) {
+  const pick = inspState_.picks[i];
+  const startedAt = Date.now();
+  inspState_.spin = {
+    i,
+    pick,
+    frames: inspBuildFrames_(inspState_.moves, pick.title),
+    startedAt,
+    endsAt: startedAt + INSP_SPIN_MS_
+  };
+  inspState_.lastFrame = "";
+  paintInspSlot_(i, { title: pick.title, category: pick.category }, "spin");
+  inspState_.raf = requestAnimationFrame(tickInspSpin_);
+}
+function paintInspSlot_(i, move, mode) {
+  const el = document.getElementById("insp-slot-" + i);
+  if (!el) return;
+  const next = inspSlotHtml_(i, move, mode);
+  const wrap = document.createElement("div");
+  wrap.innerHTML = next;
+  el.replaceWith(wrap.firstElementChild);
+}
+function tickInspSpin_() {
+  const spin = inspState_.spin;
+  if (!spin) return;
+  const now = Date.now();
+  const idx = inspSpinIndex_(spin.startedAt, spin.endsAt, now, spin.frames.length);
+  const title = spin.frames[idx] || spin.pick.title;
+  if (title !== inspState_.lastFrame) {
+    inspState_.lastFrame = title;
+    paintInspSlot_(spin.i, { title, category: spin.pick.category }, now >= spin.endsAt ? "land" : "spin");
+  }
+  if (now >= spin.endsAt) {
+    inspState_.landed[spin.i] = spin.pick;
+    paintInspSlot_(spin.i, spin.pick, "land");
+    if (spin.i < 2) {
+      beginInspSlotSpin_(spin.i + 1);
+    } else {
+      inspState_.spinning = false;
+      inspState_.spin = null;
+      const btn = document.getElementById("insp-draw-btn");
+      if (btn) { btn.disabled = false; btn.textContent = "Dra igen"; }
+      const rule = document.querySelector(".insp-rule");
+      if (rule) rule.hidden = false;
+    }
+    return;
+  }
+  inspState_.raf = requestAnimationFrame(tickInspSpin_);
 }
 
 if (document.readyState === "loading") {

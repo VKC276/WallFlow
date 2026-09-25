@@ -97,6 +97,11 @@ import {
   issueWellnessReceipt,
   saveWellnessSettings
 } from "./friskvard.js";
+import {
+  addBuilderMove,
+  deleteBuilderMove,
+  getBuilderMoves
+} from "./inspiration.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -218,6 +223,12 @@ export async function dispatch(env, action, token, args, extras) {
       return emailWellnessReceipt(env, args[0], session, extras && extras.origin);
     case "deleteWellnessReceipt":
       return deleteWellnessReceipt(env, args[0], session);
+    case "getBuilderMoves":
+      return getBuilderMoves(env, session);
+    case "addBuilderMove":
+      return addBuilderMove(env, args[0], session);
+    case "deleteBuilderMove":
+      return deleteBuilderMove(env, args[0], session);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }
