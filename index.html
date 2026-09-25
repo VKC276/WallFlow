@@ -10472,15 +10472,24 @@ function inspBuildFrames_(moves, winnerTitle) {
   frames.push(winner);
   return frames;
 }
-function pickInspThree_(moves) {
-  const pool = moves.slice();
+function shuffleInsp_(list) {
+  const pool = (list || []).slice();
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     const tmp = pool[i];
     pool[i] = pool[j];
     pool[j] = tmp;
   }
-  return pool.slice(0, 3);
+  return pool;
+}
+function pickInspThree_(moves) {
+  const shuffled = shuffleInsp_(moves);
+  if (!inspState_.includeAdvanced) return shuffled.slice(0, 3);
+  const basics = shuffleInsp_(moves.filter((m) => !m.advanced));
+  if (!basics.length) return shuffled.slice(0, 3);
+  const must = basics[0];
+  const rest = shuffled.filter((m) => m.id !== must.id).slice(0, 2);
+  return shuffleInsp_([must].concat(rest));
 }
 function inspSlotHtml_(i, move, mode) {
   const n = i + 1;
@@ -10613,6 +10622,9 @@ function startInspDraw_() {
   if (box) setInspIncludeAdvanced_(box.checked);
   const pool = inspDrawPool_();
   if (pool.length < 3) return showToast("Det behövs minst tre moment i den valda listan");
+  if (inspState_.includeAdvanced && !pool.some((m) => !m.advanced)) {
+    return showToast("Det behövs minst ett icke-avancerat moment i listan");
+  }
   const picks = pickInspThree_(pool);
   inspState_.picks = picks;
   inspState_.landed = [null, null, null];
