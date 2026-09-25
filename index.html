@@ -1776,13 +1776,45 @@
     }
     .insp-list strong { display: block; font-size: 0.92rem; }
     .insp-list span { display: block; color: var(--muted); font-size: 0.78rem; }
+    .insp-list-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .insp-list-check,
+    .insp-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      cursor: pointer;
+      font-weight: 600;
+      user-select: none;
+    }
+    .insp-check { margin: 0 0 14px; font-size: 0.92rem; }
+    .insp-list-check { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+    .insp-check input,
+    .insp-list-check input,
+    .insp-add-adv input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
     .insp-add {
       display: grid;
       grid-template-columns: 1fr 1fr auto;
       gap: 8px;
     }
+    .insp-add-adv {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      margin: 0;
+      cursor: pointer;
+    }
     @media (max-width: 640px) {
       .insp-add { grid-template-columns: 1fr; }
+      .insp-list li { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -3192,7 +3224,7 @@ function demoApi_(action, args) {
       if (action === "getWellnessApp" || action === "getWellnessReceipt" || action === "issueWellnessReceipt" || action === "emailWellnessReceipt" || action === "deleteWellnessReceipt" || action === "getWellnessSettings" || action === "saveWellnessSettings") {
         return ok(demoWellnessApi_(store, action, args));
       }
-      if (action === "getBuilderMoves" || action === "addBuilderMove" || action === "deleteBuilderMove") {
+      if (action === "getBuilderMoves" || action === "addBuilderMove" || action === "updateBuilderMove" || action === "deleteBuilderMove") {
         return ok(demoBuilderMovesApi_(store, action, args));
       }
       return fail("Okänd action: " + action);
@@ -6388,6 +6420,7 @@ function renderAdminHome() {
         ${canRoutes ? `<button class="btn btn-accent" type="button" onclick="closeSettings(); renderRouteForm()">Lägg till ny led</button>` : ""}
         ${canLife ? `<button class="btn btn-ghost" type="button" onclick="renderLifetimeSettings()">Standardlivslängd</button>` : ""}
         ${canLife ? `<button class="btn btn-ghost" type="button" onclick="renderBaseUrlQrSettings()">QR-bas-URL</button>` : ""}
+        ${userRole_() === "superadmin" ? `<button class="btn btn-ghost" type="button" onclick="renderInspMovesAdmin_()">Inspirationskort</button>` : ""}
       </div>
     </div>` : ""}
     ${canReset ? `
@@ -10217,50 +10250,51 @@ async function emailWellnessReceipt_() {
 }
 
 const DEFAULT_INSP_ROWS_ = [
-  ["Viktöverföring","Teknik"],["Högt fotsteg","Fotarbete"],["Fotbyte","Fotarbete"],
-  ["Handbyte","Teknik"],["Matcha händer","Teknik"],["Flagga","Balans"],
-  ["Enkel backstep","Fotarbete"],["Kroppen nära väggen","Kroppskontroll"],
-  ["Långt statiskt drag","Räckvidd"],["Flytta höften åt sidan","Kroppskontroll"],
-  ["Rotera höften","Kroppskontroll"],["Pressa genom foten","Fotarbete"],
-  ["Stå på liten fot","Balans"],["Sträcka ut kroppen","Räckvidd"],
-  ["Cross","Handteknik"],["Gaston","Handteknik"],["Undercling","Handteknik"],
-  ["Sidodrag","Handteknik"],["Drop knee","Kropp/fot"],["Backstep","Fotarbete"],
-  ["Enkel heel hook","Fot"],["Enkel toe hook","Fot"],["Layback","Kropp"],
-  ["Mantle","Teknik"],["Stor flagga","Balans"],["Långt cross","Räckvidd"],
-  ["Hand–fot-koordinering","Koordination"],["Heel hook för att nå","Fot"],
-  ["Smearing","Fotarbete"],["Rockover","Kropp"],
-  ["Avancerad heel hook","Fot"],["Toe hook","Fot"],["Heel-toe cam","Fot"],
-  ["Liten dyno","Dynamisk"],["Stor dyno","Dynamisk"],
-  ["Koordinationsrörelse","Koordination"],["Deadpoint","Dynamisk"],
-  ["Cut loose","Dynamisk"],["Paddle","Dynamisk"],["Stor cross","Handteknik"],
-  ["Dynamisk cross","Dynamisk"],["Compression","Kropp"],["Kneebar","Kropp"],
-  ["Stor höftrotation","Kropp"],["Dynamiskt fotbyte","Fot"],
-  ["Skicka fötterna högt","Fot"],["Heel hook → handflytt","Kombination"],
-  ["Cross → flagga","Kombination"],["Drop knee → långt drag","Kombination"],
-  ["Dyno → match","Dynamisk"],
-  ["Campusliknande flytt","Styrka"],["Campus 1-2-3","Styrka"],
-  ["Stor koordinationsdyno","Dynamisk"],["Paddle dyno","Dynamisk"],
-  ["One-arm move","Styrka"],["Avancerad compression","Styrka"],
-  ["Avancerad kneebar","Kropp"],["Cut loose → catch","Dynamisk"],
-  ["Dyno från dålig fot","Dynamisk"],["Dynamisk heel hook","Fot"],
-  ["Heel hook → dyno","Kombination"],["Toe hook → dynamisk flytt","Kombination"],
-  ["Paddle mellan dåliga grepp","Dynamisk"],["Stor deadpoint","Dynamisk"],
-  ["Deadpoint med kroppsvridning","Dynamisk"],["Campus + fot","Styrka"],
-  ["Cut feet → återtag","Dynamisk"],["Extremt högt fotsteg","Rörlighet"],
-  ["Compression → dynamisk flytt","Kombination"],["Stor lateral dyno","Dynamisk"],
-  ["Bathang","Avancerad"],["Bathang → handflytt","Kombination"],
-  ["One-arm dyno","Extrem"],["Stor koordinationssekvens","Koordination"],
-  ["Campus utan fötter","Styrka"],["Dubbel dyno","Dynamisk"],
-  ["Dyno → dyno","Dynamisk"],["Extrem compression","Styrka"],
-  ["Heel hook → dyno → catch","Kombination"],["Cut loose → dynamisk catch","Dynamisk"],
-  ["Paddle → paddle → catch","Koordination"],["Extrem lateral dyno","Dynamisk"],
-  ["One-arm lock-off → lång flytt","Styrka"],["Dynamisk rörelse från extrem fotposition","Kombination"],
-  ["Två tekniker i samma rörelse","Kombination"]
+  ["Viktöverföring","Teknik",0],["Högt fotsteg","Fotarbete",0],["Fotbyte","Fotarbete",0],
+  ["Handbyte","Teknik",0],["Matcha händer","Teknik",0],["Flagga","Balans",0],
+  ["Enkel backstep","Fotarbete",0],["Kroppen nära väggen","Kroppskontroll",0],
+  ["Långt statiskt drag","Räckvidd",0],["Flytta höften åt sidan","Kroppskontroll",0],
+  ["Rotera höften","Kroppskontroll",0],["Pressa genom foten","Fotarbete",0],
+  ["Stå på liten fot","Balans",0],["Sträcka ut kroppen","Räckvidd",0],["Smearing","Fotarbete",0],
+  ["Cross","Handteknik",0],["Gaston","Handteknik",0],["Undercling","Handteknik",0],
+  ["Sidodrag","Handteknik",0],["Drop knee","Kropp/fot",0],["Backstep","Fotarbete",0],
+  ["Enkel heel hook","Fot",0],["Enkel toe hook","Fot",0],["Layback","Kropp",0],
+  ["Mantle","Teknik",0],["Stor flagga","Balans",0],["Långt cross","Räckvidd",0],
+  ["Hand–fot-koordinering","Koordination",0],["Heel hook för att nå","Fot",0],["Rockover","Kropp",0],
+  ["Avancerad heel hook","Fot",1],["Toe hook","Fot",1],["Heel-toe cam","Fot",1],
+  ["Liten dyno","Dynamisk",1],["Stor dyno","Dynamisk",1],
+  ["Koordinationsrörelse","Koordination",1],["Deadpoint","Dynamisk",1],
+  ["Cut loose","Dynamisk",1],["Paddle","Dynamisk",1],["Stor cross","Handteknik",1],
+  ["Dynamisk cross","Dynamisk",1],["Compression","Kropp",1],["Kneebar","Kropp",1],
+  ["Stor höftrotation","Kropp",1],["Dynamiskt fotbyte","Fot",1],
+  ["Skicka fötterna högt","Fot",1],["Heel hook → handflytt","Kombination",1],
+  ["Cross → flagga","Kombination",1],["Drop knee → långt drag","Kombination",1],
+  ["Dyno → match","Dynamisk",1],
+  ["Campusliknande flytt","Styrka",1],["Campus 1-2-3","Styrka",1],
+  ["Stor koordinationsdyno","Dynamisk",1],["Paddle dyno","Dynamisk",1],
+  ["One-arm move","Styrka",1],["Avancerad compression","Styrka",1],
+  ["Avancerad kneebar","Kropp",1],["Cut loose → catch","Dynamisk",1],
+  ["Dyno från dålig fot","Dynamisk",1],["Dynamisk heel hook","Fot",1],
+  ["Heel hook → dyno","Kombination",1],["Toe hook → dynamisk flytt","Kombination",1],
+  ["Paddle mellan dåliga grepp","Dynamisk",1],["Stor deadpoint","Dynamisk",1],
+  ["Deadpoint med kroppsvridning","Dynamisk",1],["Campus + fot","Styrka",1],
+  ["Cut feet → återtag","Dynamisk",1],["Extremt högt fotsteg","Rörlighet",1],
+  ["Compression → dynamisk flytt","Kombination",1],["Stor lateral dyno","Dynamisk",1],
+  ["Bathang","Avancerad",1],["Bathang → handflytt","Kombination",1],
+  ["One-arm dyno","Extrem",1],["Stor koordinationssekvens","Koordination",1],
+  ["Campus utan fötter","Styrka",1],["Dubbel dyno","Dynamisk",1],
+  ["Dyno → dyno","Dynamisk",1],["Extrem compression","Styrka",1],
+  ["Heel hook → dyno → catch","Kombination",1],["Cut loose → dynamisk catch","Dynamisk",1],
+  ["Paddle → paddle → catch","Koordination",1],["Extrem lateral dyno","Dynamisk",1],
+  ["One-arm lock-off → lång flytt","Styrka",1],["Dynamisk rörelse från extrem fotposition","Kombination",1],
+  ["Två tekniker i samma rörelse","Kombination",1]
 ];
 const INSP_SPIN_MS_ = 2200;
+const INSP_ADV_KEY_ = "wallflow_insp_advanced_v1";
 let inspState_ = {
   moves: [],
   canManage: false,
+  includeAdvanced: false,
   spinning: false,
   landed: [null, null, null],
   picks: [],
@@ -10270,12 +10304,52 @@ let inspState_ = {
 };
 
 function defaultInspMoves_() {
-  return DEFAULT_INSP_ROWS_.map((row, i) => ({ id: "d" + (i + 1), title: row[0], category: row[1] }));
+  return DEFAULT_INSP_ROWS_.map((row, i) => ({
+    id: "d" + (i + 1),
+    title: row[0],
+    category: row[1],
+    advanced: !!row[2]
+  }));
+}
+function normalizeInspMoves_(list) {
+  const known = {};
+  DEFAULT_INSP_ROWS_.forEach((row) => { known[String(row[0]).toLowerCase()] = !!row[2]; });
+  return (list || []).map((m, i) => {
+    const title = String(m && m.title || "").trim();
+    let advanced = m && m.advanced;
+    if (advanced == null) {
+      const key = title.toLowerCase();
+      advanced = known[key];
+      if (advanced == null) advanced = /dyno|campus|bathang|one-arm|extrem|avancerad|paddle|deadpoint|cut loose|kneebar/i.test(title);
+    } else {
+      advanced = advanced === true || advanced === 1 || advanced === "1" || advanced === "true";
+    }
+    return {
+      id: String(m && m.id || ("m" + (i + 1))),
+      title,
+      category: String(m && m.category || "").trim(),
+      advanced: !!advanced
+    };
+  }).filter((m) => m.title);
+}
+function readInspIncludeAdvanced_() {
+  try { return localStorage.getItem(INSP_ADV_KEY_) === "1"; } catch (_) { return false; }
+}
+function setInspIncludeAdvanced_(on) {
+  inspState_.includeAdvanced = !!on;
+  try { localStorage.setItem(INSP_ADV_KEY_, on ? "1" : "0"); } catch (_) {}
+}
+function inspDrawPool_() {
+  const all = inspState_.moves || [];
+  if (inspState_.includeAdvanced) return all.slice();
+  return all.filter((m) => !m.advanced);
 }
 function demoBuilderMovesApi_(store, action, args) {
   if (!Array.isArray(store.builderMoves) || !store.builderMoves.length) {
     store.builderMoves = defaultInspMoves_();
     saveDemoDb_(store);
+  } else {
+    store.builderMoves = normalizeInspMoves_(store.builderMoves);
   }
   const canManage = userRole_() === "superadmin";
   if (action === "getBuilderMoves") return { ok: true, moves: store.builderMoves.slice(), canManage };
@@ -10288,7 +10362,22 @@ function demoBuilderMovesApi_(store, action, args) {
     if (store.builderMoves.some((m) => String(m.title).toLowerCase() === title.toLowerCase())) {
       return { ok: false, error: "Momentet finns redan" };
     }
-    store.builderMoves.push({ id: "m" + Date.now(), title, category });
+    store.builderMoves.push({
+      id: "m" + Date.now(),
+      title,
+      category,
+      advanced: !!(payload.advanced === true || payload.advanced === 1 || payload.advanced === "1")
+    });
+    saveDemoDb_(store);
+    return { ok: true, moves: store.builderMoves.slice(), canManage: true };
+  }
+  if (action === "updateBuilderMove") {
+    const id = String(payload.id || "").trim();
+    const hit = store.builderMoves.find((m) => m.id === id);
+    if (!hit) return { ok: false, error: "Momentet hittades inte" };
+    if (payload.advanced != null) {
+      hit.advanced = payload.advanced === true || payload.advanced === 1 || payload.advanced === "1" || payload.advanced === "true";
+    }
     saveDemoDb_(store);
     return { ok: true, moves: store.builderMoves.slice(), canManage: true };
   }
@@ -10350,11 +10439,14 @@ function loadInspTool_() {
         inspState_.canManage = !!res.canManage;
       }
       if (!inspState_.moves.length) inspState_.moves = defaultInspMoves_();
+      inspState_.moves = normalizeInspMoves_(inspState_.moves);
+      inspState_.includeAdvanced = readInspIncludeAdvanced_();
       renderInspTool_();
     })
     .withFailureHandler(() => {
       inspState_.moves = defaultInspMoves_();
       inspState_.canManage = userRole_() === "superadmin";
+      inspState_.includeAdvanced = readInspIncludeAdvanced_();
       renderInspTool_();
     })
     .getBuilderMoves();
@@ -10399,7 +10491,7 @@ function inspSlotHtml_(i, move, mode) {
     </div>`;
   }
   const cls = mode === "spin" ? "is-spinning" : "is-landed";
-  const kicker = mode === "spin" ? "Slumpar…" : (move.category || "Kort " + n);
+  const kicker = mode === "spin" ? "Slumpar…" : [move.category, move.advanced ? "Avancerad" : ""].filter(Boolean).join(" · ") || ("Kort " + n);
   return `<div class="insp-slot ${cls}" id="insp-slot-${i}" data-mode="${mode}">
     <p class="insp-kicker">${escapeHtml_(kicker)}</p>
     <p class="insp-title">${escapeHtml_(move.title)}</p>
@@ -10411,60 +10503,117 @@ function renderInspTool_() {
   const landedCount = inspState_.landed.filter(Boolean).length;
   const drawLabel = landedCount ? "Dra igen" : "Dra tre kort";
   const slots = [0, 1, 2].map((i) => inspSlotHtml_(i, inspState_.landed[i], inspState_.landed[i] ? "land" : "wait")).join("");
-  const manage = inspState_.canManage ? renderInspManage_() : "";
+  const advOn = inspState_.includeAdvanced;
   main.innerHTML = `
     <div class="admin-card">
       <p class="admin-kicker">Ledbyggare</p>
       <h3>Inspirationskort</h3>
       <p class="insp-lead">Dra tre kort. Minst två av dem ska byggas in i leden du sätter.</p>
+      <label class="insp-check">
+        <input type="checkbox" id="insp-include-adv" ${advOn ? "checked" : ""} onchange="setInspIncludeAdvanced_(this.checked)">
+        Inkludera avancerade moves
+      </label>
       <div class="insp-slots" id="insp-slots">${slots}</div>
       <p class="insp-rule" ${landedCount === 3 ? "" : "hidden"}>Bygg in minst två av korten i leden.</p>
       <button class="btn btn-accent w-100" type="button" id="insp-draw-btn" onclick="startInspDraw_()">${drawLabel}</button>
-    </div>
-    ${manage}`;
+    </div>`;
 }
-function renderInspManage_() {
+function renderInspMovesAdmin_() {
+  if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
+  setAdminChrome_("Administration");
+  document.getElementById("app-admin").classList.add("show");
+  document.getElementById("admin-main").innerHTML = `<div class="admin-card"><p class="mb-0" style="color:var(--muted);">Laddar…</p></div>`;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        inspState_.moves = defaultInspMoves_();
+      } else {
+        inspState_.moves = normalizeInspMoves_(res.moves || []);
+      }
+      if (!inspState_.moves.length) inspState_.moves = defaultInspMoves_();
+      paintInspMovesAdmin_();
+    })
+    .withFailureHandler(() => {
+      inspState_.moves = defaultInspMoves_();
+      paintInspMovesAdmin_();
+    })
+    .getBuilderMoves();
+}
+function paintInspMovesAdmin_() {
+  const draftTitle = val_("insp-new-title");
+  const draftCat = val_("insp-new-cat");
+  const draftAdv = !!(document.getElementById("insp-new-adv") && document.getElementById("insp-new-adv").checked);
   const items = (inspState_.moves || []).map((m) =>
     `<li>
       <div><strong>${escapeHtml_(m.title)}</strong><span>${escapeHtml_(m.category || "")}</span></div>
-      <button class="btn btn-sm btn-ghost" type="button" onclick='deleteInspMove_(${JSON.stringify(String(m.id))})'>Ta bort</button>
+      <div class="insp-list-actions">
+        <label class="insp-list-check">
+          <input type="checkbox" ${m.advanced ? "checked" : ""} onchange='toggleInspAdvanced_(${JSON.stringify(String(m.id))}, this.checked)'>
+          Avancerad
+        </label>
+        <button class="btn btn-sm btn-ghost" type="button" onclick='deleteInspMove_(${JSON.stringify(String(m.id))})'>Ta bort</button>
+      </div>
     </li>`
   ).join("");
-  return `<div class="admin-card">
-    <p class="admin-kicker">Superadmin</p>
-    <h3>Moment</h3>
-    <p class="insp-lead">Listan används när ledbyggare drar kort. Nya moment syns direkt.</p>
-    <ul class="insp-list">${items}</ul>
-    <div class="insp-add">
-      <input id="insp-new-title" class="form-control" maxlength="80" placeholder="Moment" autocomplete="off">
-      <input id="insp-new-cat" class="form-control" maxlength="40" placeholder="Kategori" autocomplete="off">
-      <button class="btn btn-accent" type="button" onclick="addInspMove_()">Lägg till</button>
-    </div>
-  </div>`;
+  document.getElementById("admin-main").innerHTML = `
+    <div class="admin-card">
+      <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
+      <p class="admin-kicker">Administration · Leder</p>
+      <h3>Inspirationskort</h3>
+      <p class="insp-lead">Kryssa <strong>Avancerad</strong> på dynos och andra krävande moment. De ingår bara i dragningen om ledbyggaren väljer att inkludera avancerade moves.</p>
+      <ul class="insp-list">${items}</ul>
+      <div class="insp-add">
+        <input id="insp-new-title" class="form-control" maxlength="80" placeholder="Moment" autocomplete="off" value="${escapeHtml_(draftTitle)}">
+        <input id="insp-new-cat" class="form-control" maxlength="40" placeholder="Kategori" autocomplete="off" value="${escapeHtml_(draftCat)}">
+        <button class="btn btn-accent" type="button" onclick="addInspMove_()">Lägg till</button>
+        <label class="insp-add-adv">
+          <input id="insp-new-adv" type="checkbox" ${draftAdv ? "checked" : ""}>
+          Avancerad
+        </label>
+      </div>
+    </div>`;
 }
-function applyInspMoves_(res) {
+function applyInspAdminMoves_(res) {
   if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
-  inspState_.moves = res.moves || inspState_.moves;
-  renderInspTool_();
+  inspState_.moves = normalizeInspMoves_(res.moves || inspState_.moves);
+  paintInspMovesAdmin_();
 }
 function addInspMove_() {
   const title = val_("insp-new-title");
   const category = val_("insp-new-cat");
+  const advanced = !!(document.getElementById("insp-new-adv") && document.getElementById("insp-new-adv").checked);
   google.script.run
-    .withSuccessHandler(applyInspMoves_)
+    .withSuccessHandler((res) => {
+      applyInspAdminMoves_(res);
+      const titleEl = document.getElementById("insp-new-title");
+      const catEl = document.getElementById("insp-new-cat");
+      const advEl = document.getElementById("insp-new-adv");
+      if (titleEl) titleEl.value = "";
+      if (catEl) catEl.value = "";
+      if (advEl) advEl.checked = false;
+    })
     .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
-    .addBuilderMove({ title, category });
+    .addBuilderMove({ title, category, advanced });
+}
+function toggleInspAdvanced_(id, on) {
+  google.script.run
+    .withSuccessHandler(applyInspAdminMoves_)
+    .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+    .updateBuilderMove({ id, advanced: !!on });
 }
 function deleteInspMove_(id) {
   google.script.run
-    .withSuccessHandler(applyInspMoves_)
+    .withSuccessHandler(applyInspAdminMoves_)
     .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
     .deleteBuilderMove({ id });
 }
 function startInspDraw_() {
   if (inspState_.spinning) return;
-  if ((inspState_.moves || []).length < 3) return showToast("Det behövs minst tre moment i listan");
-  const picks = pickInspThree_(inspState_.moves);
+  const box = document.getElementById("insp-include-adv");
+  if (box) setInspIncludeAdvanced_(box.checked);
+  const pool = inspDrawPool_();
+  if (pool.length < 3) return showToast("Det behövs minst tre moment i den valda listan");
+  const picks = pickInspThree_(pool);
   inspState_.picks = picks;
   inspState_.landed = [null, null, null];
   inspState_.spinning = true;
@@ -10480,7 +10629,7 @@ function beginInspSlotSpin_(i) {
   inspState_.spin = {
     i,
     pick,
-    frames: inspBuildFrames_(inspState_.moves, pick.title),
+    frames: inspBuildFrames_(inspDrawPool_(), pick.title),
     startedAt,
     endsAt: startedAt + INSP_SPIN_MS_
   };

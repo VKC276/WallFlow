@@ -98,9 +98,10 @@ import {
   saveWellnessSettings
 } from "./friskvard.js";
 import {
-  addBuilderMove,
-  deleteBuilderMove,
-  getBuilderMoves
+    addBuilderMove,
+    deleteBuilderMove,
+    getBuilderMoves,
+    updateBuilderMove
 } from "./inspiration.js";
 
 export async function dispatch(env, action, token, args, extras) {
@@ -227,6 +228,8 @@ export async function dispatch(env, action, token, args, extras) {
       return getBuilderMoves(env, session);
     case "addBuilderMove":
       return addBuilderMove(env, args[0], session);
+    case "updateBuilderMove":
+      return updateBuilderMove(env, args[0], session);
     case "deleteBuilderMove":
       return deleteBuilderMove(env, args[0], session);
     default:
