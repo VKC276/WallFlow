@@ -1741,8 +1741,8 @@
       border: 1px solid var(--line);
       background: var(--bg-elevated);
       padding: 10px 14px;
-      display: grid;
-      align-content: center;
+      display: flex;
+      flex-direction: column;
       overflow: hidden;
     }
     .insp-slot.is-wait { opacity: 0.55; }
@@ -1753,14 +1753,24 @@
       font-size: 0.7rem;
       font-weight: 700;
       color: var(--muted);
+      flex-shrink: 0;
+    }
+    .insp-title-box {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      width: 100%;
     }
     .insp-title {
       margin: 0;
+      width: 100%;
       font-family: var(--font-body);
       font-weight: 700;
-      font-size: clamp(1.05rem, 3.6vw, 1.45rem);
+      font-size: 1.2rem;
       letter-spacing: -0.01em;
-      line-height: 1.28;
+      line-height: 1.2;
+      overflow-wrap: break-word;
     }
     .insp-slot.is-spinning .insp-title {
       animation: insp-tick 0.16s ease;
@@ -10319,7 +10329,8 @@ let inspState_ = {
   picks: [],
   spin: null,
   raf: 0,
-  lastFrame: ""
+  lastFrame: "",
+  resizeObs: null
 };
 
 function defaultInspMoves_() {
@@ -10413,6 +10424,10 @@ function hideInspOverlay_() {
   if (el) el.classList.remove("show");
   document.body.classList.remove("insp-open");
   if (inspState_.raf) cancelAnimationFrame(inspState_.raf);
+  if (inspState_.resizeObs) {
+    try { inspState_.resizeObs.disconnect(); } catch (_) {}
+    inspState_.resizeObs = null;
+  }
   inspState_.spinning = false;
   inspState_.spin = null;
 }
@@ -10515,15 +10530,49 @@ function inspSlotHtml_(i, move, mode) {
   if (!move) {
     return `<div class="insp-slot is-wait" id="insp-slot-${i}" data-mode="wait">
       <p class="insp-kicker">Kort ${n}</p>
-      <p class="insp-title">Väntar</p>
+      <div class="insp-title-box"><p class="insp-title">Väntar</p></div>
     </div>`;
   }
   const cls = mode === "spin" ? "is-spinning" : "is-landed";
   const kicker = mode === "spin" ? "Slumpar…" : [move.category, move.advanced ? "Avancerad" : ""].filter(Boolean).join(" · ") || ("Kort " + n);
   return `<div class="insp-slot ${cls}" id="insp-slot-${i}" data-mode="${mode}">
     <p class="insp-kicker">${escapeHtml_(kicker)}</p>
-    <p class="insp-title">${escapeHtml_(move.title)}</p>
+    <div class="insp-title-box"><p class="insp-title">${escapeHtml_(move.title)}</p></div>
   </div>`;
+}
+function fitInspTitle_(slot) {
+  if (!slot) return;
+  const box = slot.querySelector(".insp-title-box");
+  const title = slot.querySelector(".insp-title");
+  if (!box || !title) return;
+  const availW = box.clientWidth;
+  const availH = box.clientHeight;
+  if (availW < 8 || availH < 8) return;
+  let lo = 15;
+  let hi = Math.max(lo, Math.min(72, Math.floor(availH * 0.78)));
+  for (let n = 0; n < 16; n++) {
+    const mid = (lo + hi) / 2;
+    title.style.fontSize = mid + "px";
+    const ok = title.scrollWidth <= availW + 1 && title.scrollHeight <= availH + 1;
+    if (ok) lo = mid;
+    else hi = mid;
+  }
+  title.style.fontSize = Math.floor(lo) + "px";
+}
+function fitAllInspSlots_() {
+  document.querySelectorAll("#insp-slots .insp-slot").forEach(fitInspTitle_);
+}
+function bindInspFit_() {
+  const slots = document.getElementById("insp-slots");
+  if (!slots) return;
+  if (inspState_.resizeObs) {
+    try { inspState_.resizeObs.disconnect(); } catch (_) {}
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    inspState_.resizeObs = new ResizeObserver(() => fitAllInspSlots_());
+    inspState_.resizeObs.observe(slots);
+  }
+  requestAnimationFrame(fitAllInspSlots_);
 }
 function renderInspTool_() {
   const main = document.getElementById("insp-main");
@@ -10544,6 +10593,7 @@ function renderInspTool_() {
       <div class="insp-slots" id="insp-slots">${slots}</div>
       <button class="btn btn-accent w-100" type="button" id="insp-draw-btn" onclick="startInspDraw_()">${drawLabel}</button>
     </div>`;
+  bindInspFit_();
 }
 function renderInspMovesAdmin_() {
   if (userRole_() !== "superadmin") return showToast("Saknar behörighet");
@@ -10671,7 +10721,9 @@ function paintInspSlot_(i, move, mode) {
   const next = inspSlotHtml_(i, move, mode);
   const wrap = document.createElement("div");
   wrap.innerHTML = next;
-  el.replaceWith(wrap.firstElementChild);
+  const fresh = wrap.firstElementChild;
+  el.replaceWith(fresh);
+  fitInspTitle_(fresh);
 }
 function tickInspSpin_() {
   const spin = inspState_.spin;
