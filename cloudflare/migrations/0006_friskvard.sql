@@ -1,4 +1,4 @@
--- Friskvårdskvitto: utfärdade kvitton med digital underskrift och PDF-nyckel.
+-- Friskvårdsintyg: utfärdade intyg med digital underskrift och PDF-nyckel.
 --   npx wrangler d1 execute wallflow --remote --file=migrations/0006_friskvard.sql
 --   npx wrangler d1 execute wallflow --local  --file=migrations/0006_friskvard.sql
 

@@ -1,4 +1,4 @@
-/** Friskvårdskvitto: utfärda, lagra PDF, mejla. */
+/** Friskvårdsintyg: utfärda, lagra PDF, mejla. */
 
 import { canIssueWellnessReceipt, hashPassword, isSuperadminRole, roleOf, validateEmail } from "./auth.js";
 import { findUser, getSetting, setSetting, todayStockholm } from "./db.js";
@@ -93,7 +93,7 @@ function normalizeIdnr(raw) {
 
 async function verifySessionPassword(env, session, password) {
   if (!String(password || "")) {
-    return { ok: false, error: "Ange ditt lösenord för att signera kvittot" };
+    return { ok: false, error: "Ange ditt lösenord för att signera intyget" };
   }
   const u = await findUser(env, session && session.username);
   if (!u || !u.salt || !u.passwordHash) {
@@ -139,7 +139,7 @@ function mapRow(row, env, origin, org) {
     signedAt: row.signed_at,
     hasPdf: false,
     emailedAt: row.emailed_at || "",
-    filename: "friskvardskvitto-" + String(row.receipt_no || "").replace(/\s+/g, "") + ".pdf",
+    filename: "friskvardsintyg-" + String(row.receipt_no || "").replace(/\s+/g, "") + ".pdf",
     ...(org || {})
   };
 }
@@ -198,16 +198,16 @@ export async function getWellnessReceipt(env, payload, session, origin) {
   if (!canIssueWellnessReceipt(session)) return deny();
   const org = await readOrgProfile(env);
   const row = await getRow(env, payload && (payload.id || payload.receiptId));
-  if (!row) return { ok: false, error: "Kvittot hittades inte" };
+  if (!row) return { ok: false, error: "Intyget hittades inte" };
   return { ok: true, receipt: mapRow(row, env, origin, org) };
 }
 
 export async function deleteWellnessReceipt(env, payload, session) {
   if (!canManageWellnessSettings(session)) {
-    return { ok: false, error: "Bara superadmin kan ta bort kvitton" };
+    return { ok: false, error: "Bara superadmin kan ta bort intyg" };
   }
   const row = await getRow(env, payload && (payload.id || payload.receiptId));
-  if (!row) return { ok: false, error: "Kvittot hittades inte" };
+  if (!row) return { ok: false, error: "Intyget hittades inte" };
   await env.DB.prepare("DELETE FROM wellness_receipts WHERE id = ?").bind(row.id).run();
   return { ok: true, id: row.id, receiptNo: row.receipt_no };
 }
@@ -254,7 +254,7 @@ export async function issueWellnessReceipt(env, payload, session, origin) {
   const org = await readOrgProfile(env);
 
   const recipientName = clipText(payload.recipientName || payload.name, 120);
-  if (!recipientName) return { ok: false, error: "Ange vem kvittot gäller" };
+  if (!recipientName) return { ok: false, error: "Ange vem intyget gäller" };
 
   const emailRaw = String(payload.recipientEmail || payload.email || "").trim().toLowerCase();
   let recipientEmail = "";
@@ -311,7 +311,7 @@ export async function emailWellnessReceipt(env, payload, session, origin) {
   if (!canIssueWellnessReceipt(session)) return deny();
   payload = payload && typeof payload === "object" ? payload : {};
   const row = await getRow(env, payload.id);
-  if (!row) return { ok: false, error: "Kvittot hittades inte" };
+  if (!row) return { ok: false, error: "Intyget hittades inte" };
 
   let to = String(payload.email || row.recipient_email || "").trim().toLowerCase();
   const check = validateEmail(to);
@@ -319,7 +319,7 @@ export async function emailWellnessReceipt(env, payload, session, origin) {
   to = check.email;
 
   const pdfRaw = String(payload.pdfBase64 || "");
-  if (!pdfRaw) return { ok: false, error: "PDF saknas — öppna kvittot igen och skicka" };
+  if (!pdfRaw) return { ok: false, error: "PDF saknas — öppna intyget igen och skicka" };
   if (pdfRaw.length > MAX_PDF_BASE64_CHARS) {
     return { ok: false, error: "PDF:en är för stor" };
   }

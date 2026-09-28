@@ -1,4 +1,4 @@
--- Föreningsuppgifter och gallringstid för friskvårdskvitto.
+-- Föreningsuppgifter och gallringstid för friskvårdsintyg.
 --   npx wrangler d1 execute wallflow --remote --file=migrations/0007_wellness_org.sql
 --   npx wrangler d1 execute wallflow --local  --file=migrations/0007_wellness_org.sql
 

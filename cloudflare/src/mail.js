@@ -224,11 +224,11 @@ export async function mailWellnessReceipt(env, opts) {
   const meta = opts.meta || {};
   const composed = compose({
     name: opts.name,
-    subject: "friskvårdskvitto " + String(meta.receiptNo || ""),
+    subject: "Friskvårdsintyg " + String(meta.receiptNo || ""),
     intro:
-      "Här är ditt kvitto för friskvård från Västerviks klätterklubb. Kvittot kan lämnas till arbetsgivaren som underlag för friskvårdsbidrag. Ersättning för medlemskap omfattas inte enligt Skatteverkets regler.",
+      "Här är ditt friskvårdsintyg från Västerviks klätterklubb. Intyget kan lämnas till arbetsgivaren som underlag för friskvårdsbidrag. Ersättning för medlemskap omfattas inte enligt Skatteverkets regler.",
     rows: [
-      { label: "Kvitto nr", value: String(meta.receiptNo || "") },
+      { label: "Intyg nr", value: String(meta.receiptNo || "") },
       { label: "Vad", value: String(meta.description || "") },
       { label: "Belopp", value: formatSekSv(meta.amount) },
       { label: "Moms", value: "0,00 kr (ideell förening, inte momsregistrerad)" },

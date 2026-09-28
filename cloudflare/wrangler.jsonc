@@ -39,7 +39,7 @@
     }
   ],
   "triggers": {
-    // Rensa gamla friskvårdskvitton i D1 varje natt 02:15 UTC.
+    // Rensa gamla friskvårdsintyg i D1 varje natt 02:15 UTC.
     "crons": ["15 2 * * *"]
   },
   "services": [

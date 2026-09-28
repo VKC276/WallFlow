@@ -110,7 +110,7 @@ export function canManageTencards(session) {
   return r === "superadmin" || r === "admin" || hasRole(session, "hallvard");
 }
 
-/** Samma krets utfärdar friskvårdskvitto i hallen. */
+/** Samma krets utfärdar friskvårdsintyg i hallen. */
 export function canIssueWellnessReceipt(session) {
   return canManageTencards(session);
 }

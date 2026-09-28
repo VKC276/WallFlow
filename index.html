@@ -2606,7 +2606,7 @@ function demoMapWellness_(row, store) {
     hasPdf: !!row.hasPdf,
     emailedAt: row.emailedAt || "",
     downloadUrl: "",
-    filename: "friskvardskvitto-" + String(row.receiptNo || "") + ".pdf"
+    filename: "friskvardsintyg-" + String(row.receiptNo || "") + ".pdf"
   }, demoWellnessOrg_(store));
 }
 function demoWellnessApi_(store, action, args) {
@@ -2615,7 +2615,7 @@ function demoWellnessApi_(store, action, args) {
   if (action === "getWellnessSettings" || action === "saveWellnessSettings" || action === "deleteWellnessReceipt") {
     if (String(currentUser.role) !== "superadmin") {
       return { ok: false, error: action === "deleteWellnessReceipt"
-        ? "Bara superadmin kan ta bort kvitton"
+        ? "Bara superadmin kan ta bort intyg"
         : "Bara superadmin kan ändra föreningsuppgifter" };
     }
   } else if (!demoCanManageTencards_()) {
@@ -2662,16 +2662,16 @@ function demoWellnessApi_(store, action, args) {
   }
   if (action === "getWellnessReceipt") {
     const row = store.wellnessReceipts.find((x) => String(x.id) === String(payload.id));
-    if (!row) return { ok: false, error: "Kvittot hittades inte" };
+    if (!row) return { ok: false, error: "Intyget hittades inte" };
     return { ok: true, receipt: demoMapWellness_(row, store) };
   }
   if (action === "issueWellnessReceipt") {
     const me = (store.users || []).find((x) => x.username === currentUser.username);
     if (!me) return { ok: false, error: "Användaren hittades inte" };
-    if (!payload.password) return { ok: false, error: "Ange ditt lösenord för att signera kvittot" };
+    if (!payload.password) return { ok: false, error: "Ange ditt lösenord för att signera intyget" };
     if (me.password !== String(payload.password)) return { ok: false, error: "Fel lösenord" };
     const recipientName = String(payload.recipientName || payload.name || "").trim();
-    if (!recipientName) return { ok: false, error: "Ange vem kvittot gäller" };
+    if (!recipientName) return { ok: false, error: "Ange vem intyget gäller" };
     const description = String(payload.description || "").trim();
     if (!description) return { ok: false, error: "Ange vad som har köpts" };
     const amount = Math.round((Number(payload.amount) || 0) * 100) / 100;
@@ -2703,8 +2703,8 @@ function demoWellnessApi_(store, action, args) {
   }
   if (action === "emailWellnessReceipt") {
     const row = store.wellnessReceipts.find((x) => x.id === payload.id);
-    if (!row) return { ok: false, error: "Kvittot hittades inte" };
-    if (!payload.pdfBase64) return { ok: false, error: "PDF saknas — stanna på kvittot och skicka direkt efter utfärdandet" };
+    if (!row) return { ok: false, error: "Intyget hittades inte" };
+    if (!payload.pdfBase64) return { ok: false, error: "PDF saknas — stanna på intyget och skicka direkt efter utfärdandet" };
     const to = String(payload.email || row.recipientEmail || "").trim().toLowerCase();
     if (!to || to.indexOf("@") < 1) return { ok: false, error: "Ange en giltig e-postadress" };
     row.recipientEmail = to;
@@ -2714,7 +2714,7 @@ function demoWellnessApi_(store, action, args) {
   }
   if (action === "deleteWellnessReceipt") {
     const idx = store.wellnessReceipts.findIndex((x) => String(x.id) === String(payload.id));
-    if (idx < 0) return { ok: false, error: "Kvittot hittades inte" };
+    if (idx < 0) return { ok: false, error: "Intyget hittades inte" };
     const removed = store.wellnessReceipts[idx];
     store.wellnessReceipts.splice(idx, 1);
     saveDemoDb_(store);
@@ -3418,7 +3418,7 @@ function renderAccountMenu_() {
     ekonomi.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
   }
   if (canIssueWellnessReceipt_()) {
-    ekonomi.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdskvitto</button>`);
+    ekonomi.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdsintyg</button>`);
   }
   const konto = [
     `<button type="button" role="menuitem" onclick="openSettingsFromMenu_()">Konto</button>`
@@ -6485,10 +6485,10 @@ function renderAdminHome() {
     </div>` : ""}
     ${canIssueWellnessReceipt_() ? `
     <div class="admin-card">
-      <h3>Friskvårdskvitto</h3>
-      <p class="small mb-3" style="color:var(--muted);">Utfärda kvitto för årskort, halvårskort, 10-kort eller engångsklättring. Signeras med lösenord och kan mejlas eller skrivas ut.</p>
+      <h3>Friskvårdsintyg</h3>
+      <p class="small mb-3" style="color:var(--muted);">Utfärda intyg för årskort, halvårskort, 10-kort eller engångsklättring. Signeras med lösenord och kan mejlas eller skrivas ut.</p>
       <div class="admin-actions">
-        <button class="btn btn-ghost" type="button" onclick="openWellnessTool()">Öppna friskvårdskvitto</button>
+        <button class="btn btn-ghost" type="button" onclick="openWellnessTool()">Öppna friskvårdsintyg</button>
         ${canTimeAdmin_() ? `<button class="btn btn-ghost" type="button" onclick="renderWellnessSettingsFromAdmin_()">Föreningsuppgifter</button>` : ""}
       </div>
     </div>` : ""}`;
@@ -9408,7 +9408,7 @@ function renderWellnessSettings_(data) {
       <p class="admin-kicker">Administration · Friskvård</p>
       <h3>Föreningsuppgifter</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Uppgifterna skrivs ut på friskvårdskvittot. PDF:en mejlas som bilaga och skrivs ut i hallen — den sparas inte i Cloudflare. Äldre registerrader rensas automatiskt.
+        Uppgifterna skrivs ut på friskvårdsintyget. PDF:en mejlas som bilaga och skrivs ut i hallen — den sparas inte i Cloudflare. Äldre registerrader rensas automatiskt.
       </p>
       <label class="form-label" for="wf-org-name">Föreningens namn</label>
       <input id="wf-org-name" class="form-control mb-2" value="${escapeHtml_(d.orgName || "")}" autocomplete="organization">
@@ -9430,7 +9430,7 @@ function renderWellnessSettings_(data) {
       <input id="wf-org-legal" class="form-control mb-2" value="${escapeHtml_(d.orgLegal || "")}">
       <label class="form-label" for="wf-org-vat">Moms</label>
       <input id="wf-org-vat" class="form-control mb-2" value="${escapeHtml_(d.orgVat || "")}">
-      <label class="form-label" for="wf-org-keep">Spara kvitton (dagar)</label>
+      <label class="form-label" for="wf-org-keep">Spara intyg (dagar)</label>
       <input id="wf-org-keep" class="form-control mb-3" inputmode="numeric" value="${escapeHtml_(String(d.retentionDays || 90))}">
       <p class="small mb-3" style="color:var(--muted);">14–730 dagar. Standard 90. Registerposten tas bort efter tiden. PDF skickas bara som mejlbilaga.</p>
       <button class="btn btn-accent w-100" type="button" id="wf-org-save" onclick="saveWellnessSettings_()">Spara</button>
@@ -9803,6 +9803,19 @@ const WELLNESS_PRODUCTS_ = [
 const WELLNESS_MEMBERSHIP_NOTE_ =
   "Ersättning för medlemskap omfattas inte enligt Skatteverkets regler.";
 let wellnessState_ = { step: 1, product: "yearcard", receipt: null, pdfBytes: null, pdfBase64: "", receipts: [], today: "", org: null, fromArchive: false };
+let wellnessLogoBytesCache_ = null;
+
+async function wellnessLogoBytes_() {
+  if (wellnessLogoBytesCache_) return wellnessLogoBytesCache_;
+  try {
+    const res = await fetch("vkc-logo.png");
+    if (!res.ok) return null;
+    wellnessLogoBytesCache_ = new Uint8Array(await res.arrayBuffer());
+    return wellnessLogoBytesCache_;
+  } catch (_) {
+    return null;
+  }
+}
 
 function hideWellnessOverlay_() {
   const el = document.getElementById("app-wellness");
@@ -9927,12 +9940,12 @@ function renderWellnessTool_(keepForm) {
     <div class="admin-card">
       <p class="admin-kicker">Friskvård</p>
       <span class="wellness-step">Steg 1 av 2</span>
-      <h3>Utfärda kvitto</h3>
+      <h3>Utfärda intyg</h3>
       <p class="small mb-3" style="color:var(--muted);">
-        Kvittot följer Skatteverkets krav för friskvårdsbidrag: vad som köpts, belopp och säljarens identitet.
+        Intyget följer Skatteverkets krav för friskvårdsbidrag: vad som köpts, belopp och säljarens identitet.
         ${escapeHtml_(org.orgName || "Föreningen")} anges som ${escapeHtml_(org.orgLegal || "ideell förening som inte betalar moms")}.
         ${escapeHtml_(WELLNESS_MEMBERSHIP_NOTE_)}
-        Du signerar med ditt lösenord. Utfärdade kvitton rensas efter ${escapeHtml_(String(keepDays))} dagar.
+        Du signerar med ditt lösenord. Utfärdade intyg rensas efter ${escapeHtml_(String(keepDays))} dagar.
       </p>
       <div class="wellness-chips">${chips}</div>
       <label class="form-label" for="wellness-name">Köpare (namn)</label>
@@ -9961,8 +9974,8 @@ function renderWellnessTool_(keepForm) {
       <button class="btn btn-accent w-100" type="button" id="wellness-sign-btn" onclick="signWellnessReceipt_()">Utfärda och signera</button>
     </div>
     ${recent ? `<div class="admin-card">
-      <p class="admin-kicker">Senaste kvitton</p>
-      <p class="small mb-2" style="color:var(--muted);">Tryck på ett kvitto för att se detaljer och skicka om PDF.</p>
+      <p class="admin-kicker">Senaste intyg</p>
+      <p class="small mb-2" style="color:var(--muted);">Tryck på ett intyg för att se detaljer och skicka om PDF.</p>
       <div style="overflow-x:auto;"><table class="tencard-list">
         <thead><tr><th>Nr</th><th>Köpare</th><th>Belopp</th><th>Datum</th></tr></thead>
         <tbody>${recent}</tbody>
@@ -9984,7 +9997,7 @@ function bindWellnessList_() {
 }
 function wellnessFactRows_(r) {
   return [
-    ["Kvitto nr", r.receiptNo],
+    ["Intyg nr", r.receiptNo],
     ["Köpare", r.recipientName],
     r.recipientIdnr ? ["Personnr", r.recipientIdnr] : null,
     r.recipientEmail ? ["E-post", r.recipientEmail] : null,
@@ -10008,8 +10021,8 @@ function renderWellnessStep2_() {
   return `
     <div class="admin-card">
       <p class="admin-kicker">Friskvård</p>
-      <span class="wellness-step">${fromArchive ? "Tidigare kvitto" : "Steg 2 av 2"}</span>
-      <h3>Kvitto ${escapeHtml_(r.receiptNo)}</h3>
+      <span class="wellness-step">${fromArchive ? "Tidigare intyg" : "Steg 2 av 2"}</span>
+      <h3>Intyg ${escapeHtml_(r.receiptNo)}</h3>
       <dl class="wellness-facts">${facts}</dl>
       <label class="form-label" for="wellness-send-email">E-post till köparen</label>
       <input id="wellness-send-email" type="email" class="form-control mb-3" value="${escapeHtml_(r.recipientEmail || "")}" placeholder="namn@exempel.se">
@@ -10018,8 +10031,8 @@ function renderWellnessStep2_() {
         <button class="btn btn-ghost" type="button" onclick="printWellnessReceipt_()">Skriv ut</button>
         <button class="btn btn-ghost" type="button" onclick="downloadWellnessReceipt_()">Ladda ner PDF</button>
       </div>
-      <button class="btn btn-ghost w-100" type="button" onclick="resetWellnessForm_()">${fromArchive ? "Tillbaka till listan" : "Nytt kvitto"}</button>
-      ${canDeleteWellnessReceipt_() ? `<button class="btn btn-ghost wellness-delete w-100 mt-2" type="button" id="wellness-del-btn" onclick="deleteWellnessReceipt_()">Ta bort kvitto</button>` : ""}
+      <button class="btn btn-ghost w-100" type="button" onclick="resetWellnessForm_()">${fromArchive ? "Tillbaka till listan" : "Nytt intyg"}</button>
+      ${canDeleteWellnessReceipt_() ? `<button class="btn btn-ghost wellness-delete w-100 mt-2" type="button" id="wellness-del-btn" onclick="deleteWellnessReceipt_()">Ta bort intyg</button>` : ""}
     </div>`;
 }
 function resetWellnessForm_() {
@@ -10033,22 +10046,22 @@ function resetWellnessForm_() {
 function deleteWellnessReceipt_() {
   const r = wellnessState_.receipt;
   if (!r) return;
-  if (!canDeleteWellnessReceipt_()) return showToast("Bara superadmin kan ta bort kvitton");
+  if (!canDeleteWellnessReceipt_()) return showToast("Bara superadmin kan ta bort intyg");
   const who = r.recipientName ? " till " + r.recipientName : "";
-  if (!confirm("Ta bort kvitto " + (r.receiptNo || "") + who + "?\nDetta går inte att ångra.")) return;
+  if (!confirm("Ta bort intyg " + (r.receiptNo || "") + who + "?\nDetta går inte att ångra.")) return;
   const btn = document.getElementById("wellness-del-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Tar bort…"; }
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
-        if (btn) { btn.disabled = false; btn.textContent = "Ta bort kvitto"; }
-        return showToast((res && res.error) || "Kunde inte ta bort kvittot");
+        if (btn) { btn.disabled = false; btn.textContent = "Ta bort intyg"; }
+        return showToast((res && res.error) || "Kunde inte ta bort intyget");
       }
-      showToast("Kvitto " + (res.receiptNo || r.receiptNo || "") + " borttaget");
+      showToast("Intyg " + (res.receiptNo || r.receiptNo || "") + " borttaget");
       resetWellnessForm_();
     })
     .withFailureHandler((err) => {
-      if (btn) { btn.disabled = false; btn.textContent = "Ta bort kvitto"; }
+      if (btn) { btn.disabled = false; btn.textContent = "Ta bort intyg"; }
       showToast(String(err && err.message ? err.message : err));
     })
     .deleteWellnessReceipt({ id: r.id });
@@ -10078,7 +10091,7 @@ function openWellnessReceipt_(id) {
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
-        if (!local) showToast((res && res.error) || "Kvittot hittades inte");
+        if (!local) showToast((res && res.error) || "Intyget hittades inte");
         return;
       }
       show(res.receipt);
@@ -10109,7 +10122,7 @@ function signWellnessReceipt_() {
     .withSuccessHandler(async (res) => {
       if (!res || res.ok === false) {
         if (btn) { btn.disabled = false; btn.textContent = "Utfärda och signera"; }
-        return showToast((res && res.error) || "Kunde inte utfärda kvitto");
+        return showToast((res && res.error) || "Kunde inte utfärda intyg");
       }
       try {
         const pdf = await buildWellnessPdf_(res.receipt);
@@ -10159,15 +10172,30 @@ async function buildWellnessPdf_(receipt) {
       });
     });
   }
-  drawText(receipt.orgName || "Västerviks klätterklubb", margin, y, 12, true, rgb(0.05, 0.43, 0.43));
+  const logoH = 44;
+  let headerX = margin;
+  try {
+    const logoBytes = await wellnessLogoBytes_();
+    if (logoBytes) {
+      const logo = await doc.embedPng(logoBytes);
+      const logoW = logo.width * (logoH / logo.height);
+      page.drawImage(logo, {
+        x: margin,
+        y: pageH - margin - logoH,
+        width: logoW,
+        height: logoH
+      });
+      headerX = margin + logoW + 14;
+    }
+  } catch (_) { /* logga saknas — fortsätt utan */ }
+  const headerTop = pageH - margin - 6;
+  drawText(receipt.orgName || "Västerviks klätterklubb", headerX, headerTop, 12, true, rgb(0.05, 0.43, 0.43));
+  drawText("Org.nr " + (receipt.orgNr || "802431-5718"), headerX, headerTop - 16, 10, false, rgb(0.35, 0.4, 0.45));
+  drawText(receipt.orgAddress || "Klätterhallen, Västervik", headerX, headerTop - 30, 10, false, rgb(0.35, 0.4, 0.45));
+  y = pageH - margin - logoH - 24;
+  drawText("Friskvårdsintyg", margin, y, 22, true);
   y -= 16;
-  drawText("Org.nr " + (receipt.orgNr || "802431-5718"), margin, y, 10, false, rgb(0.35, 0.4, 0.45));
-  y -= 14;
-  drawText(receipt.orgAddress || "Klätterhallen, Västervik", margin, y, 10, false, rgb(0.35, 0.4, 0.45));
-  y -= 28;
-  drawText("Friskvårdskvitto", margin, y, 22, true);
-  y -= 16;
-  drawText("Kvitto nr " + (receipt.receiptNo || ""), margin, y, 11, true, rgb(0.05, 0.43, 0.43));
+  drawText("Intyg nr " + (receipt.receiptNo || ""), margin, y, 11, true, rgb(0.05, 0.43, 0.43));
   y -= 28;
   const facts = [
     ["Köpare", receipt.recipientName],
@@ -10192,7 +10220,7 @@ async function buildWellnessPdf_(receipt) {
   y -= 16;
   block([
     receipt.orgVat || "Moms utgår inte. Beloppet avser 0 kr moms.",
-    "Kvittot avser motion och annan friskvård enligt inkomstskattelagen och Skatteverkets regler om friskvårdsbidrag. Det kan lämnas till arbetsgivaren som underlag. " + WELLNESS_MEMBERSHIP_NOTE_
+    "Intyget avser motion och annan friskvård enligt inkomstskattelagen och Skatteverkets regler om friskvårdsbidrag. Det kan lämnas till arbetsgivaren som underlag. " + WELLNESS_MEMBERSHIP_NOTE_
   ], 10, 13);
   y -= 10;
   drawText("Digital underskrift", margin, y, 11, true);
@@ -10204,7 +10232,7 @@ async function buildWellnessPdf_(receipt) {
   ], 10, 13);
   const bytes = await doc.save();
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  return { bytes: u8, base64: uint8ToBase64_(u8), filename: receipt.filename || "friskvardskvitto.pdf" };
+  return { bytes: u8, base64: uint8ToBase64_(u8), filename: receipt.filename || "friskvardsintyg.pdf" };
 }
 async function ensureWellnessPdf_() {
   if (wellnessState_.pdfBytes && String(wellnessState_.pdfBase64 || "").trim()) return true;
@@ -10220,7 +10248,7 @@ async function downloadWellnessReceipt_() {
   } catch (err) {
     return showToast(String(err && err.message ? err.message : err));
   }
-  downloadBytes_(wellnessState_.pdfBytes, (wellnessState_.receipt && wellnessState_.receipt.filename) || "friskvardskvitto.pdf");
+  downloadBytes_(wellnessState_.pdfBytes, (wellnessState_.receipt && wellnessState_.receipt.filename) || "friskvardsintyg.pdf");
 }
 async function printWellnessReceipt_() {
   try {
@@ -10232,7 +10260,7 @@ async function printWellnessReceipt_() {
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
   if (!w) {
-    downloadBytes_(wellnessState_.pdfBytes, (wellnessState_.receipt && wellnessState_.receipt.filename) || "friskvardskvitto.pdf");
+    downloadBytes_(wellnessState_.pdfBytes, (wellnessState_.receipt && wellnessState_.receipt.filename) || "friskvardsintyg.pdf");
     showToast("Tillat popup eller öppna den nedladdade PDF:en och skriv ut");
     return;
   }
@@ -10269,7 +10297,7 @@ async function emailWellnessReceipt_() {
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte skicka");
       wellnessState_.receipt = res.receipt || r;
       renderWellnessTool_();
-      showToast(res.demo ? "Demoläge: mejl skickas inte på riktigt" : "Kvitto skickat som PDF-bilaga");
+      showToast(res.demo ? "Demoläge: mejl skickas inte på riktigt" : "Intyg skickat som PDF-bilaga");
     })
     .withFailureHandler((err) => {
       if (btn) { btn.disabled = false; btn.textContent = mailLabel; }
