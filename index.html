@@ -514,11 +514,17 @@
     #panel {
       position: fixed; left: 0; right: 0; bottom: 0; max-height: min(82vh, 720px); background: var(--panel-sheet);
       border-radius: 22px 22px 0 0; border: 1px solid var(--line); border-bottom: 0; z-index: 50;
-      transform: translateY(110%); transition: transform .35s cubic-bezier(.2,.8,.2,1);
-      display: flex; flex-direction: column; box-shadow: var(--panel-shadow);
+      /* 100% + skuggbuffert: annars läcker panel-shadow (uppåt) in i viewporten när sheetet är stängt */
+      transform: translateY(calc(100% + 96px)); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s cubic-bezier(.2,.8,.2,1);
+      display: flex; flex-direction: column; box-shadow: none;
       overflow: hidden;
+      pointer-events: none;
     }
-    #panel.open { transform: translateY(0); }
+    #panel.open {
+      transform: translateY(0);
+      box-shadow: var(--panel-shadow);
+      pointer-events: auto;
+    }
     @media (min-width: 768px) {
       #panel {
         left: 50%;
@@ -528,7 +534,7 @@
         bottom: 16px;
         border-radius: 22px;
         border-bottom: 1px solid var(--line);
-        transform: translate(-50%, 110%);
+        transform: translate(-50%, calc(100% + 96px));
       }
       #panel.open { transform: translate(-50%, 0); }
     }
@@ -5985,6 +5991,7 @@ function openRoutesFromMenu_() {
   closeTencardTool();
   closeWellnessTool();
   closeInspTool();
+  if (typeof closeCatalogTool === "function") closeCatalogTool();
 }
 function openSettingsFromMenu_() {
   closeAccountMenu_();
@@ -9858,7 +9865,8 @@ function closeWellnessTool() {
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
   const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !inspOpen) {
+  const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !inspOpen && !catalogOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -10496,7 +10504,8 @@ function closeInspTool() {
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !wellnessOpen) {
+  const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !wellnessOpen && !catalogOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
