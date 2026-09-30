@@ -108,10 +108,13 @@ import {
   listKioskCatalog,
   listKioskSales,
   recordKioskSale,
+  restoreKioskSale,
+  deleteKioskSale,
   saveKioskProduct,
   saveKioskSettings,
   uploadKioskLogo,
-  uploadKioskProductImage
+  uploadKioskProductImage,
+  voidKioskSale
 } from "./catalog.js";
 
 export async function dispatch(env, action, token, args, extras) {
@@ -247,6 +250,12 @@ export async function dispatch(env, action, token, args, extras) {
       return listKioskCatalog(env, session, extras && extras.origin);
     case "listKioskSales":
       return listKioskSales(env, session, args[0]);
+    case "voidKioskSale":
+      return voidKioskSale(env, session, args[0]);
+    case "restoreKioskSale":
+      return restoreKioskSale(env, session, args[0]);
+    case "deleteKioskSale":
+      return deleteKioskSale(env, session, args[0]);
     case "saveKioskProduct":
       return saveKioskProduct(env, session, args[0]);
     case "deleteKioskProduct":

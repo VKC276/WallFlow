@@ -46,7 +46,7 @@ let catalogState_ = {
   error: "",
   saving: false,
   filter: { name: "", price: "", category: "", status: "all" },
-  sales: { fromDate: "", toDate: "", orders: [], productTotals: [], totalAmount: 0, orderCount: 0, error: "", loading: false }
+  sales: { fromDate: "", toDate: "", orders: [], productTotals: [], totalAmount: 0, orderCount: 0, error: "", loading: false, filter: "active" }
 };
 
 function kioskTodayYmd_() {
@@ -313,17 +313,33 @@ function renderCatalogTool_() {
 
 function renderKioskSales_(main) {
   const sales = catalogState_.sales;
-  const orders = sales.orders || [];
+  const filter = sales.filter === "voided" || sales.filter === "all" ? sales.filter : "active";
+  sales.filter = filter;
+  const orders = (sales.orders || []).filter((order) => {
+    if (filter === "active") return !order.voided;
+    if (filter === "voided") return order.voided;
+    return true;
+  });
   const totals = sales.productTotals || [];
   const orderRows = orders.map((order) => {
     const lines = (order.items || [])
       .map((item) => `${escapeHtml_(item.name)} × ${escapeHtml_(String(item.qty))} (${kioskFormatSek_(item.price * item.qty)})`)
       .join("<br>");
-    return `<tr>
+    const action = order.voided
+      ? `<div class="d-flex flex-wrap gap-1">
+          <button type="button" class="btn btn-sm btn-ghost" data-kiosk-restore="${escapeHtml_(order.id)}">Återställ</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-kiosk-delete="${escapeHtml_(order.id)}">Radera</button>
+        </div>`
+      : `<button type="button" class="btn btn-sm btn-outline-danger" data-kiosk-void="${escapeHtml_(order.id)}">Makulera</button>`;
+    const voidNote = order.voided
+      ? `<div class="small" style="color:#e8b4b4;">Makulerad${order.voidedAt ? " " + escapeHtml_(kioskFormatWhen_(order.voidedAt)) : ""}</div>`
+      : "";
+    return `<tr${order.voided ? ' style="opacity:.55;"' : ""}>
       <td>${escapeHtml_(kioskFormatWhen_(order.createdAt))}</td>
-      <td><strong>${escapeHtml_(order.id)}</strong><div class="small" style="color:var(--muted);">${escapeHtml_(order.message || "")}</div></td>
+      <td><strong>${escapeHtml_(order.id)}</strong><div class="small" style="color:var(--muted);">${escapeHtml_(order.message || "")}</div>${voidNote}</td>
       <td>${lines || "<span style='color:var(--muted);'>Inga rader sparade</span>"}</td>
       <td class="num">${kioskFormatSek_(order.amount)}</td>
+      <td>${action}</td>
     </tr>`;
   }).join("");
   const totalRows = totals.map((row) => `
@@ -336,7 +352,7 @@ function renderKioskSales_(main) {
     <p class="admin-kicker">Självbetjäningskassa</p>
     ${catalogTabsHtml_()}
     <h3>Historiska Swishköp</h3>
-    <p class="small" style="color:var(--muted);">Matcha Swish-meddelandet mot ordernumret. Varje köp visar vad som låg i korgen.</p>
+    <p class="small" style="color:var(--muted);">Matcha Swish-meddelandet mot ordernumret. Makulera felaktiga köp först. Därefter kan du återställa eller radera dem för gott.</p>
     ${sales.error ? `<p style="color:#e8b4b4;">${escapeHtml_(sales.error)}</p>` : ""}
     <div class="detail-grid" style="margin-bottom:16px;">
       <div class="detail-cell">
@@ -346,6 +362,14 @@ function renderKioskSales_(main) {
       <div class="detail-cell">
         <label>Till</label>
         <input id="kiosk-sales-to" class="form-control" type="date" value="${escapeHtml_(sales.toDate)}">
+      </div>
+      <div class="detail-cell">
+        <label>Visa</label>
+        <select id="kiosk-sales-filter" class="form-control">
+          <option value="active"${filter === "active" ? " selected" : ""}>I rapporten</option>
+          <option value="voided"${filter === "voided" ? " selected" : ""}>Makulerade</option>
+          <option value="all"${filter === "all" ? " selected" : ""}>Alla</option>
+        </select>
       </div>
     </div>
     <div class="d-flex flex-wrap gap-2 mb-3">
@@ -366,8 +390,8 @@ function renderKioskSales_(main) {
     <h4>Köprader</h4>
     <div class="table-responsive">
       <table class="tencard-list">
-        <thead><tr><th>Tid</th><th>Order / Swish-meddelande</th><th>Innehåll</th><th class="num">Belopp</th></tr></thead>
-        <tbody>${orderRows || `<tr><td colspan="4" style="color:var(--muted);">Inga köp i perioden.</td></tr>`}</tbody>
+        <thead><tr><th>Tid</th><th>Order / Swish-meddelande</th><th>Innehåll</th><th class="num">Belopp</th><th></th></tr></thead>
+        <tbody>${orderRows || `<tr><td colspan="5" style="color:var(--muted);">Inga köp i perioden.</td></tr>`}</tbody>
       </table>
     </div>`}
   `;
@@ -382,6 +406,49 @@ function renderKioskSales_(main) {
       loadKioskSales_();
     });
   }
+  const filterEl = main.querySelector("#kiosk-sales-filter");
+  if (filterEl) {
+    filterEl.addEventListener("change", () => {
+      catalogState_.sales.filter = filterEl.value;
+      renderCatalogTool_();
+    });
+  }
+  function runSaleAction_(action, id) {
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res || res.ok === false) {
+          if (typeof showToast === "function") showToast((res && res.error) || "Kunde inte uppdatera köpet");
+          return;
+        }
+        loadKioskSales_();
+      })
+      .withFailureHandler((err) => {
+        if (typeof showToast === "function") showToast(String(err && err.message ? err.message : err));
+      })[action]({ id });
+  }
+  main.querySelectorAll("[data-kiosk-void]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-kiosk-void");
+      if (!id) return;
+      if (!window.confirm("Makulera köp " + id + "? Det räknas inte i rapporten. Därefter kan du återställa eller radera det.")) return;
+      runSaleAction_("voidKioskSale", id);
+    });
+  });
+  main.querySelectorAll("[data-kiosk-restore]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-kiosk-restore");
+      if (!id) return;
+      runSaleAction_("restoreKioskSale", id);
+    });
+  });
+  main.querySelectorAll("[data-kiosk-delete]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-kiosk-delete");
+      if (!id) return;
+      if (!window.confirm("Radera köp " + id + " för gott? Det går inte att ångra.")) return;
+      runSaleAction_("deleteKioskSale", id);
+    });
+  });
   const pdfBtn = main.querySelector("#kiosk-sales-pdf");
   if (pdfBtn) {
     pdfBtn.addEventListener("click", () => {
@@ -405,7 +472,7 @@ function kioskPdfMoney_(n) {
 
 async function buildKioskSalesPdf_() {
   const sales = catalogState_.sales || {};
-  const orders = sales.orders || [];
+  const orders = (sales.orders || []).filter((order) => !order.voided);
   const totals = sales.productTotals || [];
   const { PDFDocument, StandardFonts, rgb, PageSizes } = pdfLib_();
   const doc = await PDFDocument.create();

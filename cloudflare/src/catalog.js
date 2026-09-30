@@ -301,14 +301,41 @@ function parseOrderItems(raw) {
   }
 }
 
+let kioskOrderVoidReady = false;
+
+async function ensureKioskOrderVoid(env) {
+  if (kioskOrderVoidReady) return;
+  try {
+    await env.DB.prepare("SELECT voided, voided_at FROM kiosk_orders LIMIT 1").first();
+  } catch {
+    try {
+      await env.DB.prepare("ALTER TABLE kiosk_orders ADD COLUMN voided INTEGER NOT NULL DEFAULT 0").run();
+    } catch {
+      /* redan tillagd */
+    }
+    try {
+      await env.DB.prepare("ALTER TABLE kiosk_orders ADD COLUMN voided_at TEXT").run();
+    } catch {
+      /* redan tillagd */
+    }
+  }
+  kioskOrderVoidReady = true;
+}
+
+function saleIdFrom(payload) {
+  if (payload && typeof payload === "object") return String(payload.id || payload.orderId || "").trim().toUpperCase();
+  return String(payload || "").trim().toUpperCase();
+}
+
 export async function listKioskSales(env, session, payload) {
   if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  await ensureKioskOrderVoid(env);
   payload = payload || {};
   const toDate = ymdOr(payload.toDate, todayYmdUtc());
   const fromDate = ymdOr(payload.fromDate, addDaysYmd(toDate, -30));
   if (fromDate > toDate) return { ok: false, error: "Startdatum kan inte vara efter slutdatum" };
   const listed = await env.DB.prepare(
-    `SELECT id, created_at, amount, message, items_json
+    `SELECT id, created_at, amount, message, items_json, IFNULL(voided, 0) AS voided, voided_at
      FROM kiosk_orders
      WHERE date(created_at) >= date(?) AND date(created_at) <= date(?)
      ORDER BY created_at DESC
@@ -324,11 +351,14 @@ export async function listKioskSales(env, session, payload) {
       createdAt: String(row.created_at || ""),
       message: String(row.message || ""),
       amount,
-      items
+      items,
+      voided: Number(row.voided) !== 0,
+      voidedAt: row.voided_at ? String(row.voided_at) : null
     };
   });
+  const active = orders.filter((order) => !order.voided);
   const productMap = new Map();
-  for (const order of orders) {
+  for (const order of active) {
     for (const item of order.items) {
       const key = item.name;
       const prev = productMap.get(key) || { name: item.name, qty: 0, amount: 0 };
@@ -340,7 +370,7 @@ export async function listKioskSales(env, session, payload) {
   const productTotals = [...productMap.values()]
     .map((row) => ({ ...row, amount: Math.round(row.amount * 100) / 100 }))
     .sort((a, b) => b.amount - a.amount);
-  const totalAmount = Math.round(orders.reduce((sum, order) => sum + order.amount, 0) * 100) / 100;
+  const totalAmount = Math.round(active.reduce((sum, order) => sum + order.amount, 0) * 100) / 100;
   return {
     ok: true,
     fromDate,
@@ -348,12 +378,57 @@ export async function listKioskSales(env, session, payload) {
     orders,
     productTotals,
     totalAmount,
-    orderCount: orders.length
+    orderCount: active.length
   };
+}
+
+export async function voidKioskSale(env, session, payload) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  await ensureKioskOrderVoid(env);
+  const id = saleIdFrom(payload);
+  if (!id) return { ok: false, error: "Order-id saknas" };
+  const result = await env.DB.prepare(
+    "UPDATE kiosk_orders SET voided = 1, voided_at = datetime('now') WHERE id = ? AND IFNULL(voided, 0) = 0"
+  )
+    .bind(id)
+    .run();
+  if (!result.meta || !result.meta.changes) {
+    return { ok: false, error: "Köpet hittades inte eller är redan makulerat" };
+  }
+  return { ok: true };
+}
+
+export async function restoreKioskSale(env, session, payload) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  await ensureKioskOrderVoid(env);
+  const id = saleIdFrom(payload);
+  if (!id) return { ok: false, error: "Order-id saknas" };
+  const result = await env.DB.prepare(
+    "UPDATE kiosk_orders SET voided = 0, voided_at = NULL WHERE id = ? AND IFNULL(voided, 0) = 1"
+  )
+    .bind(id)
+    .run();
+  if (!result.meta || !result.meta.changes) return { ok: false, error: "Köpet hittades inte eller är inte makulerat" };
+  return { ok: true };
+}
+
+export async function deleteKioskSale(env, session, payload) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  await ensureKioskOrderVoid(env);
+  const id = saleIdFrom(payload);
+  if (!id) return { ok: false, error: "Order-id saknas" };
+  const result = await env.DB.prepare("DELETE FROM kiosk_orders WHERE id = ? AND IFNULL(voided, 0) = 1")
+    .bind(id)
+    .run();
+  if (!result.meta || !result.meta.changes) {
+    return { ok: false, error: "Köpet måste makuleras innan det kan raderas" };
+  }
+  return { ok: true };
 }
 
 export async function recordKioskSale(env, payload) {
   payload = payload || {};
+  await ensureKioskOrderVoid(env);
   const items = Array.isArray(payload.items) ? payload.items : [];
   const amount = Number(payload.amount);
   const message = String(payload.message || "").trim().slice(0, 50);
@@ -362,7 +437,7 @@ export async function recordKioskSale(env, payload) {
   }
   const id = String(payload.orderId || crypto.randomUUID().slice(0, 8)).toUpperCase();
   await env.DB.prepare(
-    "INSERT OR REPLACE INTO kiosk_orders (id, created_at, amount, message, items_json) VALUES (?, datetime('now'), ?, ?, ?)"
+    "INSERT OR REPLACE INTO kiosk_orders (id, created_at, amount, message, items_json, voided, voided_at) VALUES (?, datetime('now'), ?, ?, ?, 0, NULL)"
   )
     .bind(id, Math.round(amount * 100) / 100, message || "Kassa " + id, JSON.stringify(items))
     .run();
