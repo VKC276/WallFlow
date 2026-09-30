@@ -350,7 +350,7 @@ function renderKioskSales_(main) {
     </div>
     <div class="d-flex flex-wrap gap-2 mb-3">
       <button class="btn btn-accent" type="button" id="kiosk-sales-load">Visa period</button>
-      <button class="btn btn-ghost" type="button" onclick="window.print()">Skriv ut / PDF</button>
+      <button class="btn btn-ghost" type="button" id="kiosk-sales-pdf">Ladda ner PDF</button>
     </div>
     ${sales.loading ? `<p style="color:var(--muted);">Hämtar…</p>` : `
     <div class="admin-card" style="margin-bottom:16px;">
@@ -382,6 +382,216 @@ function renderKioskSales_(main) {
       loadKioskSales_();
     });
   }
+  const pdfBtn = main.querySelector("#kiosk-sales-pdf");
+  if (pdfBtn) {
+    pdfBtn.addEventListener("click", () => {
+      downloadKioskSalesPdf_().catch((err) => {
+        if (typeof showToast === "function") showToast(String(err && err.message ? err.message : err));
+      });
+    });
+  }
+}
+
+function kioskPdfText_(text) {
+  return String(text || "")
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u00a0/g, " ")
+    .replace(/[^\x20-\x7E\u00C0-\u00FF]/g, "");
+}
+
+function kioskPdfMoney_(n) {
+  return kioskPdfText_(kioskFormatSek_(n).replace(/\u00a0/g, " "));
+}
+
+async function buildKioskSalesPdf_() {
+  const sales = catalogState_.sales || {};
+  const orders = sales.orders || [];
+  const totals = sales.productTotals || [];
+  const { PDFDocument, StandardFonts, rgb, PageSizes } = pdfLib_();
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const pageW = PageSizes.A4[0];
+  const pageH = PageSizes.A4[1];
+  const margin = 40;
+  const contentW = pageW - margin * 2;
+  const ink = rgb(0.12, 0.14, 0.16);
+  const muted = rgb(0.4, 0.45, 0.5);
+  const line = rgb(0.82, 0.84, 0.86);
+  const accent = rgb(0.05, 0.43, 0.43);
+
+  let page = doc.addPage([pageW, pageH]);
+  let y = pageH - margin;
+
+  function newPage_() {
+    page = doc.addPage([pageW, pageH]);
+    y = pageH - margin;
+  }
+
+  function ensure_(need) {
+    if (y - need < margin) newPage_();
+  }
+
+  function draw_(text, x, yy, size, bold, color) {
+    page.drawText(kioskPdfText_(text), {
+      x, y: yy, size, font: bold ? fontBold : font, color: color || ink
+    });
+  }
+
+  function drawWrapped_(text, x, size, bold, color, maxW) {
+    const wrap = typeof wrapPdfText_ === "function"
+      ? wrapPdfText_(bold ? fontBold : font, text, size, maxW)
+      : [kioskPdfText_(text)];
+    wrap.forEach((ln) => {
+      ensure_(size + 4);
+      draw_(ln, x, y, size, bold, color);
+      y -= size + 4;
+    });
+    return wrap.length;
+  }
+
+  function hrule_() {
+    page.drawLine({
+      start: { x: margin, y: y + 4 },
+      end: { x: pageW - margin, y: y + 4 },
+      thickness: 0.7,
+      color: line
+    });
+    y -= 8;
+  }
+
+  const from = sales.fromDate || "";
+  const to = sales.toDate || "";
+  const period = from && to ? (from + " – " + to) : (from || to || "");
+
+  draw_("Självbetjäningskassa", margin, y, 10, true, accent);
+  y -= 16;
+  draw_("Historiska Swishköp", margin, y, 18, true);
+  y -= 16;
+  if (period) {
+    draw_("Period " + period, margin, y, 11, false, muted);
+    y -= 14;
+  }
+  draw_(String(sales.orderCount || 0) + " köp · " + kioskPdfMoney_(sales.totalAmount), margin, y, 12, true);
+  y -= 18;
+  hrule_();
+
+  draw_("Per vara", margin, y, 13, true);
+  y -= 16;
+
+  const prodCols = [
+    { key: "name", label: "Vara", x: margin, w: contentW - 150 },
+    { key: "qty", label: "Antal", x: margin + contentW - 150, w: 60, right: true },
+    { key: "amount", label: "Summa", x: margin + contentW - 90, w: 90, right: true }
+  ];
+
+  function drawHeader_(cols) {
+    ensure_(22);
+    cols.forEach((c) => {
+      const label = c.label;
+      const tw = fontBold.widthOfTextAtSize(label, 9);
+      const x = c.right ? c.x + c.w - tw : c.x;
+      draw_(label, x, y, 9, true, muted);
+    });
+    y -= 12;
+    hrule_();
+  }
+
+  drawHeader_(prodCols);
+  if (!totals.length) {
+    drawWrapped_("Inga sålda varor.", margin, 10, false, muted, contentW);
+    y -= 6;
+  } else {
+    totals.forEach((row) => {
+      const nameLines = typeof wrapPdfText_ === "function"
+        ? wrapPdfText_(font, row.name, 10, prodCols[0].w - 4)
+        : [kioskPdfText_(row.name)];
+      const rowH = Math.max(14, nameLines.length * 12);
+      ensure_(rowH + 4);
+      nameLines.forEach((ln, i) => draw_(ln, prodCols[0].x, y - i * 12, 10, false));
+      const qty = String(row.qty) + " st";
+      const qtyW = font.widthOfTextAtSize(kioskPdfText_(qty), 10);
+      draw_(qty, prodCols[1].x + prodCols[1].w - qtyW, y, 10, false);
+      const amt = kioskPdfMoney_(row.amount);
+      const amtW = font.widthOfTextAtSize(amt, 10);
+      draw_(amt, prodCols[2].x + prodCols[2].w - amtW, y, 10, false);
+      y -= rowH;
+    });
+  }
+
+  y -= 10;
+  ensure_(40);
+  draw_("Köprader", margin, y, 13, true);
+  y -= 16;
+
+  const orderCols = [
+    { key: "when", label: "Tid", x: margin, w: 90 },
+    { key: "order", label: "Order / Swish", x: margin + 94, w: 130 },
+    { key: "items", label: "Innehåll", x: margin + 228, w: contentW - 228 - 72 },
+    { key: "amount", label: "Belopp", x: margin + contentW - 72, w: 72, right: true }
+  ];
+  drawHeader_(orderCols);
+
+  if (!orders.length) {
+    drawWrapped_("Inga köp i perioden.", margin, 10, false, muted, contentW);
+  } else {
+    orders.forEach((order) => {
+      const when = kioskFormatWhen_(order.createdAt);
+      const orderId = String(order.id || "");
+      const msg = String(order.message || "").trim();
+      const itemLines = (order.items || []).map((item) => {
+        const qty = item.qty != null ? String(item.qty) : "1";
+        return String(item.name || "") + " x " + qty + " (" + kioskPdfMoney_(Number(item.price || 0) * Number(item.qty || 0)) + ")";
+      });
+      const itemsText = itemLines.length ? itemLines.join("\n") : "Inga rader sparade";
+
+      const whenWrap = typeof wrapPdfText_ === "function" ? wrapPdfText_(font, when, 9, orderCols[0].w - 2) : [kioskPdfText_(when)];
+      const orderWrap = [];
+      [orderId, msg].filter(Boolean).forEach((part) => {
+        const wrapped = typeof wrapPdfText_ === "function" ? wrapPdfText_(font, part, 9, orderCols[1].w - 2) : [kioskPdfText_(part)];
+        wrapped.forEach((w) => orderWrap.push(w));
+      });
+      if (!orderWrap.length) orderWrap.push("");
+      const itemsWrap = [];
+      itemsText.split("\n").forEach((part) => {
+        const wrapped = typeof wrapPdfText_ === "function" ? wrapPdfText_(font, part, 9, orderCols[2].w - 2) : [kioskPdfText_(part)];
+        wrapped.forEach((w) => itemsWrap.push(w));
+      });
+      const rowH = Math.max(14, Math.max(whenWrap.length, orderWrap.length, itemsWrap.length) * 11 + 4);
+      ensure_(rowH + 6);
+
+      whenWrap.forEach((ln, i) => draw_(ln, orderCols[0].x, y - i * 11, 9, false));
+      orderWrap.forEach((ln, i) => draw_(ln, orderCols[1].x, y - i * 11, 9, i === 0));
+      itemsWrap.forEach((ln, i) => draw_(ln, orderCols[2].x, y - i * 11, 9, false, muted));
+      const amt = kioskPdfMoney_(order.amount);
+      const amtW = fontBold.widthOfTextAtSize(amt, 9);
+      draw_(amt, orderCols[3].x + orderCols[3].w - amtW, y, 9, true);
+
+      y -= rowH;
+      page.drawLine({
+        start: { x: margin, y: y + 2 },
+        end: { x: pageW - margin, y: y + 2 },
+        thickness: 0.4,
+        color: line
+      });
+      y -= 4;
+    });
+  }
+
+  const bytes = await doc.save();
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const stamp = (from && to) ? (from + "_" + to) : kioskTodayYmd_();
+  return { bytes: u8, filename: "swishkop-" + stamp + ".pdf" };
+}
+
+async function downloadKioskSalesPdf_() {
+  if (catalogState_.sales && catalogState_.sales.loading) {
+    if (typeof showToast === "function") showToast("Vänta tills perioden är hämtad");
+    return;
+  }
+  const pdf = await buildKioskSalesPdf_();
+  downloadBytes_(pdf.bytes, pdf.filename);
+  if (typeof showToast === "function") showToast("PDF nedladdad");
 }
 
 function catalogProductFromRow_(id) {
