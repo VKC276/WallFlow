@@ -3431,8 +3431,7 @@ function renderAccountMenu_() {
     ekonomi.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
   }
   if (canManageKioskCatalog_()) {
-    ekonomi.push(`<button type="button" role="menuitem" onclick="openCatalogToolFromMenu_()">Kassasortiment</button>`);
-    ekonomi.push(`<button type="button" role="menuitem" onclick="openCatalogSalesFromMenu_()">Swish-köp</button>`);
+    ekonomi.push(`<button type="button" role="menuitem" onclick="openCatalogToolFromMenu_()">Självbetjäningskassa</button>`);
   }
   if (canIssueWellnessReceipt_()) {
     ekonomi.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdsintyg</button>`);
@@ -6014,10 +6013,6 @@ function openTencardToolFromMenu_() {
 function openCatalogToolFromMenu_() {
   closeAccountMenu_();
   openCatalogTool("products");
-}
-function openCatalogSalesFromMenu_() {
-  closeAccountMenu_();
-  openCatalogTool("sales");
 }
 function openWellnessToolFromMenu_() {
   closeAccountMenu_();

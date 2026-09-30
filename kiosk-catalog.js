@@ -1,4 +1,4 @@
-/* Kassasortiment i WallFlow — admin / superadmin / kassör. */
+/* Självbetjäningskassa i WallFlow — admin / superadmin / kassör. */
 
 function hideCatalogOverlay_() {
   const el = document.getElementById("app-catalog");
@@ -76,7 +76,7 @@ function catalogTabsHtml_() {
   const view = catalogState_.view === "sales" ? "sales" : "products";
   return `<div class="time-view-tabs" style="padding:0 0 12px;">
     <button type="button" class="btn ${view === "products" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="products">Sortiment</button>
-    <button type="button" class="btn ${view === "sales" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="sales">Swish-köp</button>
+    <button type="button" class="btn ${view === "sales" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="sales">Historiska Swishköp</button>
   </div>`;
 }
 
@@ -92,7 +92,7 @@ function bindCatalogTabs_(root) {
 
 function loadCatalogTool_() {
   const main = document.getElementById("catalog-main");
-  if (main) main.innerHTML = `<p class="admin-kicker">Kassasortiment</p><p style="color:var(--muted);">Hämtar…</p>`;
+  if (main) main.innerHTML = `<p class="admin-kicker">Självbetjäningskassa</p><p style="color:var(--muted);">Hämtar…</p>`;
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
@@ -181,7 +181,7 @@ function renderCatalogTool_() {
       </td>
     </tr>`).join("");
   main.innerHTML = `
-    <p class="admin-kicker">Kassasortiment</p>
+    <p class="admin-kicker">Självbetjäningskassa</p>
     ${catalogTabsHtml_()}
     <h3>Varor till självbetjäningen</h3>
     <p class="small" style="color:var(--muted);">Ändringar syns i kassan inom fem minuter. Revision ${escapeHtml_(String(s.revision || 1))}.</p>
@@ -254,9 +254,9 @@ function renderKioskSales_(main) {
       <td class="num">${kioskFormatSek_(row.amount)}</td>
     </tr>`).join("") || `<tr><td colspan="3" style="color:var(--muted);">Inga sålda varor.</td></tr>`;
   main.innerHTML = `
-    <p class="admin-kicker">Kassasortiment</p>
+    <p class="admin-kicker">Självbetjäningskassa</p>
     ${catalogTabsHtml_()}
-    <h3>Swish-köp</h3>
+    <h3>Historiska Swishköp</h3>
     <p class="small" style="color:var(--muted);">Matcha Swish-meddelandet mot ordernumret. Varje köp visar vad som låg i korgen.</p>
     ${sales.error ? `<p style="color:#e8b4b4;">${escapeHtml_(sales.error)}</p>` : ""}
     <div class="detail-grid" style="margin-bottom:16px;">
