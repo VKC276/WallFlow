@@ -567,14 +567,14 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp, #app-catalog { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show, #app-catalog.show { display: flex; }
     body.time-open .filters-block,
     body.time-open .search-toggle,
     body.time-open .search-wrap,
@@ -584,6 +584,9 @@
     body.tencard-open .filters-block,
     body.tencard-open .search-toggle,
     body.tencard-open .search-wrap,
+    body.catalog-open .filters-block,
+    body.catalog-open .search-toggle,
+    body.catalog-open .search-wrap,
     body.wellness-open .filters-block,
     body.wellness-open .search-toggle,
     body.wellness-open .search-wrap,
@@ -596,6 +599,7 @@
     body.time-open .topbar,
     body.verif-open .topbar,
     body.tencard-open .topbar,
+    body.catalog-open .topbar,
     body.wellness-open .topbar,
     body.insp-open .topbar,
     body.no-routes .topbar {
@@ -1926,6 +1930,9 @@
     </div>
     <div id="app-insp">
       <div class="admin-shell wide" id="insp-main"></div>
+    </div>
+    <div id="app-catalog">
+      <div class="admin-shell wide" id="catalog-main"></div>
     </div>
   </div>
 
@@ -3380,6 +3387,10 @@ function canManageTencards_() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || hasAppRole_("hallvard");
 }
+function canManageKioskCatalog_() {
+  const r = userRole_();
+  return r === "superadmin" || r === "admin" || hasAppRole_("kassor");
+}
 function canIssueWellnessReceipt_() {
   return canManageTencards_();
 }
@@ -3418,6 +3429,9 @@ function renderAccountMenu_() {
   ];
   if (canManageTencards_()) {
     ekonomi.push(`<button type="button" role="menuitem" onclick="openTencardToolFromMenu_()">10-kort</button>`);
+  }
+  if (canManageKioskCatalog_()) {
+    ekonomi.push(`<button type="button" role="menuitem" onclick="openCatalogToolFromMenu_()">Kassasortiment</button>`);
   }
   if (canIssueWellnessReceipt_()) {
     ekonomi.push(`<button type="button" role="menuitem" onclick="openWellnessToolFromMenu_()">Friskvårdsintyg</button>`);
@@ -3675,7 +3689,7 @@ function currentDisplayName_() {
 function hideAppChrome_() {
   const chrome = document.getElementById("app-chrome");
   if (chrome) chrome.classList.remove("ready");
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "no-routes");
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "no-routes");
 }
 function showAppChrome_() {
   const chrome = document.getElementById("app-chrome");
@@ -3686,6 +3700,7 @@ function showAppChrome_() {
   document.body.classList.toggle("tencard-open", !!(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")));
   document.body.classList.toggle("wellness-open", !!(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")));
   document.body.classList.toggle("insp-open", !!(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")));
+  document.body.classList.toggle("catalog-open", !!(document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show")));
   renderAccountMenu_();
 }
 function onTopBrandClick_() {
@@ -3700,11 +3715,13 @@ function onTopBrandClick_() {
     closeTencardTool();
     closeWellnessTool();
     closeInspTool();
+    if (typeof closeCatalogTool === "function") closeCatalogTool();
   } else if (currentUser.authorized) {
     closeVerifTool();
     closeTencardTool();
     closeWellnessTool();
     closeInspTool();
+    if (typeof closeCatalogTool === "function") closeCatalogTool();
     openTimeTool();
   }
 }
@@ -3726,7 +3743,8 @@ function showAppShell_() {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open");
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open");
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
@@ -5978,6 +5996,7 @@ function openTimeToolFromMenu_() {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   openTimeTool();
 }
 function openVerifToolFromMenu_() {
@@ -5990,6 +6009,10 @@ function openVerifToolFromMenu_() {
 function openTencardToolFromMenu_() {
   closeAccountMenu_();
   openTencardTool();
+}
+function openCatalogToolFromMenu_() {
+  closeAccountMenu_();
+  openCatalogTool();
 }
 function openWellnessToolFromMenu_() {
   closeAccountMenu_();
@@ -7992,7 +8015,8 @@ function closeTimeTool() {
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
-  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen && !inspOpen) {
+  const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
+  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen && !inspOpen && !catalogOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -8014,6 +8038,7 @@ function openTimeTool(view) {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
@@ -8638,7 +8663,7 @@ function closeVerifTool() {
     showLoginGate_();
     return;
   }
-  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")) && !(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show"))) {
+  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")) && !(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")) && !(document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show"))) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -8649,6 +8674,7 @@ function openVerifTool() {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
@@ -9472,7 +9498,8 @@ function closeTencardTool() {
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
   const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen && !inspOpen) {
+  const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen && !inspOpen && !catalogOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -9488,6 +9515,7 @@ function openTencardTool() {
   document.getElementById("app-verif").classList.remove("show");
   hideWellnessOverlay_();
   hideInspOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-tencard").classList.add("show");
@@ -9846,6 +9874,7 @@ function openWellnessTool() {
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
   hideInspOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-wellness").classList.add("show");
@@ -10483,6 +10512,7 @@ function openInspTool() {
   document.getElementById("app-verif").classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-insp").classList.add("show");
@@ -10801,5 +10831,6 @@ window.addEventListener("hashchange", () => {
   }
 });
   </script>
+  <script src="kiosk-catalog.js"></script>
 </body>
 </html>

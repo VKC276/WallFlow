@@ -6,6 +6,7 @@ export function isR2ImageKey(id) {
   const s = String(id == null ? "" : id).trim();
   if (!s || /^https?:/i.test(s) || /^data:/i.test(s)) return false;
   if (/^led-[\w\-]+\.(jpe?g|png|webp)$/i.test(s)) return true;
+  if (/^kiosk-[\w.\-]+\.(jpe?g|png|webp)$/i.test(s)) return true;
   if (/\.(jpe?g|png|webp)$/i.test(s) && !/^[a-zA-Z0-9_-]{20,}$/.test(s)) return true;
   return false;
 }

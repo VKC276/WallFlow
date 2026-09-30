@@ -8,6 +8,7 @@
  */
 
 import { dispatch } from "./api.js";
+import { publicCatalog, readCatalogRevision } from "./catalog.js";
 import { serveImage } from "./images.js";
 import { serveVerifPdf } from "./verif.js";
 import { purgeExpiredWellnessReceipts } from "./friskvard.js";
@@ -54,6 +55,38 @@ export default {
       const headers = new Headers(res.headers);
       for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
       return new Response(res.body, { status: res.status, headers });
+    }
+
+    if (request.method === "GET" && url.pathname === "/kiosk/revision") {
+      try {
+        const revision = await readCatalogRevision(env);
+        return new Response(JSON.stringify({ ok: true, revision }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Cache-Control": "no-store",
+            ...CORS_HEADERS
+          }
+        });
+      } catch (err) {
+        return jsonResponse({ ok: false, error: String(err && err.message ? err.message : err) }, 500);
+      }
+    }
+
+    if (request.method === "GET" && url.pathname === "/kiosk/catalog") {
+      try {
+        const catalog = await publicCatalog(env, url.origin);
+        return new Response(JSON.stringify(catalog), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Cache-Control": "no-store",
+            ...CORS_HEADERS
+          }
+        });
+      } catch (err) {
+        return jsonResponse({ ok: false, error: String(err && err.message ? err.message : err) }, 500);
+      }
     }
 
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/api")) {

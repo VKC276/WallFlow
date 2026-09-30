@@ -540,6 +540,7 @@ export function publicSessionFlags(session) {
     treasurer: canTreasurerReport(session),
     timeAdmin: canManageTimeSettings(session),
     tencards: canManageTencards(session),
-    wellness: canIssueWellnessReceipt(session)
+    wellness: canIssueWellnessReceipt(session),
+    kioskCatalog: roleOf(session) === "superadmin" || roleOf(session) === "admin" || hasRole(session, "kassor")
   };
 }

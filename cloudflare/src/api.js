@@ -103,6 +103,15 @@ import {
     getBuilderMoves,
     updateBuilderMove
 } from "./inspiration.js";
+import {
+  deleteKioskProduct,
+  listKioskCatalog,
+  recordKioskSale,
+  saveKioskProduct,
+  saveKioskSettings,
+  uploadKioskLogo,
+  uploadKioskProductImage
+} from "./catalog.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -112,7 +121,8 @@ export async function dispatch(env, action, token, args, extras) {
     requestPasswordReset: true,
     completePasswordReset: true,
     applyForAccount: true,
-    getVerifApp: true
+    getVerifApp: true,
+    recordKioskSale: true
   };
 
   let session = null;
@@ -232,6 +242,20 @@ export async function dispatch(env, action, token, args, extras) {
       return updateBuilderMove(env, args[0], session);
     case "deleteBuilderMove":
       return deleteBuilderMove(env, args[0], session);
+    case "listKioskCatalog":
+      return listKioskCatalog(env, session, extras && extras.origin);
+    case "saveKioskProduct":
+      return saveKioskProduct(env, session, args[0]);
+    case "deleteKioskProduct":
+      return deleteKioskProduct(env, session, args[0]);
+    case "uploadKioskProductImage":
+      return uploadKioskProductImage(env, session, args[0]);
+    case "saveKioskSettings":
+      return saveKioskSettings(env, session, args[0]);
+    case "uploadKioskLogo":
+      return uploadKioskLogo(env, session, args[0]);
+    case "recordKioskSale":
+      return recordKioskSale(env, args[0]);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }
