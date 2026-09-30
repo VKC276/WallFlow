@@ -108,8 +108,6 @@ import {
   listKioskCatalog,
   listKioskSales,
   recordKioskSale,
-  restoreKioskSale,
-  deleteKioskSale,
   saveKioskProduct,
   saveKioskSettings,
   uploadKioskLogo,
@@ -252,10 +250,6 @@ export async function dispatch(env, action, token, args, extras) {
       return listKioskSales(env, session, args[0]);
     case "voidKioskSale":
       return voidKioskSale(env, session, args[0]);
-    case "restoreKioskSale":
-      return restoreKioskSale(env, session, args[0]);
-    case "deleteKioskSale":
-      return deleteKioskSale(env, session, args[0]);
     case "saveKioskProduct":
       return saveKioskProduct(env, session, args[0]);
     case "deleteKioskProduct":
