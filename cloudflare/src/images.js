@@ -64,6 +64,46 @@ export async function deleteBilderKey(env, key) {
   return true;
 }
 
+function escapeR2Prefix(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Radera alla kiosk-bilder för en produkt så R2 inte växer vid byte av bild. */
+export async function deleteKioskProductBilder(env, productId) {
+  const safeId = String(productId || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
+  if (!safeId) return 0;
+  const match = new RegExp("^kiosk-" + escapeR2Prefix(safeId) + "(-[a-f0-9]{16})?\\.(jpe?g|png|webp)$", "i");
+  let cursor;
+  let n = 0;
+  do {
+    const listed = await env.BILDER.list({ prefix: "kiosk-" + safeId, cursor, limit: 1000 });
+    for (const obj of listed.objects || []) {
+      const name = String(obj.key || "");
+      if (!match.test(name)) continue;
+      await env.BILDER.delete(name);
+      n++;
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return n;
+}
+
+export async function deleteKioskLogoBilder(env) {
+  let cursor;
+  let n = 0;
+  do {
+    const listed = await env.BILDER.list({ prefix: "kiosk-logo", cursor, limit: 1000 });
+    for (const obj of listed.objects || []) {
+      const name = String(obj.key || "");
+      if (!/^kiosk-logo(-[a-f0-9]{16})?\.(jpe?g|png|webp)$/i.test(name)) continue;
+      await env.BILDER.delete(name);
+      n++;
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return n;
+}
+
 function base64ToBytes(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);

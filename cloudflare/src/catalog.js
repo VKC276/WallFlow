@@ -4,7 +4,7 @@
  */
 
 import { hasRole, roleOf } from "./auth.js";
-import { deleteBilderKey, isR2ImageKey } from "./images.js";
+import { deleteKioskLogoBilder, deleteKioskProductBilder, isR2ImageKey } from "./images.js";
 
 const DEFAULT_CATEGORIES = ["Entre", "Hyra", "Dryck", "Snacks", "Utrustning", "Övrigt"];
 
@@ -71,7 +71,9 @@ function mapProduct(row, origin) {
     featured: Number(row.featured) !== 0,
     imageKey,
     imageHash: String(row.image_hash || ""),
-    imageUrl: imageKey ? origin + "/img/" + encodeURIComponent(imageKey) : null
+    imageUrl: imageKey
+      ? origin + "/img/" + encodeURIComponent(imageKey) + (row.image_hash ? "?v=" + encodeURIComponent(String(row.image_hash)) : "")
+      : null
   };
 }
 
@@ -97,7 +99,9 @@ export async function publicCatalog(env, origin) {
     theme: normalizeTheme(theme),
     swishNumber: swish,
     swishConfigured: Boolean(swish),
-    logoUrl: logo ? origin + "/img/" + encodeURIComponent(logo) : null,
+    logoUrl: logo
+      ? origin + "/img/" + encodeURIComponent(logo) + (logoHash ? "?v=" + encodeURIComponent(String(logoHash)) : "")
+      : null,
     logoHash: String(logoHash || logo || ""),
     categories: parseCategories(categoriesRaw),
     products: (products.results || []).map((row) => mapProduct(row, origin))
@@ -164,7 +168,7 @@ export async function deleteKioskProduct(env, session, id) {
   if (!id) return { ok: false, error: "Id saknas" };
   const row = await env.DB.prepare("SELECT image_key FROM kiosk_products WHERE id = ?").bind(id).first();
   if (!row) return { ok: false, error: "Produkten hittades inte" };
-  if (row.image_key) await deleteBilderKey(env, row.image_key);
+  if (row.image_key) await deleteKioskProductBilder(env, id);
   await env.DB.prepare("DELETE FROM kiosk_products WHERE id = ?").bind(id).run();
   const revision = await bumpRevision(env);
   return { ok: true, revision };
@@ -203,14 +207,15 @@ export async function uploadKioskProductImage(env, session, payload) {
   if (!product) return { ok: false, error: "Produkten hittades inte" };
   const raw = String(payload.dataBase64 || "").replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "");
   if (!raw) return { ok: false, error: "Ingen bilddata" };
-  if (raw.length > 6000000) return { ok: false, error: "Bilden är för stor" };
+  if (raw.length > 6000000) return { ok: false, error: "Bilden är för stor — prova en mindre fil" };
   let mime = String(payload.mimeType || "image/jpeg").trim() || "image/jpeg";
   if (mime.indexOf("image/") !== 0) mime = "image/jpeg";
   const ext = mime.indexOf("png") >= 0 ? "png" : mime.indexOf("webp") >= 0 ? "webp" : "jpg";
-  const key = "kiosk-" + id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) + "." + ext;
   const bytes = base64ToBytes(raw);
   const hash = await sha16(bytes);
-  if (product.image_key && product.image_key !== key) await deleteBilderKey(env, product.image_key);
+  const safeId = id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || "vara";
+  const key = "kiosk-" + safeId + "-" + hash + "." + ext;
+  await deleteKioskProductBilder(env, id);
   await env.BILDER.put(key, bytes, { httpMetadata: { contentType: mime } });
   await env.DB.prepare(
     "UPDATE kiosk_products SET image_key = ?, image_hash = ?, updated_at = datetime('now') WHERE id = ?"
@@ -251,11 +256,10 @@ export async function uploadKioskLogo(env, session, payload) {
   let mime = String(payload.mimeType || "image/png").trim() || "image/png";
   if (mime.indexOf("image/") !== 0) mime = "image/png";
   const ext = mime.indexOf("jpeg") >= 0 || mime.indexOf("jpg") >= 0 ? "jpg" : mime.indexOf("webp") >= 0 ? "webp" : "png";
-  const key = "kiosk-logo." + ext;
-  const prev = await setting(env, "kioskLogoKey", "");
   const bytes = base64ToBytes(raw);
   const hash = await sha16(bytes);
-  if (prev && prev !== key) await deleteBilderKey(env, prev);
+  const key = "kiosk-logo-" + hash + "." + ext;
+  await deleteKioskLogoBilder(env);
   await env.BILDER.put(key, bytes, { httpMetadata: { contentType: mime } });
   const upsert = env.DB.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"

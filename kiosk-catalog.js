@@ -145,8 +145,9 @@ function catalogProductRowsHtml_(cats) {
         <label class="small mb-0 d-block"><input type="checkbox" data-cat-field="featured" data-id="${escapeHtml_(p.id)}" ${p.featured ? "checked" : ""}> Vanlig</label>
       </td>
       <td>
-        <label class="btn btn-sm btn-ghost mb-0">Bild
-          <input type="file" accept="image/*" hidden data-cat-img="${escapeHtml_(p.id)}">
+        <label class="btn btn-sm btn-ghost mb-0">
+          Byt bild
+          <input type="file" accept="image/*" class="visually-hidden" data-cat-img="${escapeHtml_(p.id)}">
         </label>
         <button class="btn btn-sm btn-ghost" type="button" data-cat-save="${escapeHtml_(p.id)}">Spara</button>
         <button class="btn btn-sm btn-outline-danger" type="button" data-cat-del="${escapeHtml_(p.id)}">Ta bort</button>
@@ -400,11 +401,37 @@ function catalogProductFromRow_(id) {
 }
 
 function fileToPayload_(file) {
+  const maxEdge = 1600;
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ dataBase64: String(reader.result || ""), mimeType: file.type || "image/jpeg" });
-    reader.onerror = () => reject(new Error("Kunde inte läsa filen"));
-    reader.readAsDataURL(file);
+    const fallback = () => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ dataBase64: String(reader.result || ""), mimeType: file.type || "image/jpeg" });
+      reader.onerror = () => reject(new Error("Kunde inte läsa filen"));
+      reader.readAsDataURL(file);
+    };
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let width = img.naturalWidth || img.width;
+      let height = img.naturalHeight || img.height;
+      if (!width || !height) return fallback();
+      const scale = Math.min(1, maxEdge / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return fallback();
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve({ dataBase64: canvas.toDataURL("image/jpeg", 0.84), mimeType: "image/jpeg" });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      fallback();
+    };
+    img.src = url;
   });
 }
 
@@ -459,17 +486,24 @@ function bindCatalogProductRows_(root) {
   root.querySelectorAll("[data-cat-img]").forEach((input) => {
     input.addEventListener("change", async () => {
       const file = input.files && input.files[0];
+      input.value = "";
       if (!file) return;
       const id = input.getAttribute("data-cat-img");
-      const payload = await fileToPayload_(file);
-      payload.id = id;
-      google.script.run
-        .withSuccessHandler((res) => {
-          if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ladda upp");
-          showToast("Bild sparad");
-          loadCatalogTool_();
-        })
-        .uploadKioskProductImage(payload);
+      showToast("Laddar upp bild…");
+      try {
+        const payload = await fileToPayload_(file);
+        payload.id = id;
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ladda upp");
+            showToast("Bild sparad");
+            loadCatalogTool_();
+          })
+          .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+          .uploadKioskProductImage(payload);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Kunde inte läsa bilden");
+      }
     });
   });
 }
