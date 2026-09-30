@@ -21,10 +21,11 @@ function closeCatalogTool() {
   }
 }
 
-function openCatalogTool() {
+function openCatalogTool(view) {
   if (!currentUser.authorized) return showLoginGate_();
   if (currentUser.firstLogin) return showToast("Byt lösenord först");
   if (!canManageKioskCatalog_()) return showToast("Saknar behörighet");
+  catalogState_.view = view === "sales" ? "sales" : "products";
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
@@ -38,7 +39,56 @@ function openCatalogTool() {
   loadCatalogTool_();
 }
 
-let catalogState_ = { products: [], settings: null, error: "", saving: false };
+let catalogState_ = {
+  view: "products",
+  products: [],
+  settings: null,
+  error: "",
+  saving: false,
+  sales: { fromDate: "", toDate: "", orders: [], productTotals: [], totalAmount: 0, orderCount: 0, error: "", loading: false }
+};
+
+function kioskTodayYmd_() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function kioskShiftYmd_(ymd, days) {
+  const d = new Date(ymd + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function kioskFormatSek_(n) {
+  if (typeof formatSek_ === "function") return formatSek_(n);
+  const v = Number(n) || 0;
+  return new Intl.NumberFormat("sv-SE", { style: "currency", currency: "SEK", maximumFractionDigits: v % 1 === 0 ? 0 : 2 }).format(v);
+}
+
+function kioskFormatWhen_(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const d = new Date(s.indexOf("T") >= 0 || s.indexOf("Z") >= 0 ? s : s.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return s.replace("T", " ").slice(0, 16);
+  return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+}
+
+function catalogTabsHtml_() {
+  const view = catalogState_.view === "sales" ? "sales" : "products";
+  return `<div class="time-view-tabs" style="padding:0 0 12px;">
+    <button type="button" class="btn ${view === "products" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="products">Sortiment</button>
+    <button type="button" class="btn ${view === "sales" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="sales">Swish-köp</button>
+  </div>`;
+}
+
+function bindCatalogTabs_(root) {
+  root.querySelectorAll("[data-cat-view]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      catalogState_.view = btn.getAttribute("data-cat-view") === "sales" ? "sales" : "products";
+      if (catalogState_.view === "sales") loadKioskSales_();
+      else renderCatalogTool_();
+    });
+  });
+}
 
 function loadCatalogTool_() {
   const main = document.getElementById("catalog-main");
@@ -53,7 +103,8 @@ function loadCatalogTool_() {
       catalogState_.error = "";
       catalogState_.products = res.products || [];
       catalogState_.settings = res;
-      renderCatalogTool_();
+      if (catalogState_.view === "sales") loadKioskSales_();
+      else renderCatalogTool_();
     })
     .withFailureHandler((err) => {
       catalogState_.error = String(err && err.message ? err.message : err);
@@ -62,9 +113,45 @@ function loadCatalogTool_() {
     .listKioskCatalog();
 }
 
+function loadKioskSales_() {
+  const sales = catalogState_.sales;
+  if (!sales.toDate) sales.toDate = kioskTodayYmd_();
+  if (!sales.fromDate) sales.fromDate = kioskShiftYmd_(sales.toDate, -30);
+  sales.loading = true;
+  sales.error = "";
+  renderCatalogTool_();
+  google.script.run
+    .withSuccessHandler((res) => {
+      sales.loading = false;
+      if (!res || res.ok === false) {
+        sales.error = (res && res.error) || "Kunde inte hämta köp";
+        renderCatalogTool_();
+        return;
+      }
+      sales.fromDate = res.fromDate || sales.fromDate;
+      sales.toDate = res.toDate || sales.toDate;
+      sales.orders = res.orders || [];
+      sales.productTotals = res.productTotals || [];
+      sales.totalAmount = res.totalAmount || 0;
+      sales.orderCount = res.orderCount || 0;
+      sales.error = "";
+      renderCatalogTool_();
+    })
+    .withFailureHandler((err) => {
+      sales.loading = false;
+      sales.error = String(err && err.message ? err.message : err);
+      renderCatalogTool_();
+    })
+    .listKioskSales({ fromDate: sales.fromDate, toDate: sales.toDate });
+}
+
 function renderCatalogTool_() {
   const main = document.getElementById("catalog-main");
   if (!main) return;
+  if (catalogState_.view === "sales") {
+    renderKioskSales_(main);
+    return;
+  }
   const s = catalogState_.settings || {};
   const cats = s.categories || ["Övrigt"];
   const rows = (catalogState_.products || []).map((p) => `
@@ -95,6 +182,7 @@ function renderCatalogTool_() {
     </tr>`).join("");
   main.innerHTML = `
     <p class="admin-kicker">Kassasortiment</p>
+    ${catalogTabsHtml_()}
     <h3>Varor till självbetjäningen</h3>
     <p class="small" style="color:var(--muted);">Ändringar syns i kassan inom fem minuter. Revision ${escapeHtml_(String(s.revision || 1))}.</p>
     ${catalogState_.error ? `<p style="color:#e8b4b4;">${escapeHtml_(catalogState_.error)}</p>` : ""}
@@ -140,7 +228,81 @@ function renderCatalogTool_() {
     </div>
     <button class="btn btn-accent mt-2" type="button" id="kiosk-new-save">Lägg till</button>
   `;
+  bindCatalogTabs_(main);
   bindCatalogTool_(main);
+}
+
+function renderKioskSales_(main) {
+  const sales = catalogState_.sales;
+  const orders = sales.orders || [];
+  const totals = sales.productTotals || [];
+  const orderRows = orders.map((order) => {
+    const lines = (order.items || [])
+      .map((item) => `${escapeHtml_(item.name)} × ${escapeHtml_(String(item.qty))} (${kioskFormatSek_(item.price * item.qty)})`)
+      .join("<br>");
+    return `<tr>
+      <td>${escapeHtml_(kioskFormatWhen_(order.createdAt))}</td>
+      <td><strong>${escapeHtml_(order.id)}</strong><div class="small" style="color:var(--muted);">${escapeHtml_(order.message || "")}</div></td>
+      <td>${lines || "<span style='color:var(--muted);'>Inga rader sparade</span>"}</td>
+      <td class="num">${kioskFormatSek_(order.amount)}</td>
+    </tr>`;
+  }).join("");
+  const totalRows = totals.map((row) => `
+    <tr>
+      <td>${escapeHtml_(row.name)}</td>
+      <td class="num">${escapeHtml_(String(row.qty))} st</td>
+      <td class="num">${kioskFormatSek_(row.amount)}</td>
+    </tr>`).join("") || `<tr><td colspan="3" style="color:var(--muted);">Inga sålda varor.</td></tr>`;
+  main.innerHTML = `
+    <p class="admin-kicker">Kassasortiment</p>
+    ${catalogTabsHtml_()}
+    <h3>Swish-köp</h3>
+    <p class="small" style="color:var(--muted);">Matcha Swish-meddelandet mot ordernumret. Varje köp visar vad som låg i korgen.</p>
+    ${sales.error ? `<p style="color:#e8b4b4;">${escapeHtml_(sales.error)}</p>` : ""}
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-cell">
+        <label>Från</label>
+        <input id="kiosk-sales-from" class="form-control" type="date" value="${escapeHtml_(sales.fromDate)}">
+      </div>
+      <div class="detail-cell">
+        <label>Till</label>
+        <input id="kiosk-sales-to" class="form-control" type="date" value="${escapeHtml_(sales.toDate)}">
+      </div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button class="btn btn-accent" type="button" id="kiosk-sales-load">Visa period</button>
+      <button class="btn btn-ghost" type="button" onclick="window.print()">Skriv ut / PDF</button>
+    </div>
+    ${sales.loading ? `<p style="color:var(--muted);">Hämtar…</p>` : `
+    <div class="admin-card" style="margin-bottom:16px;">
+      <p class="mb-1"><strong>${escapeHtml_(String(sales.orderCount || 0))} köp</strong> · ${kioskFormatSek_(sales.totalAmount)}</p>
+    </div>
+    <h4>Per vara</h4>
+    <div class="table-responsive mb-4">
+      <table class="tencard-list">
+        <thead><tr><th>Vara</th><th class="num">Antal</th><th class="num">Summa</th></tr></thead>
+        <tbody>${totalRows}</tbody>
+      </table>
+    </div>
+    <h4>Köprader</h4>
+    <div class="table-responsive">
+      <table class="tencard-list">
+        <thead><tr><th>Tid</th><th>Order / Swish-meddelande</th><th>Innehåll</th><th class="num">Belopp</th></tr></thead>
+        <tbody>${orderRows || `<tr><td colspan="4" style="color:var(--muted);">Inga köp i perioden.</td></tr>`}</tbody>
+      </table>
+    </div>`}
+  `;
+  bindCatalogTabs_(main);
+  const loadBtn = main.querySelector("#kiosk-sales-load");
+  if (loadBtn) {
+    loadBtn.addEventListener("click", () => {
+      const from = document.getElementById("kiosk-sales-from");
+      const to = document.getElementById("kiosk-sales-to");
+      catalogState_.sales.fromDate = from ? from.value : catalogState_.sales.fromDate;
+      catalogState_.sales.toDate = to ? to.value : catalogState_.sales.toDate;
+      loadKioskSales_();
+    });
+  }
 }
 
 function catalogProductFromRow_(id) {

@@ -106,6 +106,7 @@ import {
 import {
   deleteKioskProduct,
   listKioskCatalog,
+  listKioskSales,
   recordKioskSale,
   saveKioskProduct,
   saveKioskSettings,
@@ -244,6 +245,8 @@ export async function dispatch(env, action, token, args, extras) {
       return deleteBuilderMove(env, args[0], session);
     case "listKioskCatalog":
       return listKioskCatalog(env, session, extras && extras.origin);
+    case "listKioskSales":
+      return listKioskSales(env, session, args[0]);
     case "saveKioskProduct":
       return saveKioskProduct(env, session, args[0]);
     case "deleteKioskProduct":

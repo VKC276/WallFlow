@@ -265,6 +265,89 @@ export async function uploadKioskLogo(env, session, payload) {
   return { ok: true, logoKey: key, logoHash: hash, revision };
 }
 
+function ymdOr(value, fallback) {
+  const s = String(value || "").trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : fallback;
+}
+
+function todayYmdUtc() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysYmd(ymd, days) {
+  const d = new Date(ymd + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function parseOrderItems(raw) {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row) => ({
+        id: String((row && row.id) || ""),
+        name: String((row && row.name) || "Vara").trim() || "Vara",
+        price: Math.round((Number(row && row.price) || 0) * 100) / 100,
+        qty: Number(row && row.qty) || 0
+      }))
+      .filter((row) => row.qty > 0);
+  } catch {
+    return [];
+  }
+}
+
+export async function listKioskSales(env, session, payload) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  payload = payload || {};
+  const toDate = ymdOr(payload.toDate, todayYmdUtc());
+  const fromDate = ymdOr(payload.fromDate, addDaysYmd(toDate, -30));
+  if (fromDate > toDate) return { ok: false, error: "Startdatum kan inte vara efter slutdatum" };
+  const listed = await env.DB.prepare(
+    `SELECT id, created_at, amount, message, items_json
+     FROM kiosk_orders
+     WHERE date(created_at) >= date(?) AND date(created_at) <= date(?)
+     ORDER BY created_at DESC
+     LIMIT 500`
+  )
+    .bind(fromDate, toDate)
+    .all();
+  const orders = (listed.results || []).map((row) => {
+    const items = parseOrderItems(row.items_json);
+    const amount = Math.round((Number(row.amount) || 0) * 100) / 100;
+    return {
+      id: String(row.id || ""),
+      createdAt: String(row.created_at || ""),
+      message: String(row.message || ""),
+      amount,
+      items
+    };
+  });
+  const productMap = new Map();
+  for (const order of orders) {
+    for (const item of order.items) {
+      const key = item.name;
+      const prev = productMap.get(key) || { name: item.name, qty: 0, amount: 0 };
+      prev.qty += item.qty;
+      prev.amount += item.price * item.qty;
+      productMap.set(key, prev);
+    }
+  }
+  const productTotals = [...productMap.values()]
+    .map((row) => ({ ...row, amount: Math.round(row.amount * 100) / 100 }))
+    .sort((a, b) => b.amount - a.amount);
+  const totalAmount = Math.round(orders.reduce((sum, order) => sum + order.amount, 0) * 100) / 100;
+  return {
+    ok: true,
+    fromDate,
+    toDate,
+    orders,
+    productTotals,
+    totalAmount,
+    orderCount: orders.length
+  };
+}
+
 export async function recordKioskSale(env, payload) {
   payload = payload || {};
   const items = Array.isArray(payload.items) ? payload.items : [];
