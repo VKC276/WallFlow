@@ -45,6 +45,7 @@ let catalogState_ = {
   settings: null,
   error: "",
   saving: false,
+  filter: { name: "", price: "", category: "", status: "all" },
   sales: { fromDate: "", toDate: "", orders: [], productTotals: [], totalAmount: 0, orderCount: 0, error: "", loading: false }
 };
 
@@ -88,6 +89,71 @@ function bindCatalogTabs_(root) {
       else renderCatalogTool_();
     });
   });
+}
+
+function catalogCategories_() {
+  const listed = (catalogState_.settings && catalogState_.settings.categories) || [];
+  const fromProducts = (catalogState_.products || []).map((p) => String(p.category || "").trim()).filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  listed.concat(fromProducts).forEach((name) => {
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(name);
+  });
+  return out.length ? out : ["Övrigt"];
+}
+
+function catalogFilteredProducts_() {
+  const f = catalogState_.filter || { name: "", price: "", category: "", status: "all" };
+  const nameQ = String(f.name || "").trim().toLowerCase();
+  const priceQ = String(f.price || "").trim().toLowerCase();
+  const catQ = String(f.category || "").trim();
+  const status = String(f.status || "all");
+  return (catalogState_.products || []).filter((p) => {
+    if (nameQ && String(p.name || "").toLowerCase().indexOf(nameQ) < 0) return false;
+    if (priceQ && String(p.price ?? "").toLowerCase().indexOf(priceQ) < 0) return false;
+    if (catQ && String(p.category || "") !== catQ) return false;
+    if (status === "visible" && !p.active) return false;
+    if (status === "hidden" && p.active) return false;
+    if (status === "featured" && !p.featured) return false;
+    return true;
+  });
+}
+
+function catalogProductRowsHtml_(cats) {
+  const rows = catalogFilteredProducts_().map((p) => {
+    const options = cats.slice();
+    if (p.category && options.indexOf(p.category) < 0) options.push(p.category);
+    return `
+    <tr>
+      <td>${p.imageUrl ? `<img src="${escapeHtml_(p.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : "—"}</td>
+      <td>
+        <input class="form-control form-control-sm" data-cat-field="name" data-id="${escapeHtml_(p.id)}" value="${escapeHtml_(p.name)}">
+      </td>
+      <td style="width:88px;">
+        <input class="form-control form-control-sm" type="number" step="0.5" data-cat-field="price" data-id="${escapeHtml_(p.id)}" value="${escapeHtml_(String(p.price))}">
+      </td>
+      <td>
+        <select class="form-control form-control-sm" data-cat-field="category" data-id="${escapeHtml_(p.id)}">
+          ${options.map((c) => `<option${c === p.category ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
+        </select>
+      </td>
+      <td>
+        <label class="small mb-0"><input type="checkbox" data-cat-field="active" data-id="${escapeHtml_(p.id)}" ${p.active ? "checked" : ""}> Synlig</label>
+        <label class="small mb-0 d-block"><input type="checkbox" data-cat-field="featured" data-id="${escapeHtml_(p.id)}" ${p.featured ? "checked" : ""}> Vanlig</label>
+      </td>
+      <td>
+        <label class="btn btn-sm btn-ghost mb-0">Bild
+          <input type="file" accept="image/*" hidden data-cat-img="${escapeHtml_(p.id)}">
+        </label>
+        <button class="btn btn-sm btn-ghost" type="button" data-cat-save="${escapeHtml_(p.id)}">Spara</button>
+        <button class="btn btn-sm btn-outline-danger" type="button" data-cat-del="${escapeHtml_(p.id)}">Ta bort</button>
+      </td>
+    </tr>`;
+  }).join("");
+  return rows || `<tr><td colspan="6" style="color:var(--muted);">Inga varor matchar filtret.</td></tr>`;
 }
 
 function loadCatalogTool_() {
@@ -153,33 +219,16 @@ function renderCatalogTool_() {
     return;
   }
   const s = catalogState_.settings || {};
-  const cats = s.categories || ["Övrigt"];
-  const rows = (catalogState_.products || []).map((p) => `
-    <tr>
-      <td>${p.imageUrl ? `<img src="${escapeHtml_(p.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : "—"}</td>
-      <td>
-        <input class="form-control form-control-sm" data-cat-field="name" data-id="${escapeHtml_(p.id)}" value="${escapeHtml_(p.name)}">
-      </td>
-      <td style="width:88px;">
-        <input class="form-control form-control-sm" type="number" step="0.5" data-cat-field="price" data-id="${escapeHtml_(p.id)}" value="${escapeHtml_(String(p.price))}">
-      </td>
-      <td>
-        <select class="form-control form-control-sm" data-cat-field="category" data-id="${escapeHtml_(p.id)}">
-          ${cats.map((c) => `<option${c === p.category ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
-        </select>
-      </td>
-      <td>
-        <label class="small mb-0"><input type="checkbox" data-cat-field="active" data-id="${escapeHtml_(p.id)}" ${p.active ? "checked" : ""}> Synlig</label>
-        <label class="small mb-0 d-block"><input type="checkbox" data-cat-field="featured" data-id="${escapeHtml_(p.id)}" ${p.featured ? "checked" : ""}> Vanlig</label>
-      </td>
-      <td>
-        <label class="btn btn-sm btn-ghost mb-0">Bild
-          <input type="file" accept="image/*" hidden data-cat-img="${escapeHtml_(p.id)}">
-        </label>
-        <button class="btn btn-sm btn-ghost" type="button" data-cat-save="${escapeHtml_(p.id)}">Spara</button>
-        <button class="btn btn-sm btn-outline-danger" type="button" data-cat-del="${escapeHtml_(p.id)}">Ta bort</button>
-      </td>
-    </tr>`).join("");
+  const cats = catalogCategories_();
+  const managed = (s.categories && s.categories.length ? s.categories : cats).slice();
+  const f = catalogState_.filter || { name: "", price: "", category: "", status: "all" };
+  const catChips = managed.map((c) => {
+    const used = (catalogState_.products || []).filter((p) => p.category === c).length;
+    return `<span class="d-inline-flex align-items-center gap-1 me-2 mb-2" style="border:1px solid var(--line);border-radius:999px;padding:4px 10px;">
+      ${escapeHtml_(c)}${used ? ` <span class="small" style="color:var(--muted);">(${used})</span>` : ""}
+      <button type="button" class="btn btn-sm btn-ghost" style="padding:0 4px;min-height:0;" data-cat-remove="${escapeHtml_(c)}" aria-label="Ta bort ${escapeHtml_(c)}">×</button>
+    </span>`;
+  }).join("");
   main.innerHTML = `
     <p class="admin-kicker">Självbetjäningskassa</p>
     ${catalogTabsHtml_()}
@@ -211,10 +260,39 @@ function renderCatalogTool_() {
       </div>
     </div>
     <button class="btn btn-accent mb-3" type="button" id="kiosk-settings-save">Spara kassainställningar</button>
+    <h4>Kategorier</h4>
+    <p class="small" style="color:var(--muted);">Kategorierna visas som filter i kassan. Ta bort bara om inga varor använder den, eller godkänn flytt.</p>
+    <div class="mb-2">${catChips || `<span style="color:var(--muted);">Inga kategorier.</span>`}</div>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <input id="kiosk-new-category" class="form-control" style="max-width:240px;" placeholder="Ny kategori">
+      <button class="btn btn-accent" type="button" id="kiosk-add-category">Lägg till kategori</button>
+    </div>
     <div class="table-responsive">
       <table class="tencard-list">
-        <thead><tr><th></th><th>Namn</th><th>Pris</th><th>Kategori</th><th></th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" style="color:var(--muted);">Inga produkter ännu.</td></tr>`}</tbody>
+        <thead>
+          <tr><th></th><th>Namn</th><th>Pris</th><th>Kategori</th><th>Status</th><th></th></tr>
+          <tr>
+            <th></th>
+            <th><input id="kiosk-filter-name" class="form-control form-control-sm" placeholder="Sök namn" value="${escapeHtml_(f.name || "")}"></th>
+            <th><input id="kiosk-filter-price" class="form-control form-control-sm" placeholder="Sök pris" value="${escapeHtml_(f.price || "")}"></th>
+            <th>
+              <select id="kiosk-filter-category" class="form-control form-control-sm">
+                <option value="">Alla</option>
+                ${cats.map((c) => `<option value="${escapeHtml_(c)}"${f.category === c ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
+              </select>
+            </th>
+            <th>
+              <select id="kiosk-filter-status" class="form-control form-control-sm">
+                <option value="all"${f.status === "all" ? " selected" : ""}>Alla</option>
+                <option value="visible"${f.status === "visible" ? " selected" : ""}>Synlig</option>
+                <option value="hidden"${f.status === "hidden" ? " selected" : ""}>Dold</option>
+                <option value="featured"${f.status === "featured" ? " selected" : ""}>Vanlig</option>
+              </select>
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="kiosk-product-tbody">${catalogProductRowsHtml_(cats)}</tbody>
       </table>
     </div>
     <h4 class="mt-4">Ny produkt</h4>
@@ -223,7 +301,7 @@ function renderCatalogTool_() {
       <div class="detail-cell"><label>Pris</label><input id="kiosk-new-price" class="form-control" type="number" step="0.5"></div>
       <div class="detail-cell">
         <label>Kategori</label>
-        <select id="kiosk-new-cat" class="form-control">${cats.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
+        <select id="kiosk-new-cat" class="form-control">${managed.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
       </div>
     </div>
     <button class="btn btn-accent mt-2" type="button" id="kiosk-new-save">Lägg till</button>
@@ -330,29 +408,30 @@ function fileToPayload_(file) {
   });
 }
 
-function bindCatalogTool_(root) {
-  const saveSettings = root.querySelector("#kiosk-settings-save");
-  if (saveSettings) {
-    saveSettings.addEventListener("click", () => {
-      google.script.run
-        .withSuccessHandler((res) => {
-          if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
-          showToast("Kassainställningar sparade");
-          const logo = document.getElementById("kiosk-logo");
-          const file = logo && logo.files && logo.files[0];
-          if (!file) return loadCatalogTool_();
-          fileToPayload_(file).then((payload) => {
-            google.script.run.withSuccessHandler(() => loadCatalogTool_()).uploadKioskLogo(payload);
-          });
-        })
-        .saveKioskSettings({
-          shopName: document.getElementById("kiosk-shop-name").value,
-          swishNumber: document.getElementById("kiosk-swish").value,
-          theme: document.getElementById("kiosk-theme").value,
-          categories: (catalogState_.settings && catalogState_.settings.categories) || []
-        });
-    });
-  }
+function kioskSettingsPayload_(categories) {
+  const s = catalogState_.settings || {};
+  const shop = document.getElementById("kiosk-shop-name");
+  const swish = document.getElementById("kiosk-swish");
+  const theme = document.getElementById("kiosk-theme");
+  return {
+    shopName: shop ? shop.value : s.shopName,
+    swishNumber: swish ? swish.value : s.swishNumber,
+    theme: theme ? theme.value : s.theme,
+    categories: categories || s.categories || []
+  };
+}
+
+function persistKioskCategories_(categories, okMessage) {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara kategorier");
+      if (okMessage) showToast(okMessage);
+      loadCatalogTool_();
+    })
+    .saveKioskSettings(kioskSettingsPayload_(categories));
+}
+
+function bindCatalogProductRows_(root) {
   root.querySelectorAll("[data-cat-save]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-cat-save");
@@ -391,6 +470,104 @@ function bindCatalogTool_(root) {
           loadCatalogTool_();
         })
         .uploadKioskProductImage(payload);
+    });
+  });
+}
+
+function bindCatalogFilters_(root) {
+  const apply = () => {
+    catalogState_.filter = {
+      name: (document.getElementById("kiosk-filter-name") || {}).value || "",
+      price: (document.getElementById("kiosk-filter-price") || {}).value || "",
+      category: (document.getElementById("kiosk-filter-category") || {}).value || "",
+      status: (document.getElementById("kiosk-filter-status") || {}).value || "all"
+    };
+    const tbody = document.getElementById("kiosk-product-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = catalogProductRowsHtml_(catalogCategories_());
+    bindCatalogProductRows_(root);
+  };
+  ["kiosk-filter-name", "kiosk-filter-price"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", apply);
+  });
+  ["kiosk-filter-category", "kiosk-filter-status"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", apply);
+  });
+}
+
+function bindCatalogTool_(root) {
+  bindCatalogFilters_(root);
+  bindCatalogProductRows_(root);
+  const saveSettings = root.querySelector("#kiosk-settings-save");
+  if (saveSettings) {
+    saveSettings.addEventListener("click", () => {
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
+          showToast("Kassainställningar sparade");
+          const logo = document.getElementById("kiosk-logo");
+          const file = logo && logo.files && logo.files[0];
+          if (!file) return loadCatalogTool_();
+          fileToPayload_(file).then((payload) => {
+            google.script.run.withSuccessHandler(() => loadCatalogTool_()).uploadKioskLogo(payload);
+          });
+        })
+        .saveKioskSettings(kioskSettingsPayload_());
+    });
+  }
+  const addCat = root.querySelector("#kiosk-add-category");
+  if (addCat) {
+    addCat.addEventListener("click", () => {
+      const input = document.getElementById("kiosk-new-category");
+      const name = String((input && input.value) || "").trim();
+      if (!name) return showToast("Ange ett kategorinamn");
+      const cats = ((catalogState_.settings && catalogState_.settings.categories) || []).slice();
+      if (cats.some((c) => c.toLowerCase() === name.toLowerCase())) return showToast("Kategorin finns redan");
+      cats.push(name);
+      persistKioskCategories_(cats, "Kategori tillagd");
+    });
+  }
+  const catInput = root.querySelector("#kiosk-new-category");
+  if (catInput) {
+    catInput.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      if (addCat) addCat.click();
+    });
+  }
+  root.querySelectorAll("[data-cat-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const name = btn.getAttribute("data-cat-remove");
+      const cats = ((catalogState_.settings && catalogState_.settings.categories) || []).slice();
+      if (cats.length < 2) return showToast("Minst en kategori måste finnas kvar");
+      const used = (catalogState_.products || []).filter((p) => p.category === name);
+      const next = cats.filter((c) => c !== name);
+      const fallback = next[0];
+      if (used.length) {
+        if (!window.confirm(`${used.length} varor har kategorin "${name}". De flyttas till "${fallback}". Fortsätt?`)) return;
+        let left = used.length;
+        used.forEach((product) => {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte flytta vara");
+              left -= 1;
+              if (left === 0) persistKioskCategories_(next, "Kategori borttagen");
+            })
+            .saveKioskProduct({
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              category: fallback,
+              active: product.active,
+              featured: product.featured,
+              sort: product.sort
+            });
+        });
+        return;
+      }
+      persistKioskCategories_(next, "Kategori borttagen");
     });
   });
   const addBtn = root.querySelector("#kiosk-new-save");
