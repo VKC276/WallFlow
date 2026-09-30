@@ -339,7 +339,7 @@ function renderKioskSales_(main) {
     <p class="admin-kicker">Självbetjäningskassa</p>
     ${catalogTabsHtml_()}
     <h3>Historiska Swishköp</h3>
-    <p class="small" style="color:var(--muted);">Matcha Swish-meddelandet mot ordernumret. Makulera felaktiga köp — de tas bort från rapporten för gott.</p>
+    <p class="small" style="color:var(--muted);">Matcha Swish-meddelandet mot ordernumret. Makulera felaktiga köp — de raderas permanent.</p>
     ${sales.error ? `<p style="color:#e8b4b4;">${escapeHtml_(sales.error)}</p>` : ""}
     <div class="detail-grid" style="margin-bottom:16px;">
       <div class="detail-cell">
@@ -389,7 +389,7 @@ function renderKioskSales_(main) {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-kiosk-void");
       if (!id) return;
-      if (!window.confirm("Makulera köp " + id + "? Det tas bort från rapporten och går inte att ångra.")) return;
+      if (!window.confirm("Makulera köp " + id + "?\n\nKöpet raderas permanent och går inte att återställa.")) return;
       google.script.run
         .withSuccessHandler((res) => {
           if (!res || res.ok === false) {
