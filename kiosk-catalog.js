@@ -219,6 +219,10 @@ function loadKioskSales_() {
     .listKioskSales({ fromDate: sales.fromDate, toDate: sales.toDate });
 }
 
+function catalogSectionDivider_() {
+  return `<hr class="kiosk-section-divider" style="border:0;border-top:1px solid var(--line);margin:28px 0;">`;
+}
+
 function renderCatalogTool_() {
   const main = document.getElementById("catalog-main");
   if (!main) return;
@@ -250,10 +254,11 @@ function renderCatalogTool_() {
     <h4>Kategorier</h4>
     <p class="small" style="color:var(--muted);">Kategorierna visas som filter i kassan. Ta bort bara om inga varor använder den, eller godkänn flytt.</p>
     <div class="mb-2">${catChips || `<span style="color:var(--muted);">Inga kategorier.</span>`}</div>
-    <div class="d-flex flex-wrap gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
       <input id="kiosk-new-category" class="form-control" style="max-width:240px;" placeholder="Ny kategori">
       <button class="btn btn-accent" type="button" id="kiosk-add-category">Lägg till kategori</button>
     </div>
+    ${catalogSectionDivider_()}
     <h4>Ny produkt</h4>
     <div class="detail-grid">
       <div class="detail-cell"><label>Namn</label><input id="kiosk-new-name" class="form-control"></div>
@@ -263,32 +268,43 @@ function renderCatalogTool_() {
         <select id="kiosk-new-cat" class="form-control">${managed.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
       </div>
     </div>
-    <button class="btn btn-accent mt-2 mb-4" type="button" id="kiosk-new-save">Lägg till</button>
+    <button class="btn btn-accent mt-2" type="button" id="kiosk-new-save">Lägg till</button>
+    ${catalogSectionDivider_()}
     <h4>Befintliga produkter</h4>
+    <div class="admin-card" style="margin-bottom:16px;">
+      <h4 style="margin-bottom:8px;">Filter</h4>
+      <p class="small" style="color:var(--muted);margin-bottom:12px;">Filtrera listan nedan utan att ändra produkterna.</p>
+      <div class="detail-grid">
+        <div class="detail-cell">
+          <label>Namn</label>
+          <input id="kiosk-filter-name" class="form-control form-control-sm" placeholder="Sök namn" value="${escapeHtml_(f.name || "")}">
+        </div>
+        <div class="detail-cell">
+          <label>Pris</label>
+          <input id="kiosk-filter-price" class="form-control form-control-sm" placeholder="Sök pris" value="${escapeHtml_(f.price || "")}">
+        </div>
+        <div class="detail-cell">
+          <label>Kategori</label>
+          <select id="kiosk-filter-category" class="form-control form-control-sm">
+            <option value="">Alla</option>
+            ${cats.map((c) => `<option value="${escapeHtml_(c)}"${f.category === c ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="detail-cell">
+          <label>Status</label>
+          <select id="kiosk-filter-status" class="form-control form-control-sm">
+            <option value="all"${f.status === "all" ? " selected" : ""}>Alla</option>
+            <option value="visible"${f.status === "visible" ? " selected" : ""}>Synlig</option>
+            <option value="hidden"${f.status === "hidden" ? " selected" : ""}>Dold</option>
+            <option value="featured"${f.status === "featured" ? " selected" : ""}>Vanlig</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div class="table-responsive">
       <table class="tencard-list">
         <thead>
           <tr><th></th><th>Namn</th><th>Pris</th><th>Kategori</th><th>Status</th><th></th></tr>
-          <tr>
-            <th></th>
-            <th><input id="kiosk-filter-name" class="form-control form-control-sm" placeholder="Sök namn" value="${escapeHtml_(f.name || "")}"></th>
-            <th><input id="kiosk-filter-price" class="form-control form-control-sm" placeholder="Sök pris" value="${escapeHtml_(f.price || "")}"></th>
-            <th>
-              <select id="kiosk-filter-category" class="form-control form-control-sm">
-                <option value="">Alla</option>
-                ${cats.map((c) => `<option value="${escapeHtml_(c)}"${f.category === c ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
-              </select>
-            </th>
-            <th>
-              <select id="kiosk-filter-status" class="form-control form-control-sm">
-                <option value="all"${f.status === "all" ? " selected" : ""}>Alla</option>
-                <option value="visible"${f.status === "visible" ? " selected" : ""}>Synlig</option>
-                <option value="hidden"${f.status === "hidden" ? " selected" : ""}>Dold</option>
-                <option value="featured"${f.status === "featured" ? " selected" : ""}>Vanlig</option>
-              </select>
-            </th>
-            <th></th>
-          </tr>
         </thead>
         <tbody id="kiosk-product-tbody">${catalogProductRowsHtml_(cats)}</tbody>
       </table>
@@ -359,7 +375,8 @@ function renderKioskSettings_(main) {
     <h3>Kassainställningar</h3>
     <p class="small" style="color:var(--muted);">Butik, Swish, tema och startsidans QR-sidor. Ändringar syns i kassan inom fem minuter. Revision ${escapeHtml_(String(s.revision || 1))}.</p>
     ${catalogState_.error ? `<p style="color:#e8b4b4;">${escapeHtml_(catalogState_.error)}</p>` : ""}
-    <div class="detail-grid" style="margin-bottom:16px;">
+    <h4>Butik</h4>
+    <div class="detail-grid" style="margin-bottom:8px;">
       <div class="detail-cell">
         <label>Butiksnamn</label>
         <input id="kiosk-shop-name" class="form-control" value="${escapeHtml_(s.shopName || "")}">
@@ -383,13 +400,14 @@ function renderKioskSettings_(main) {
         <input id="kiosk-logo" type="file" accept="image/*" class="form-control form-control-sm">
       </div>
     </div>
+    ${catalogSectionDivider_()}
     <h4>Startsidans knappar</h4>
     <p class="small" style="color:var(--muted);">Ändra ordningen med upp/ner. Spara kassainställningar för att publicera.</p>
-    <div class="mb-3" style="max-width:420px;">${kioskHomeOrderHtml_(s)}</div>
-    <button class="btn btn-accent mb-3" type="button" id="kiosk-settings-save">Spara kassainställningar</button>
+    <div style="max-width:420px;">${kioskHomeOrderHtml_(s)}</div>
+    ${catalogSectionDivider_()}
     <h4>Startsida — Bli medlem</h4>
     <p class="small" style="color:var(--muted);">Visas när kunden trycker Bli medlem. Ordning: logga → rubrik → QR → text.</p>
-    <div class="detail-grid" style="margin-bottom:16px;">
+    <div class="detail-grid" style="margin-bottom:8px;">
       <div class="detail-cell">
         <label>Rubrik</label>
         <input id="kiosk-member-title" class="form-control" value="${escapeHtml_((s.memberPage && s.memberPage.title) || s.memberTitle || "Bli medlem")}">
@@ -408,9 +426,10 @@ function renderKioskSettings_(main) {
         <input id="kiosk-member-logo" type="file" accept="image/*" class="form-control form-control-sm">
       </div>
     </div>
+    ${catalogSectionDivider_()}
     <h4>Startsida — Epassi</h4>
     <p class="small" style="color:var(--muted);">Visas när kunden trycker Betala med Epassi. Ordning: logga → rubrik → QR → text.</p>
-    <div class="detail-grid" style="margin-bottom:16px;">
+    <div class="detail-grid" style="margin-bottom:8px;">
       <div class="detail-cell">
         <label>Rubrik</label>
         <input id="kiosk-epassi-title" class="form-control" value="${escapeHtml_((s.epassiPage && s.epassiPage.title) || s.epassiTitle || "Betala med Epassi")}">
@@ -429,6 +448,8 @@ function renderKioskSettings_(main) {
         <input id="kiosk-epassi-logo" type="file" accept="image/*" class="form-control form-control-sm">
       </div>
     </div>
+    ${catalogSectionDivider_()}
+    <button class="btn btn-accent" type="button" id="kiosk-settings-save">Spara kassainställningar</button>
   `;
   bindCatalogTabs_(main);
   bindCatalogTool_(main);
