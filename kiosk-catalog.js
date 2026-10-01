@@ -25,7 +25,7 @@ function openCatalogTool(view) {
   if (!currentUser.authorized) return showLoginGate_();
   if (currentUser.firstLogin) return showToast("Byt lösenord först");
   if (!canManageKioskCatalog_()) return showToast("Saknar behörighet");
-  catalogState_.view = view === "sales" ? "sales" : "products";
+  catalogState_.view = catalogNormalizeView_(view);
   document.getElementById("app-admin").classList.remove("show");
   document.getElementById("app-time").classList.remove("show");
   document.getElementById("app-verif").classList.remove("show");
@@ -73,10 +73,17 @@ function kioskFormatWhen_(raw) {
   return d.toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
 }
 
+function catalogNormalizeView_(view) {
+  if (view === "sales") return "sales";
+  if (view === "settings") return "settings";
+  return "products";
+}
+
 function catalogTabsHtml_() {
-  const view = catalogState_.view === "sales" ? "sales" : "products";
+  const view = catalogNormalizeView_(catalogState_.view);
   return `<div class="time-view-tabs" style="padding:0 0 12px;">
     <button type="button" class="btn ${view === "products" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="products">Sortiment</button>
+    <button type="button" class="btn ${view === "settings" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="settings">Kassainställningar</button>
     <button type="button" class="btn ${view === "sales" ? "btn-accent" : "btn-ghost"} btn-sm" data-cat-view="sales">Historiska Swishköp</button>
   </div>`;
 }
@@ -84,7 +91,7 @@ function catalogTabsHtml_() {
 function bindCatalogTabs_(root) {
   root.querySelectorAll("[data-cat-view]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      catalogState_.view = btn.getAttribute("data-cat-view") === "sales" ? "sales" : "products";
+      catalogState_.view = catalogNormalizeView_(btn.getAttribute("data-cat-view"));
       if (catalogState_.view === "sales") loadKioskSales_();
       else renderCatalogTool_();
     });
@@ -219,6 +226,10 @@ function renderCatalogTool_() {
     renderKioskSales_(main);
     return;
   }
+  if (catalogState_.view === "settings") {
+    renderKioskSettings_(main);
+    return;
+  }
   const s = catalogState_.settings || {};
   const cats = catalogCategories_();
   const managed = (s.categories && s.categories.length ? s.categories : cats).slice();
@@ -235,6 +246,65 @@ function renderCatalogTool_() {
     ${catalogTabsHtml_()}
     <h3>Varor till självbetjäningen</h3>
     <p class="small" style="color:var(--muted);">Ändringar syns i kassan inom fem minuter. Revision ${escapeHtml_(String(s.revision || 1))}.</p>
+    ${catalogState_.error ? `<p style="color:#e8b4b4;">${escapeHtml_(catalogState_.error)}</p>` : ""}
+    <h4>Kategorier</h4>
+    <p class="small" style="color:var(--muted);">Kategorierna visas som filter i kassan. Ta bort bara om inga varor använder den, eller godkänn flytt.</p>
+    <div class="mb-2">${catChips || `<span style="color:var(--muted);">Inga kategorier.</span>`}</div>
+    <div class="d-flex flex-wrap gap-2 mb-4">
+      <input id="kiosk-new-category" class="form-control" style="max-width:240px;" placeholder="Ny kategori">
+      <button class="btn btn-accent" type="button" id="kiosk-add-category">Lägg till kategori</button>
+    </div>
+    <h4>Ny produkt</h4>
+    <div class="detail-grid">
+      <div class="detail-cell"><label>Namn</label><input id="kiosk-new-name" class="form-control"></div>
+      <div class="detail-cell"><label>Pris</label><input id="kiosk-new-price" class="form-control" type="number" step="0.5"></div>
+      <div class="detail-cell">
+        <label>Kategori</label>
+        <select id="kiosk-new-cat" class="form-control">${managed.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
+      </div>
+    </div>
+    <button class="btn btn-accent mt-2 mb-4" type="button" id="kiosk-new-save">Lägg till</button>
+    <h4>Befintliga produkter</h4>
+    <div class="table-responsive">
+      <table class="tencard-list">
+        <thead>
+          <tr><th></th><th>Namn</th><th>Pris</th><th>Kategori</th><th>Status</th><th></th></tr>
+          <tr>
+            <th></th>
+            <th><input id="kiosk-filter-name" class="form-control form-control-sm" placeholder="Sök namn" value="${escapeHtml_(f.name || "")}"></th>
+            <th><input id="kiosk-filter-price" class="form-control form-control-sm" placeholder="Sök pris" value="${escapeHtml_(f.price || "")}"></th>
+            <th>
+              <select id="kiosk-filter-category" class="form-control form-control-sm">
+                <option value="">Alla</option>
+                ${cats.map((c) => `<option value="${escapeHtml_(c)}"${f.category === c ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
+              </select>
+            </th>
+            <th>
+              <select id="kiosk-filter-status" class="form-control form-control-sm">
+                <option value="all"${f.status === "all" ? " selected" : ""}>Alla</option>
+                <option value="visible"${f.status === "visible" ? " selected" : ""}>Synlig</option>
+                <option value="hidden"${f.status === "hidden" ? " selected" : ""}>Dold</option>
+                <option value="featured"${f.status === "featured" ? " selected" : ""}>Vanlig</option>
+              </select>
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="kiosk-product-tbody">${catalogProductRowsHtml_(cats)}</tbody>
+      </table>
+    </div>
+  `;
+  bindCatalogTabs_(main);
+  bindCatalogTool_(main);
+}
+
+function renderKioskSettings_(main) {
+  const s = catalogState_.settings || {};
+  main.innerHTML = `
+    <p class="admin-kicker">Självbetjäningskassa</p>
+    ${catalogTabsHtml_()}
+    <h3>Kassainställningar</h3>
+    <p class="small" style="color:var(--muted);">Butik, Swish, tema och startsidans QR-sidor. Ändringar syns i kassan inom fem minuter. Revision ${escapeHtml_(String(s.revision || 1))}.</p>
     ${catalogState_.error ? `<p style="color:#e8b4b4;">${escapeHtml_(catalogState_.error)}</p>` : ""}
     <div class="detail-grid" style="margin-bottom:16px;">
       <div class="detail-cell">
@@ -302,52 +372,6 @@ function renderCatalogTool_() {
         ${(s.epassiPage && s.epassiPage.logoUrl) ? `<img src="${escapeHtml_(s.epassiPage.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
         <input id="kiosk-epassi-logo" type="file" accept="image/*" class="form-control form-control-sm">
       </div>
-    </div>
-    <h4>Kategorier</h4>
-    <p class="small" style="color:var(--muted);">Kategorierna visas som filter i kassan. Ta bort bara om inga varor använder den, eller godkänn flytt.</p>
-    <div class="mb-2">${catChips || `<span style="color:var(--muted);">Inga kategorier.</span>`}</div>
-    <div class="d-flex flex-wrap gap-2 mb-4">
-      <input id="kiosk-new-category" class="form-control" style="max-width:240px;" placeholder="Ny kategori">
-      <button class="btn btn-accent" type="button" id="kiosk-add-category">Lägg till kategori</button>
-    </div>
-    <h4>Ny produkt</h4>
-    <div class="detail-grid">
-      <div class="detail-cell"><label>Namn</label><input id="kiosk-new-name" class="form-control"></div>
-      <div class="detail-cell"><label>Pris</label><input id="kiosk-new-price" class="form-control" type="number" step="0.5"></div>
-      <div class="detail-cell">
-        <label>Kategori</label>
-        <select id="kiosk-new-cat" class="form-control">${managed.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
-      </div>
-    </div>
-    <button class="btn btn-accent mt-2 mb-4" type="button" id="kiosk-new-save">Lägg till</button>
-    <h4>Befintliga produkter</h4>
-    <div class="table-responsive">
-      <table class="tencard-list">
-        <thead>
-          <tr><th></th><th>Namn</th><th>Pris</th><th>Kategori</th><th>Status</th><th></th></tr>
-          <tr>
-            <th></th>
-            <th><input id="kiosk-filter-name" class="form-control form-control-sm" placeholder="Sök namn" value="${escapeHtml_(f.name || "")}"></th>
-            <th><input id="kiosk-filter-price" class="form-control form-control-sm" placeholder="Sök pris" value="${escapeHtml_(f.price || "")}"></th>
-            <th>
-              <select id="kiosk-filter-category" class="form-control form-control-sm">
-                <option value="">Alla</option>
-                ${cats.map((c) => `<option value="${escapeHtml_(c)}"${f.category === c ? " selected" : ""}>${escapeHtml_(c)}</option>`).join("")}
-              </select>
-            </th>
-            <th>
-              <select id="kiosk-filter-status" class="form-control form-control-sm">
-                <option value="all"${f.status === "all" ? " selected" : ""}>Alla</option>
-                <option value="visible"${f.status === "visible" ? " selected" : ""}>Synlig</option>
-                <option value="hidden"${f.status === "hidden" ? " selected" : ""}>Dold</option>
-                <option value="featured"${f.status === "featured" ? " selected" : ""}>Vanlig</option>
-              </select>
-            </th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="kiosk-product-tbody">${catalogProductRowsHtml_(cats)}</tbody>
-      </table>
     </div>
   `;
   bindCatalogTabs_(main);
