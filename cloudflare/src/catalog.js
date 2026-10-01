@@ -4,12 +4,51 @@
  */
 
 import { hasRole, roleOf } from "./auth.js";
-import { deleteKioskLogoBilder, deleteKioskProductBilder, deleteKioskEntryLogoBilder, isR2ImageKey } from "./images.js";
+import { deleteKioskLogoBilder, deleteKioskProductBilder, deleteKioskEntryLogoBilder, deleteKioskHomeBgBilder, isR2ImageKey } from "./images.js";
 
 const DEFAULT_CATEGORIES = ["Entre", "Hyra", "Dryck", "Snacks", "Utrustning", "Övrigt"];
-const DEFAULT_HOME_ORDER = ["member", "epassi", "swish"];
+const SWISH_SLOT = "swish";
+const MAX_HOME_QR_BUTTONS = 8;
 
-function parseHomeOrder(raw) {
+function sanitizeButtonId(id) {
+  return String(id || "")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 40);
+}
+
+function parseHomeQrButtons(raw) {
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw || "[]");
+    } catch {
+      parsed = [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const row of parsed) {
+    if (!row || typeof row !== "object") continue;
+    const id = sanitizeButtonId(row.id);
+    if (!id || id === SWISH_SLOT || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      title: String(row.title || "").trim() || "QR-knapp",
+      body: String(row.body || "").trim(),
+      url: String(row.url || "").trim(),
+      logoKey: String(row.logoKey || "").trim(),
+      logoHash: String(row.logoHash || "").trim()
+    });
+    if (out.length >= MAX_HOME_QR_BUTTONS) break;
+  }
+  return out;
+}
+
+function parseHomeOrder(raw, buttonIds) {
+  const allowed = new Set((buttonIds || []).map((id) => sanitizeButtonId(id)).filter(Boolean));
+  allowed.add(SWISH_SLOT);
   let parsed = raw;
   if (typeof raw === "string") {
     try {
@@ -18,21 +57,36 @@ function parseHomeOrder(raw) {
       parsed = null;
     }
   }
-  const allowed = new Set(DEFAULT_HOME_ORDER);
   const out = [];
   const seen = new Set();
   if (Array.isArray(parsed)) {
     for (const item of parsed) {
-      const slot = String(item || "").trim();
+      const slot = sanitizeButtonId(item) || String(item || "").trim();
+      if (slot !== SWISH_SLOT && !allowed.has(slot)) continue;
       if (!allowed.has(slot) || seen.has(slot)) continue;
       seen.add(slot);
       out.push(slot);
     }
   }
-  for (const slot of DEFAULT_HOME_ORDER) {
-    if (!seen.has(slot)) out.push(slot);
+  for (const id of buttonIds || []) {
+    const slot = sanitizeButtonId(id);
+    if (slot && !seen.has(slot)) {
+      seen.add(slot);
+      out.push(slot);
+    }
   }
+  if (!seen.has(SWISH_SLOT)) out.push(SWISH_SLOT);
   return out;
+}
+
+function mapHomeQrButton(btn, origin) {
+  return {
+    id: btn.id,
+    title: btn.title,
+    body: btn.body,
+    url: btn.url,
+    logoUrl: imageUrlFromKey(origin, btn.logoKey, btn.logoHash)
+  };
 }
 
 export function canManageKioskCatalog(session) {
@@ -130,6 +184,9 @@ export async function publicCatalog(env, origin) {
     epassiLogoKey,
     epassiLogoHash,
     homeOrderRaw,
+    homeQrButtonsRaw,
+    homeBgKey,
+    homeBgHash,
     products
   ] = await Promise.all([
     readCatalogRevision(env),
@@ -149,13 +206,40 @@ export async function publicCatalog(env, origin) {
     setting(env, "kioskEpassiBody", ""),
     setting(env, "kioskEpassiLogoKey", ""),
     setting(env, "kioskEpassiLogoHash", ""),
-    setting(env, "kioskHomeOrder", JSON.stringify(DEFAULT_HOME_ORDER)),
+    setting(env, "kioskHomeOrder", "[]"),
+    setting(env, "kioskHomeQrButtons", "[]"),
+    setting(env, "kioskHomeBgKey", ""),
+    setting(env, "kioskHomeBgHash", ""),
     env.DB.prepare(
       "SELECT id, name, price, category, sort, active, featured, image_key, image_hash FROM kiosk_products WHERE active = 1 ORDER BY featured DESC, category, sort, name"
     ).all()
   ]);
+  let homeQrButtons = parseHomeQrButtons(homeQrButtonsRaw);
+  if (!homeQrButtons.length) {
+    homeQrButtons = [
+      {
+        id: "member",
+        title: String(memberTitle || "Bli medlem").trim() || "Bli medlem",
+        body: String(memberBody || "").trim(),
+        url: String(memberUrl || "").trim(),
+        logoKey: String(memberLogoKey || "").trim(),
+        logoHash: String(memberLogoHash || "").trim()
+      },
+      {
+        id: "epassi",
+        title: String(epassiTitle || "Betala med Epassi").trim() || "Betala med Epassi",
+        body: String(epassiBody || "").trim(),
+        url: String(epassiUrl || "").trim(),
+        logoKey: String(epassiLogoKey || "").trim(),
+        logoHash: String(epassiLogoHash || "").trim()
+      }
+    ];
+  }
   const logo = String(logoKey || "").trim();
   const swish = normalizeSwish(swishNumber);
+  const mappedButtons = homeQrButtons.map((btn) => mapHomeQrButton(btn, origin));
+  const member = mappedButtons.find((b) => b.id === "member") || mappedButtons[0] || null;
+  const epassi = mappedButtons.find((b) => b.id === "epassi") || mappedButtons[1] || null;
   return {
     ok: true,
     revision,
@@ -163,19 +247,14 @@ export async function publicCatalog(env, origin) {
     theme: normalizeTheme(theme),
     swishNumber: swish,
     swishConfigured: Boolean(swish),
-    homeOrder: parseHomeOrder(homeOrderRaw),
-    memberPage: {
-      title: String(memberTitle || "Bli medlem").trim() || "Bli medlem",
-      body: String(memberBody || "").trim(),
-      url: String(memberUrl || "").trim(),
-      logoUrl: imageUrlFromKey(origin, memberLogoKey, memberLogoHash)
-    },
-    epassiPage: {
-      title: String(epassiTitle || "Betala med Epassi").trim() || "Betala med Epassi",
-      body: String(epassiBody || "").trim(),
-      url: String(epassiUrl || "").trim(),
-      logoUrl: imageUrlFromKey(origin, epassiLogoKey, epassiLogoHash)
-    },
+    homeOrder: parseHomeOrder(
+      homeOrderRaw,
+      homeQrButtons.map((b) => b.id)
+    ),
+    homeQrButtons: mappedButtons,
+    homeBackgroundUrl: imageUrlFromKey(origin, homeBgKey, homeBgHash),
+    memberPage: member,
+    epassiPage: epassi,
     logoUrl: imageUrlFromKey(origin, logo, logoHash),
     logoHash: String(logoHash || logo || ""),
     categories: parseCategories(categoriesRaw),
@@ -308,13 +387,46 @@ export async function saveKioskSettings(env, session, payload) {
   if (!shopName) return { ok: false, error: "Butiksnamn krävs" };
   const theme = normalizeTheme(payload.theme);
   const swish = normalizeSwish(payload.swishNumber);
-  const memberUrl = String(payload.memberUrl || "").trim();
-  const memberTitle = String(payload.memberTitle || "").trim() || "Bli medlem";
-  const memberBody = String(payload.memberBody || "").trim();
-  const epassiUrl = String(payload.epassiUrl || "").trim();
-  const epassiTitle = String(payload.epassiTitle || "").trim() || "Betala med Epassi";
-  const epassiBody = String(payload.epassiBody || "").trim();
-  const homeOrder = parseHomeOrder(payload.homeOrder);
+  const existingButtons = parseHomeQrButtons(await setting(env, "kioskHomeQrButtons", "[]"));
+  let homeQrButtons = parseHomeQrButtons(payload.homeQrButtons);
+  if (!homeQrButtons.length && Array.isArray(payload.homeQrButtons) === false) {
+    // Legacy payload with member/epassi fields
+    homeQrButtons = [
+      {
+        id: "member",
+        title: String(payload.memberTitle || "").trim() || "Bli medlem",
+        body: String(payload.memberBody || "").trim(),
+        url: String(payload.memberUrl || "").trim(),
+        logoKey: "",
+        logoHash: ""
+      },
+      {
+        id: "epassi",
+        title: String(payload.epassiTitle || "").trim() || "Betala med Epassi",
+        body: String(payload.epassiBody || "").trim(),
+        url: String(payload.epassiUrl || "").trim(),
+        logoKey: "",
+        logoHash: ""
+      }
+    ];
+  }
+  homeQrButtons = homeQrButtons.map((btn) => {
+    const prev = existingButtons.find((row) => row.id === btn.id);
+    return {
+      ...btn,
+      logoKey: btn.logoKey || (prev && prev.logoKey) || "",
+      logoHash: btn.logoHash || (prev && prev.logoHash) || ""
+    };
+  });
+  for (const prev of existingButtons) {
+    if (!homeQrButtons.some((btn) => btn.id === prev.id)) {
+      await deleteKioskEntryLogoBilder(env, prev.id);
+    }
+  }
+  const homeOrder = parseHomeOrder(
+    payload.homeOrder,
+    homeQrButtons.map((b) => b.id)
+  );
   const categories = parseCategories(JSON.stringify(payload.categories || DEFAULT_CATEGORIES));
   const upsert = env.DB.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
@@ -323,12 +435,7 @@ export async function saveKioskSettings(env, session, payload) {
     upsert.bind("kioskShopName", shopName),
     upsert.bind("kioskSwishNumber", swish),
     upsert.bind("kioskTheme", theme),
-    upsert.bind("kioskMemberUrl", memberUrl),
-    upsert.bind("kioskMemberTitle", memberTitle),
-    upsert.bind("kioskMemberBody", memberBody),
-    upsert.bind("kioskEpassiUrl", epassiUrl),
-    upsert.bind("kioskEpassiTitle", epassiTitle),
-    upsert.bind("kioskEpassiBody", epassiBody),
+    upsert.bind("kioskHomeQrButtons", JSON.stringify(homeQrButtons)),
     upsert.bind("kioskHomeOrder", JSON.stringify(homeOrder)),
     upsert.bind("kioskCategories", JSON.stringify(categories))
   ]);
@@ -361,7 +468,8 @@ export async function uploadKioskLogo(env, session, payload) {
 export async function uploadKioskEntryLogo(env, session, payload) {
   if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
   payload = payload || {};
-  const slot = String(payload.slot || "").trim() === "epassi" ? "epassi" : "member";
+  const buttonId = sanitizeButtonId(payload.buttonId || payload.slot);
+  if (!buttonId || buttonId === SWISH_SLOT) return { ok: false, error: "Ogiltig knapp" };
   const raw = String(payload.dataBase64 || "").replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "");
   if (!raw) return { ok: false, error: "Ingen bilddata" };
   if (raw.length > 6000000) return { ok: false, error: "Bilden är för stor" };
@@ -370,17 +478,53 @@ export async function uploadKioskEntryLogo(env, session, payload) {
   const ext = mime.indexOf("jpeg") >= 0 || mime.indexOf("jpg") >= 0 ? "jpg" : mime.indexOf("webp") >= 0 ? "webp" : "png";
   const bytes = base64ToBytes(raw);
   const hash = await sha16(bytes);
-  const key = "kiosk-entry-" + slot + "-" + hash + "." + ext;
-  await deleteKioskEntryLogoBilder(env, slot);
+  const key = "kiosk-entry-" + buttonId + "-" + hash + "." + ext;
+  let buttons = parseHomeQrButtons(await setting(env, "kioskHomeQrButtons", "[]"));
+  if (!buttons.some((b) => b.id === buttonId)) {
+    buttons.push({ id: buttonId, title: "QR-knapp", body: "", url: "", logoKey: "", logoHash: "" });
+  }
+  await deleteKioskEntryLogoBilder(env, buttonId);
   await env.BILDER.put(key, bytes, { httpMetadata: { contentType: mime } });
-  const keySetting = slot === "epassi" ? "kioskEpassiLogoKey" : "kioskMemberLogoKey";
-  const hashSetting = slot === "epassi" ? "kioskEpassiLogoHash" : "kioskMemberLogoHash";
+  buttons = buttons.map((btn) => (btn.id === buttonId ? { ...btn, logoKey: key, logoHash: hash } : btn));
   const upsert = env.DB.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   );
-  await env.DB.batch([upsert.bind(keySetting, key), upsert.bind(hashSetting, hash)]);
+  await upsert.bind("kioskHomeQrButtons", JSON.stringify(buttons)).run();
   const revision = await bumpRevision(env);
-  return { ok: true, slot, logoKey: key, logoHash: hash, revision };
+  return { ok: true, buttonId, logoKey: key, logoHash: hash, revision };
+}
+
+export async function uploadKioskHomeBackground(env, session, payload) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  payload = payload || {};
+  const raw = String(payload.dataBase64 || "").replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "");
+  if (!raw) return { ok: false, error: "Ingen bilddata" };
+  if (raw.length > 8000000) return { ok: false, error: "Bilden är för stor" };
+  let mime = String(payload.mimeType || "image/jpeg").trim() || "image/jpeg";
+  if (mime.indexOf("image/") !== 0) mime = "image/jpeg";
+  const ext = mime.indexOf("png") >= 0 ? "png" : mime.indexOf("webp") >= 0 ? "webp" : "jpg";
+  const bytes = base64ToBytes(raw);
+  const hash = await sha16(bytes);
+  const key = "kiosk-home-bg-" + hash + "." + ext;
+  await deleteKioskHomeBgBilder(env);
+  await env.BILDER.put(key, bytes, { httpMetadata: { contentType: mime } });
+  const upsert = env.DB.prepare(
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  );
+  await env.DB.batch([upsert.bind("kioskHomeBgKey", key), upsert.bind("kioskHomeBgHash", hash)]);
+  const revision = await bumpRevision(env);
+  return { ok: true, logoKey: key, logoHash: hash, revision };
+}
+
+export async function clearKioskHomeBackground(env, session) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  await deleteKioskHomeBgBilder(env);
+  const upsert = env.DB.prepare(
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  );
+  await env.DB.batch([upsert.bind("kioskHomeBgKey", ""), upsert.bind("kioskHomeBgHash", "")]);
+  const revision = await bumpRevision(env);
+  return { ok: true, revision };
 }
 
 function ymdOr(value, fallback) {

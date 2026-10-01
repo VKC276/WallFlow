@@ -314,45 +314,110 @@ function renderCatalogTool_() {
   bindCatalogTool_(main);
 }
 
+function kioskQrButtons_(settings) {
+  const list = settings && settings.homeQrButtons;
+  return Array.isArray(list) ? list.slice() : [];
+}
+
 function kioskHomeOrder_(settings) {
-  const allowed = ["member", "epassi", "swish"];
+  const buttons = kioskQrButtons_(settings);
+  const allowed = new Set(buttons.map((b) => String(b.id || "")).filter(Boolean));
+  allowed.add("swish");
   const raw = (settings && settings.homeOrder) || [];
   const out = [];
   const seen = new Set();
   (Array.isArray(raw) ? raw : []).forEach((item) => {
     const slot = String(item || "").trim();
-    if (allowed.indexOf(slot) < 0 || seen.has(slot)) return;
+    if (!allowed.has(slot) || seen.has(slot)) return;
     seen.add(slot);
     out.push(slot);
   });
-  allowed.forEach((slot) => {
-    if (!seen.has(slot)) out.push(slot);
+  buttons.forEach((b) => {
+    const id = String(b.id || "");
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
   });
+  if (!seen.has("swish")) out.push("swish");
   return out;
 }
 
 function kioskHomeOrderLabel_(slot, settings) {
-  const s = settings || {};
-  if (slot === "member") return String((s.memberPage && s.memberPage.title) || s.memberTitle || "Bli medlem").trim() || "Bli medlem";
-  if (slot === "epassi") return String((s.epassiPage && s.epassiPage.title) || s.epassiTitle || "Betala med Epassi").trim() || "Betala med Epassi";
-  return "Betala med Swish";
+  if (slot === "swish") return "Betala med Swish";
+  const btn = kioskQrButtons_(settings).find((b) => b.id === slot);
+  return String((btn && btn.title) || "QR-knapp").trim() || "QR-knapp";
 }
 
 function kioskHomeOrderHtml_(settings) {
   const order = kioskHomeOrder_(settings);
   const rows = order.map((slot, index) => `
     <div class="d-flex align-items-center gap-2 mb-2" data-home-slot="${escapeHtml_(slot)}" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;">
-      <span style="flex:1;">${escapeHtml_(kioskHomeOrderLabel_(slot, settings))}</span>
+      <span style="flex:1;">${escapeHtml_(kioskHomeOrderLabel_(slot, settings))}${slot === "swish" ? ` <span class="small" style="color:var(--muted);">(fast)</span>` : ""}</span>
       <button type="button" class="btn btn-sm btn-ghost" data-home-up ${index === 0 ? "disabled" : ""} aria-label="Flytta upp">↑</button>
       <button type="button" class="btn btn-sm btn-ghost" data-home-down ${index === order.length - 1 ? "disabled" : ""} aria-label="Flytta ner">↓</button>
     </div>`).join("");
   return `<div id="kiosk-home-order">${rows}</div>`;
 }
 
+function kioskQrButtonsEditorHtml_(settings) {
+  const buttons = kioskQrButtons_(settings);
+  if (!buttons.length) {
+    return `<p class="small" style="color:var(--muted);">Inga QR-knappar ännu. Lägg till en nedan. Swish-knappen finns alltid kvar.</p>`;
+  }
+  return buttons.map((btn) => `
+    <div class="admin-card" data-qr-button="${escapeHtml_(btn.id)}" style="margin-bottom:12px;">
+      <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+        <strong>${escapeHtml_(btn.title || "QR-knapp")}</strong>
+        <button type="button" class="btn btn-sm btn-outline-danger" data-qr-remove="${escapeHtml_(btn.id)}">Ta bort</button>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-cell">
+          <label>Rubrik</label>
+          <input class="form-control" data-qr-field="title" value="${escapeHtml_(btn.title || "")}">
+        </div>
+        <div class="detail-cell">
+          <label>QR-adress</label>
+          <input class="form-control" data-qr-field="url" value="${escapeHtml_(btn.url || "")}" placeholder="https://…">
+        </div>
+        <div class="detail-cell">
+          <label>Text under QR</label>
+          <textarea class="form-control" rows="2" data-qr-field="body">${escapeHtml_(btn.body || "")}</textarea>
+        </div>
+        <div class="detail-cell">
+          <label>Logga</label>
+          ${btn.logoUrl ? `<img src="${escapeHtml_(btn.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
+          <input type="file" accept="image/*" class="form-control form-control-sm" data-qr-logo="${escapeHtml_(btn.id)}">
+        </div>
+      </div>
+    </div>`).join("");
+}
+
 function readKioskHomeOrderFromDom_() {
   const root = document.getElementById("kiosk-home-order");
   if (!root) return kioskHomeOrder_(catalogState_.settings);
   return Array.from(root.querySelectorAll("[data-home-slot]")).map((el) => el.getAttribute("data-home-slot")).filter(Boolean);
+}
+
+function readKioskQrButtonsFromDom_() {
+  const cards = Array.from(document.querySelectorAll("[data-qr-button]"));
+  if (!cards.length) return kioskQrButtons_(catalogState_.settings);
+  return cards.map((card) => {
+    const id = card.getAttribute("data-qr-button");
+    const prev = kioskQrButtons_(catalogState_.settings).find((b) => b.id === id) || {};
+    const title = card.querySelector('[data-qr-field="title"]');
+    const url = card.querySelector('[data-qr-field="url"]');
+    const body = card.querySelector('[data-qr-field="body"]');
+    return {
+      id,
+      title: title ? title.value : prev.title || "QR-knapp",
+      url: url ? url.value : prev.url || "",
+      body: body ? body.value : prev.body || "",
+      logoKey: prev.logoKey || "",
+      logoHash: prev.logoHash || "",
+      logoUrl: prev.logoUrl || null
+    };
+  });
 }
 
 function refreshKioskHomeOrderButtons_() {
@@ -365,6 +430,12 @@ function refreshKioskHomeOrderButtons_() {
     if (up) up.disabled = index === 0;
     if (down) down.disabled = index === rows.length - 1;
   });
+}
+
+function syncSettingsDraftFromDom_() {
+  if (!catalogState_.settings) catalogState_.settings = {};
+  catalogState_.settings.homeQrButtons = readKioskQrButtonsFromDom_();
+  catalogState_.settings.homeOrder = readKioskHomeOrderFromDom_();
 }
 
 function renderKioskSettings_(main) {
@@ -401,53 +472,23 @@ function renderKioskSettings_(main) {
       </div>
     </div>
     ${catalogSectionDivider_()}
-    <h4>Startsidans knappar</h4>
-    <p class="small" style="color:var(--muted);">Ändra ordningen med upp/ner. Spara kassainställningar för att publicera.</p>
+    <h4>Startsidans bakgrund</h4>
+    <p class="small" style="color:var(--muted);">Fullskärmsbild bakom knappar och text. Text och knappar får opaka rutor för läsbarhet.</p>
+    <div class="detail-cell" style="margin-bottom:8px;max-width:420px;">
+      <label>Bakgrundsbild</label>
+      ${s.homeBackgroundUrl ? `<img src="${escapeHtml_(s.homeBackgroundUrl)}" alt="" style="width:100%;max-height:140px;object-fit:cover;display:block;margin-bottom:8px;border-radius:8px;">` : ""}
+      <input id="kiosk-home-bg" type="file" accept="image/*" class="form-control form-control-sm">
+      ${s.homeBackgroundUrl ? `<button type="button" class="btn btn-sm btn-ghost mt-2" id="kiosk-home-bg-clear">Ta bort bakgrund</button>` : ""}
+    </div>
+    ${catalogSectionDivider_()}
+    <h4>Startsidans ordning</h4>
+    <p class="small" style="color:var(--muted);">Ändra ordningen med upp/ner. Swish-knappen kan flyttas men inte tas bort.</p>
     <div style="max-width:420px;">${kioskHomeOrderHtml_(s)}</div>
     ${catalogSectionDivider_()}
-    <h4>Startsida — Bli medlem</h4>
-    <p class="small" style="color:var(--muted);">Visas när kunden trycker Bli medlem. Ordning: logga → rubrik → QR → text.</p>
-    <div class="detail-grid" style="margin-bottom:8px;">
-      <div class="detail-cell">
-        <label>Rubrik</label>
-        <input id="kiosk-member-title" class="form-control" value="${escapeHtml_((s.memberPage && s.memberPage.title) || s.memberTitle || "Bli medlem")}">
-      </div>
-      <div class="detail-cell">
-        <label>QR-adress</label>
-        <input id="kiosk-member-url" class="form-control" value="${escapeHtml_((s.memberPage && s.memberPage.url) || s.memberUrl || "")}" placeholder="https://…">
-      </div>
-      <div class="detail-cell">
-        <label>Text under QR</label>
-        <textarea id="kiosk-member-body" class="form-control" rows="2">${escapeHtml_((s.memberPage && s.memberPage.body) || s.memberBody || "")}</textarea>
-      </div>
-      <div class="detail-cell">
-        <label>Logga</label>
-        ${(s.memberPage && s.memberPage.logoUrl) ? `<img src="${escapeHtml_(s.memberPage.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
-        <input id="kiosk-member-logo" type="file" accept="image/*" class="form-control form-control-sm">
-      </div>
-    </div>
-    ${catalogSectionDivider_()}
-    <h4>Startsida — Epassi</h4>
-    <p class="small" style="color:var(--muted);">Visas när kunden trycker Betala med Epassi. Ordning: logga → rubrik → QR → text.</p>
-    <div class="detail-grid" style="margin-bottom:8px;">
-      <div class="detail-cell">
-        <label>Rubrik</label>
-        <input id="kiosk-epassi-title" class="form-control" value="${escapeHtml_((s.epassiPage && s.epassiPage.title) || s.epassiTitle || "Betala med Epassi")}">
-      </div>
-      <div class="detail-cell">
-        <label>QR-adress</label>
-        <input id="kiosk-epassi-url" class="form-control" value="${escapeHtml_((s.epassiPage && s.epassiPage.url) || s.epassiUrl || "")}" placeholder="https://…">
-      </div>
-      <div class="detail-cell">
-        <label>Text under QR</label>
-        <textarea id="kiosk-epassi-body" class="form-control" rows="2">${escapeHtml_((s.epassiPage && s.epassiPage.body) || s.epassiBody || "")}</textarea>
-      </div>
-      <div class="detail-cell">
-        <label>Logga</label>
-        ${(s.epassiPage && s.epassiPage.logoUrl) ? `<img src="${escapeHtml_(s.epassiPage.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
-        <input id="kiosk-epassi-logo" type="file" accept="image/*" class="form-control form-control-sm">
-      </div>
-    </div>
+    <h4>QR-knappar</h4>
+    <p class="small" style="color:var(--muted);">Lägg till eller ta bort knappar med QR-kod. Swish ingår alltid separat.</p>
+    <div id="kiosk-qr-buttons">${kioskQrButtonsEditorHtml_(s)}</div>
+    <button type="button" class="btn btn-ghost mt-2" id="kiosk-qr-add">Lägg till QR-knapp</button>
     ${catalogSectionDivider_()}
     <button class="btn btn-accent" type="button" id="kiosk-settings-save">Spara kassainställningar</button>
   `;
@@ -816,22 +857,11 @@ function kioskSettingsPayload_(categories) {
   const shop = document.getElementById("kiosk-shop-name");
   const swish = document.getElementById("kiosk-swish");
   const theme = document.getElementById("kiosk-theme");
-  const memberUrl = document.getElementById("kiosk-member-url");
-  const memberTitle = document.getElementById("kiosk-member-title");
-  const memberBody = document.getElementById("kiosk-member-body");
-  const epassiUrl = document.getElementById("kiosk-epassi-url");
-  const epassiTitle = document.getElementById("kiosk-epassi-title");
-  const epassiBody = document.getElementById("kiosk-epassi-body");
   return {
     shopName: shop ? shop.value : s.shopName,
     swishNumber: swish ? swish.value : s.swishNumber,
     theme: theme ? theme.value : s.theme,
-    memberUrl: memberUrl ? memberUrl.value : (s.memberPage && s.memberPage.url) || s.memberUrl || "",
-    memberTitle: memberTitle ? memberTitle.value : (s.memberPage && s.memberPage.title) || "Bli medlem",
-    memberBody: memberBody ? memberBody.value : (s.memberPage && s.memberPage.body) || "",
-    epassiUrl: epassiUrl ? epassiUrl.value : (s.epassiPage && s.epassiPage.url) || s.epassiUrl || "",
-    epassiTitle: epassiTitle ? epassiTitle.value : (s.epassiPage && s.epassiPage.title) || "Betala med Epassi",
-    epassiBody: epassiBody ? epassiBody.value : (s.epassiPage && s.epassiPage.body) || "",
+    homeQrButtons: readKioskQrButtonsFromDom_(),
     homeOrder: readKioskHomeOrderFromDom_(),
     categories: categories || s.categories || []
   };
@@ -962,28 +992,14 @@ function bindCatalogTool_(root) {
               )
             );
           }
-          const memberLogo = document.getElementById("kiosk-member-logo");
-          const memberFile = memberLogo && memberLogo.files && memberLogo.files[0];
-          if (memberFile) {
+          const homeBg = document.getElementById("kiosk-home-bg");
+          const homeBgFile = homeBg && homeBg.files && homeBg.files[0];
+          if (homeBgFile) {
             uploads.push(
-              fileToPayload_(memberFile).then(
+              fileToPayload_(homeBgFile).then(
                 (payload) =>
                   new Promise((resolve) => {
-                    payload.slot = "member";
-                    google.script.run.withSuccessHandler(resolve).withFailureHandler(resolve).uploadKioskEntryLogo(payload);
-                  })
-              )
-            );
-          }
-          const epassiLogo = document.getElementById("kiosk-epassi-logo");
-          const epassiFile = epassiLogo && epassiLogo.files && epassiLogo.files[0];
-          if (epassiFile) {
-            uploads.push(
-              fileToPayload_(epassiFile).then(
-                (payload) =>
-                  new Promise((resolve) => {
-                    payload.slot = "epassi";
-                    google.script.run.withSuccessHandler(resolve).withFailureHandler(resolve).uploadKioskEntryLogo(payload);
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(resolve).uploadKioskHomeBackground(payload);
                   })
               )
             );
@@ -994,6 +1010,70 @@ function bindCatalogTool_(root) {
         .saveKioskSettings(kioskSettingsPayload_());
     });
   }
+  const clearHomeBg = root.querySelector("#kiosk-home-bg-clear");
+  if (clearHomeBg) {
+    clearHomeBg.addEventListener("click", () => {
+      if (!window.confirm("Ta bort startsidans bakgrundsbild?")) return;
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ta bort");
+          showToast("Bakgrund borttagen");
+          loadCatalogTool_();
+        })
+        .clearKioskHomeBackground();
+    });
+  }
+  const addQr = root.querySelector("#kiosk-qr-add");
+  if (addQr) {
+    addQr.addEventListener("click", () => {
+      syncSettingsDraftFromDom_();
+      const buttons = kioskQrButtons_(catalogState_.settings);
+      if (buttons.length >= 8) return showToast("Max 8 QR-knappar");
+      const id = "qr-" + Date.now().toString(36);
+      buttons.push({ id, title: "Ny QR-knapp", body: "", url: "", logoUrl: null });
+      catalogState_.settings.homeQrButtons = buttons;
+      const order = kioskHomeOrder_(catalogState_.settings).filter((slot) => slot !== id);
+      const swishAt = order.indexOf("swish");
+      if (swishAt >= 0) order.splice(swishAt, 0, id);
+      else order.push(id);
+      catalogState_.settings.homeOrder = order;
+      renderKioskSettings_(document.getElementById("catalog-main"));
+    });
+  }
+  root.querySelectorAll("[data-qr-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-qr-remove");
+      if (!id || id === "swish") return;
+      if (!window.confirm("Ta bort QR-knappen?")) return;
+      syncSettingsDraftFromDom_();
+      catalogState_.settings.homeQrButtons = kioskQrButtons_(catalogState_.settings).filter((b) => b.id !== id);
+      catalogState_.settings.homeOrder = kioskHomeOrder_(catalogState_.settings).filter((slot) => slot !== id);
+      renderKioskSettings_(document.getElementById("catalog-main"));
+    });
+  });
+  root.querySelectorAll("[data-qr-logo]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      const buttonId = input.getAttribute("data-qr-logo");
+      showToast("Laddar upp logga…");
+      try {
+        const payload = await fileToPayload_(file);
+        payload.buttonId = buttonId;
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte ladda upp");
+            showToast("Logga sparad");
+            loadCatalogTool_();
+          })
+          .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+          .uploadKioskEntryLogo(payload);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Kunde inte läsa bilden");
+      }
+    });
+  });
   const addCat = root.querySelector("#kiosk-add-category");
   if (addCat) {
     addCat.addEventListener("click", () => {

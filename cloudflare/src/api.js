@@ -112,6 +112,8 @@ import {
   saveKioskSettings,
   uploadKioskLogo,
   uploadKioskEntryLogo,
+  uploadKioskHomeBackground,
+  clearKioskHomeBackground,
   uploadKioskProductImage,
   voidKioskSale
 } from "./catalog.js";
@@ -263,6 +265,10 @@ export async function dispatch(env, action, token, args, extras) {
       return uploadKioskLogo(env, session, args[0]);
     case "uploadKioskEntryLogo":
       return uploadKioskEntryLogo(env, session, args[0]);
+    case "uploadKioskHomeBackground":
+      return uploadKioskHomeBackground(env, session, args[0]);
+    case "clearKioskHomeBackground":
+      return clearKioskHomeBackground(env, session);
     case "recordKioskSale":
       return recordKioskSale(env, args[0]);
     default:

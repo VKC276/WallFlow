@@ -105,7 +105,9 @@ export async function deleteKioskLogoBilder(env) {
 }
 
 export async function deleteKioskEntryLogoBilder(env, slot) {
-  const prefix = slot === "epassi" ? "kiosk-entry-epassi" : "kiosk-entry-member";
+  const safe = String(slot || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
+  if (!safe) return 0;
+  const prefix = "kiosk-entry-" + safe;
   let cursor;
   let n = 0;
   do {
@@ -113,6 +115,23 @@ export async function deleteKioskEntryLogoBilder(env, slot) {
     for (const obj of listed.objects || []) {
       const name = String(obj.key || "");
       if (!new RegExp("^" + prefix + "-[a-f0-9]{16}\\.(jpe?g|png|webp)$", "i").test(name)) continue;
+      await env.BILDER.delete(name);
+      n++;
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return n;
+}
+
+export async function deleteKioskHomeBgBilder(env) {
+  const prefix = "kiosk-home-bg";
+  let cursor;
+  let n = 0;
+  do {
+    const listed = await env.BILDER.list({ prefix, cursor, limit: 1000 });
+    for (const obj of listed.objects || []) {
+      const name = String(obj.key || "");
+      if (!/^kiosk-home-bg-[a-f0-9]{16}\.(jpe?g|png|webp)$/i.test(name)) continue;
       await env.BILDER.delete(name);
       n++;
     }
