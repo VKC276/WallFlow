@@ -104,6 +104,23 @@ export async function deleteKioskLogoBilder(env) {
   return n;
 }
 
+export async function deleteKioskEntryLogoBilder(env, slot) {
+  const prefix = slot === "epassi" ? "kiosk-entry-epassi" : "kiosk-entry-member";
+  let cursor;
+  let n = 0;
+  do {
+    const listed = await env.BILDER.list({ prefix, cursor, limit: 1000 });
+    for (const obj of listed.objects || []) {
+      const name = String(obj.key || "");
+      if (!new RegExp("^" + prefix + "-[a-f0-9]{16}\\.(jpe?g|png|webp)$", "i").test(name)) continue;
+      await env.BILDER.delete(name);
+      n++;
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return n;
+}
+
 function base64ToBytes(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);

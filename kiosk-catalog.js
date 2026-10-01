@@ -261,6 +261,48 @@ function renderCatalogTool_() {
       </div>
     </div>
     <button class="btn btn-accent mb-3" type="button" id="kiosk-settings-save">Spara kassainställningar</button>
+    <h4>Startsida — Bli medlem</h4>
+    <p class="small" style="color:var(--muted);">Visas när kunden trycker Bli medlem. Ordning: logga → rubrik → QR → text.</p>
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-cell">
+        <label>Rubrik</label>
+        <input id="kiosk-member-title" class="form-control" value="${escapeHtml_((s.memberPage && s.memberPage.title) || s.memberTitle || "Bli medlem")}">
+      </div>
+      <div class="detail-cell">
+        <label>QR-adress</label>
+        <input id="kiosk-member-url" class="form-control" value="${escapeHtml_((s.memberPage && s.memberPage.url) || s.memberUrl || "")}" placeholder="https://…">
+      </div>
+      <div class="detail-cell">
+        <label>Text under QR</label>
+        <textarea id="kiosk-member-body" class="form-control" rows="2">${escapeHtml_((s.memberPage && s.memberPage.body) || s.memberBody || "")}</textarea>
+      </div>
+      <div class="detail-cell">
+        <label>Logga</label>
+        ${(s.memberPage && s.memberPage.logoUrl) ? `<img src="${escapeHtml_(s.memberPage.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
+        <input id="kiosk-member-logo" type="file" accept="image/*" class="form-control form-control-sm">
+      </div>
+    </div>
+    <h4>Startsida — Epassi</h4>
+    <p class="small" style="color:var(--muted);">Visas när kunden trycker Betala med Epassi. Ordning: logga → rubrik → QR → text.</p>
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-cell">
+        <label>Rubrik</label>
+        <input id="kiosk-epassi-title" class="form-control" value="${escapeHtml_((s.epassiPage && s.epassiPage.title) || s.epassiTitle || "Betala med Epassi")}">
+      </div>
+      <div class="detail-cell">
+        <label>QR-adress</label>
+        <input id="kiosk-epassi-url" class="form-control" value="${escapeHtml_((s.epassiPage && s.epassiPage.url) || s.epassiUrl || "")}" placeholder="https://…">
+      </div>
+      <div class="detail-cell">
+        <label>Text under QR</label>
+        <textarea id="kiosk-epassi-body" class="form-control" rows="2">${escapeHtml_((s.epassiPage && s.epassiPage.body) || s.epassiBody || "")}</textarea>
+      </div>
+      <div class="detail-cell">
+        <label>Logga</label>
+        ${(s.epassiPage && s.epassiPage.logoUrl) ? `<img src="${escapeHtml_(s.epassiPage.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
+        <input id="kiosk-epassi-logo" type="file" accept="image/*" class="form-control form-control-sm">
+      </div>
+    </div>
     <h4>Kategorier</h4>
     <p class="small" style="color:var(--muted);">Kategorierna visas som filter i kassan. Ta bort bara om inga varor använder den, eller godkänn flytt.</p>
     <div class="mb-2">${catChips || `<span style="color:var(--muted);">Inga kategorier.</span>`}</div>
@@ -672,10 +714,22 @@ function kioskSettingsPayload_(categories) {
   const shop = document.getElementById("kiosk-shop-name");
   const swish = document.getElementById("kiosk-swish");
   const theme = document.getElementById("kiosk-theme");
+  const memberUrl = document.getElementById("kiosk-member-url");
+  const memberTitle = document.getElementById("kiosk-member-title");
+  const memberBody = document.getElementById("kiosk-member-body");
+  const epassiUrl = document.getElementById("kiosk-epassi-url");
+  const epassiTitle = document.getElementById("kiosk-epassi-title");
+  const epassiBody = document.getElementById("kiosk-epassi-body");
   return {
     shopName: shop ? shop.value : s.shopName,
     swishNumber: swish ? swish.value : s.swishNumber,
     theme: theme ? theme.value : s.theme,
+    memberUrl: memberUrl ? memberUrl.value : (s.memberPage && s.memberPage.url) || s.memberUrl || "",
+    memberTitle: memberTitle ? memberTitle.value : (s.memberPage && s.memberPage.title) || "Bli medlem",
+    memberBody: memberBody ? memberBody.value : (s.memberPage && s.memberPage.body) || "",
+    epassiUrl: epassiUrl ? epassiUrl.value : (s.epassiPage && s.epassiPage.url) || s.epassiUrl || "",
+    epassiTitle: epassiTitle ? epassiTitle.value : (s.epassiPage && s.epassiPage.title) || "Betala med Epassi",
+    epassiBody: epassiBody ? epassiBody.value : (s.epassiPage && s.epassiPage.body) || "",
     categories: categories || s.categories || []
   };
 }
@@ -770,15 +824,50 @@ function bindCatalogTool_(root) {
   if (saveSettings) {
     saveSettings.addEventListener("click", () => {
       google.script.run
-        .withSuccessHandler((res) => {
+        .withSuccessHandler(async (res) => {
           if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
           showToast("Kassainställningar sparade");
-          const logo = document.getElementById("kiosk-logo");
-          const file = logo && logo.files && logo.files[0];
-          if (!file) return loadCatalogTool_();
-          fileToPayload_(file).then((payload) => {
-            google.script.run.withSuccessHandler(() => loadCatalogTool_()).uploadKioskLogo(payload);
-          });
+          const uploads = [];
+          const shopLogo = document.getElementById("kiosk-logo");
+          const shopFile = shopLogo && shopLogo.files && shopLogo.files[0];
+          if (shopFile) {
+            uploads.push(
+              fileToPayload_(shopFile).then(
+                (payload) =>
+                  new Promise((resolve) => {
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(resolve).uploadKioskLogo(payload);
+                  })
+              )
+            );
+          }
+          const memberLogo = document.getElementById("kiosk-member-logo");
+          const memberFile = memberLogo && memberLogo.files && memberLogo.files[0];
+          if (memberFile) {
+            uploads.push(
+              fileToPayload_(memberFile).then(
+                (payload) =>
+                  new Promise((resolve) => {
+                    payload.slot = "member";
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(resolve).uploadKioskEntryLogo(payload);
+                  })
+              )
+            );
+          }
+          const epassiLogo = document.getElementById("kiosk-epassi-logo");
+          const epassiFile = epassiLogo && epassiLogo.files && epassiLogo.files[0];
+          if (epassiFile) {
+            uploads.push(
+              fileToPayload_(epassiFile).then(
+                (payload) =>
+                  new Promise((resolve) => {
+                    payload.slot = "epassi";
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(resolve).uploadKioskEntryLogo(payload);
+                  })
+              )
+            );
+          }
+          if (uploads.length) await Promise.all(uploads);
+          loadCatalogTool_();
         })
         .saveKioskSettings(kioskSettingsPayload_());
     });

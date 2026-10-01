@@ -4,7 +4,7 @@
  */
 
 import { hasRole, roleOf } from "./auth.js";
-import { deleteKioskLogoBilder, deleteKioskProductBilder, isR2ImageKey } from "./images.js";
+import { deleteKioskLogoBilder, deleteKioskProductBilder, deleteKioskEntryLogoBilder, isR2ImageKey } from "./images.js";
 
 const DEFAULT_CATEGORIES = ["Entre", "Hyra", "Dryck", "Snacks", "Utrustning", "Övrigt"];
 
@@ -77,8 +77,33 @@ function mapProduct(row, origin) {
   };
 }
 
+function imageUrlFromKey(origin, key, hash) {
+  const imageKey = String(key || "").trim();
+  if (!imageKey) return null;
+  return origin + "/img/" + encodeURIComponent(imageKey) + (hash ? "?v=" + encodeURIComponent(String(hash)) : "");
+}
+
 export async function publicCatalog(env, origin) {
-  const [revision, shopName, swishNumber, theme, logoKey, logoHash, categoriesRaw, products] = await Promise.all([
+  const [
+    revision,
+    shopName,
+    swishNumber,
+    theme,
+    logoKey,
+    logoHash,
+    categoriesRaw,
+    memberUrl,
+    memberTitle,
+    memberBody,
+    memberLogoKey,
+    memberLogoHash,
+    epassiUrl,
+    epassiTitle,
+    epassiBody,
+    epassiLogoKey,
+    epassiLogoHash,
+    products
+  ] = await Promise.all([
     readCatalogRevision(env),
     setting(env, "kioskShopName", "Klätterhallen"),
     setting(env, "kioskSwishNumber", ""),
@@ -86,6 +111,16 @@ export async function publicCatalog(env, origin) {
     setting(env, "kioskLogoKey", ""),
     setting(env, "kioskLogoHash", ""),
     setting(env, "kioskCategories", JSON.stringify(DEFAULT_CATEGORIES)),
+    setting(env, "kioskMemberUrl", ""),
+    setting(env, "kioskMemberTitle", "Bli medlem"),
+    setting(env, "kioskMemberBody", ""),
+    setting(env, "kioskMemberLogoKey", ""),
+    setting(env, "kioskMemberLogoHash", ""),
+    setting(env, "kioskEpassiUrl", ""),
+    setting(env, "kioskEpassiTitle", "Betala med Epassi"),
+    setting(env, "kioskEpassiBody", ""),
+    setting(env, "kioskEpassiLogoKey", ""),
+    setting(env, "kioskEpassiLogoHash", ""),
     env.DB.prepare(
       "SELECT id, name, price, category, sort, active, featured, image_key, image_hash FROM kiosk_products WHERE active = 1 ORDER BY featured DESC, category, sort, name"
     ).all()
@@ -99,9 +134,19 @@ export async function publicCatalog(env, origin) {
     theme: normalizeTheme(theme),
     swishNumber: swish,
     swishConfigured: Boolean(swish),
-    logoUrl: logo
-      ? origin + "/img/" + encodeURIComponent(logo) + (logoHash ? "?v=" + encodeURIComponent(String(logoHash)) : "")
-      : null,
+    memberPage: {
+      title: String(memberTitle || "Bli medlem").trim() || "Bli medlem",
+      body: String(memberBody || "").trim(),
+      url: String(memberUrl || "").trim(),
+      logoUrl: imageUrlFromKey(origin, memberLogoKey, memberLogoHash)
+    },
+    epassiPage: {
+      title: String(epassiTitle || "Betala med Epassi").trim() || "Betala med Epassi",
+      body: String(epassiBody || "").trim(),
+      url: String(epassiUrl || "").trim(),
+      logoUrl: imageUrlFromKey(origin, epassiLogoKey, epassiLogoHash)
+    },
+    logoUrl: imageUrlFromKey(origin, logo, logoHash),
     logoHash: String(logoHash || logo || ""),
     categories: parseCategories(categoriesRaw),
     products: (products.results || []).map((row) => mapProduct(row, origin))
@@ -233,6 +278,12 @@ export async function saveKioskSettings(env, session, payload) {
   if (!shopName) return { ok: false, error: "Butiksnamn krävs" };
   const theme = normalizeTheme(payload.theme);
   const swish = normalizeSwish(payload.swishNumber);
+  const memberUrl = String(payload.memberUrl || "").trim();
+  const memberTitle = String(payload.memberTitle || "").trim() || "Bli medlem";
+  const memberBody = String(payload.memberBody || "").trim();
+  const epassiUrl = String(payload.epassiUrl || "").trim();
+  const epassiTitle = String(payload.epassiTitle || "").trim() || "Betala med Epassi";
+  const epassiBody = String(payload.epassiBody || "").trim();
   const categories = parseCategories(JSON.stringify(payload.categories || DEFAULT_CATEGORIES));
   const upsert = env.DB.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
@@ -241,6 +292,12 @@ export async function saveKioskSettings(env, session, payload) {
     upsert.bind("kioskShopName", shopName),
     upsert.bind("kioskSwishNumber", swish),
     upsert.bind("kioskTheme", theme),
+    upsert.bind("kioskMemberUrl", memberUrl),
+    upsert.bind("kioskMemberTitle", memberTitle),
+    upsert.bind("kioskMemberBody", memberBody),
+    upsert.bind("kioskEpassiUrl", epassiUrl),
+    upsert.bind("kioskEpassiTitle", epassiTitle),
+    upsert.bind("kioskEpassiBody", epassiBody),
     upsert.bind("kioskCategories", JSON.stringify(categories))
   ]);
   const revision = await bumpRevision(env);
@@ -267,6 +324,31 @@ export async function uploadKioskLogo(env, session, payload) {
   await env.DB.batch([upsert.bind("kioskLogoKey", key), upsert.bind("kioskLogoHash", hash)]);
   const revision = await bumpRevision(env);
   return { ok: true, logoKey: key, logoHash: hash, revision };
+}
+
+export async function uploadKioskEntryLogo(env, session, payload) {
+  if (!canManageKioskCatalog(session)) return { ok: false, error: "Saknar behörighet" };
+  payload = payload || {};
+  const slot = String(payload.slot || "").trim() === "epassi" ? "epassi" : "member";
+  const raw = String(payload.dataBase64 || "").replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "");
+  if (!raw) return { ok: false, error: "Ingen bilddata" };
+  if (raw.length > 6000000) return { ok: false, error: "Bilden är för stor" };
+  let mime = String(payload.mimeType || "image/png").trim() || "image/png";
+  if (mime.indexOf("image/") !== 0) mime = "image/png";
+  const ext = mime.indexOf("jpeg") >= 0 || mime.indexOf("jpg") >= 0 ? "jpg" : mime.indexOf("webp") >= 0 ? "webp" : "png";
+  const bytes = base64ToBytes(raw);
+  const hash = await sha16(bytes);
+  const key = "kiosk-entry-" + slot + "-" + hash + "." + ext;
+  await deleteKioskEntryLogoBilder(env, slot);
+  await env.BILDER.put(key, bytes, { httpMetadata: { contentType: mime } });
+  const keySetting = slot === "epassi" ? "kioskEpassiLogoKey" : "kioskMemberLogoKey";
+  const hashSetting = slot === "epassi" ? "kioskEpassiLogoHash" : "kioskMemberLogoHash";
+  const upsert = env.DB.prepare(
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  );
+  await env.DB.batch([upsert.bind(keySetting, key), upsert.bind(hashSetting, hash)]);
+  const revision = await bumpRevision(env);
+  return { ok: true, slot, logoKey: key, logoHash: hash, revision };
 }
 
 function ymdOr(value, fallback) {
