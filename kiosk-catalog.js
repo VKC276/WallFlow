@@ -310,6 +310,17 @@ function renderCatalogTool_() {
       <input id="kiosk-new-category" class="form-control" style="max-width:240px;" placeholder="Ny kategori">
       <button class="btn btn-accent" type="button" id="kiosk-add-category">Lägg till kategori</button>
     </div>
+    <h4>Ny produkt</h4>
+    <div class="detail-grid">
+      <div class="detail-cell"><label>Namn</label><input id="kiosk-new-name" class="form-control"></div>
+      <div class="detail-cell"><label>Pris</label><input id="kiosk-new-price" class="form-control" type="number" step="0.5"></div>
+      <div class="detail-cell">
+        <label>Kategori</label>
+        <select id="kiosk-new-cat" class="form-control">${managed.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
+      </div>
+    </div>
+    <button class="btn btn-accent mt-2 mb-4" type="button" id="kiosk-new-save">Lägg till</button>
+    <h4>Befintliga produkter</h4>
     <div class="table-responsive">
       <table class="tencard-list">
         <thead>
@@ -338,16 +349,6 @@ function renderCatalogTool_() {
         <tbody id="kiosk-product-tbody">${catalogProductRowsHtml_(cats)}</tbody>
       </table>
     </div>
-    <h4 class="mt-4">Ny produkt</h4>
-    <div class="detail-grid">
-      <div class="detail-cell"><label>Namn</label><input id="kiosk-new-name" class="form-control"></div>
-      <div class="detail-cell"><label>Pris</label><input id="kiosk-new-price" class="form-control" type="number" step="0.5"></div>
-      <div class="detail-cell">
-        <label>Kategori</label>
-        <select id="kiosk-new-cat" class="form-control">${managed.map((c) => `<option>${escapeHtml_(c)}</option>`).join("")}</select>
-      </div>
-    </div>
-    <button class="btn btn-accent mt-2" type="button" id="kiosk-new-save">Lägg till</button>
   `;
   bindCatalogTabs_(main);
   bindCatalogTool_(main);
