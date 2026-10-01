@@ -9,6 +9,20 @@ import { deleteKioskLogoBilder, deleteKioskProductBilder, deleteKioskEntryLogoBi
 const DEFAULT_CATEGORIES = ["Entre", "Hyra", "Dryck", "Snacks", "Utrustning", "Övrigt"];
 const SWISH_SLOT = "swish";
 const MAX_HOME_QR_BUTTONS = 8;
+const DEFAULT_QR_COLORS = ["#1f6f8b", "#c45c26", "#2f6b3a", "#5b4b8a"];
+const DEFAULT_SWISH_COLOR = "#1a9f4b";
+
+function normalizeHexColor(value, fallback) {
+  const s = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return "#" + s.slice(1).toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+    const r = s.charAt(1);
+    const g = s.charAt(2);
+    const b = s.charAt(3);
+    return ("#" + r + r + g + g + b + b).toLowerCase();
+  }
+  return fallback;
+}
 
 function sanitizeButtonId(id) {
   return String(id || "")
@@ -33,11 +47,13 @@ function parseHomeQrButtons(raw) {
     const id = sanitizeButtonId(row.id);
     if (!id || id === SWISH_SLOT || seen.has(id)) continue;
     seen.add(id);
+    const fallbackColor = DEFAULT_QR_COLORS[out.length % DEFAULT_QR_COLORS.length];
     out.push({
       id,
       title: String(row.title || "").trim() || "QR-knapp",
       body: String(row.body || "").trim(),
       url: String(row.url || "").trim(),
+      color: normalizeHexColor(row.color, fallbackColor),
       logoKey: String(row.logoKey || "").trim(),
       logoHash: String(row.logoHash || "").trim()
     });
@@ -85,6 +101,7 @@ function mapHomeQrButton(btn, origin) {
     title: btn.title,
     body: btn.body,
     url: btn.url,
+    color: btn.color || DEFAULT_QR_COLORS[0],
     logoUrl: imageUrlFromKey(origin, btn.logoKey, btn.logoHash)
   };
 }
@@ -187,6 +204,7 @@ export async function publicCatalog(env, origin) {
     homeQrButtonsRaw,
     homeBgKey,
     homeBgHash,
+    swishButtonColorRaw,
     products
   ] = await Promise.all([
     readCatalogRevision(env),
@@ -210,6 +228,7 @@ export async function publicCatalog(env, origin) {
     setting(env, "kioskHomeQrButtons", "[]"),
     setting(env, "kioskHomeBgKey", ""),
     setting(env, "kioskHomeBgHash", ""),
+    setting(env, "kioskSwishButtonColor", DEFAULT_SWISH_COLOR),
     env.DB.prepare(
       "SELECT id, name, price, category, sort, active, featured, image_key, image_hash FROM kiosk_products WHERE active = 1 ORDER BY featured DESC, category, sort, name"
     ).all()
@@ -222,6 +241,7 @@ export async function publicCatalog(env, origin) {
         title: String(memberTitle || "Bli medlem").trim() || "Bli medlem",
         body: String(memberBody || "").trim(),
         url: String(memberUrl || "").trim(),
+        color: DEFAULT_QR_COLORS[0],
         logoKey: String(memberLogoKey || "").trim(),
         logoHash: String(memberLogoHash || "").trim()
       },
@@ -230,6 +250,7 @@ export async function publicCatalog(env, origin) {
         title: String(epassiTitle || "Betala med Epassi").trim() || "Betala med Epassi",
         body: String(epassiBody || "").trim(),
         url: String(epassiUrl || "").trim(),
+        color: DEFAULT_QR_COLORS[1],
         logoKey: String(epassiLogoKey || "").trim(),
         logoHash: String(epassiLogoHash || "").trim()
       }
@@ -247,6 +268,7 @@ export async function publicCatalog(env, origin) {
     theme: normalizeTheme(theme),
     swishNumber: swish,
     swishConfigured: Boolean(swish),
+    swishButtonColor: normalizeHexColor(swishButtonColorRaw, DEFAULT_SWISH_COLOR),
     homeOrder: parseHomeOrder(
       homeOrderRaw,
       homeQrButtons.map((b) => b.id)
@@ -387,9 +409,10 @@ export async function saveKioskSettings(env, session, payload) {
   if (!shopName) return { ok: false, error: "Butiksnamn krävs" };
   const theme = normalizeTheme(payload.theme);
   const swish = normalizeSwish(payload.swishNumber);
+  const swishButtonColor = normalizeHexColor(payload.swishButtonColor, DEFAULT_SWISH_COLOR);
   const existingButtons = parseHomeQrButtons(await setting(env, "kioskHomeQrButtons", "[]"));
   let homeQrButtons = parseHomeQrButtons(payload.homeQrButtons);
-  if (!homeQrButtons.length && Array.isArray(payload.homeQrButtons) === false) {
+  if (!homeQrButtons.length && !Array.isArray(payload.homeQrButtons)) {
     // Legacy payload with member/epassi fields
     homeQrButtons = [
       {
@@ -397,6 +420,7 @@ export async function saveKioskSettings(env, session, payload) {
         title: String(payload.memberTitle || "").trim() || "Bli medlem",
         body: String(payload.memberBody || "").trim(),
         url: String(payload.memberUrl || "").trim(),
+        color: DEFAULT_QR_COLORS[0],
         logoKey: "",
         logoHash: ""
       },
@@ -405,6 +429,7 @@ export async function saveKioskSettings(env, session, payload) {
         title: String(payload.epassiTitle || "").trim() || "Betala med Epassi",
         body: String(payload.epassiBody || "").trim(),
         url: String(payload.epassiUrl || "").trim(),
+        color: DEFAULT_QR_COLORS[1],
         logoKey: "",
         logoHash: ""
       }
@@ -414,6 +439,7 @@ export async function saveKioskSettings(env, session, payload) {
     const prev = existingButtons.find((row) => row.id === btn.id);
     return {
       ...btn,
+      color: normalizeHexColor(btn.color, (prev && prev.color) || DEFAULT_QR_COLORS[0]),
       logoKey: btn.logoKey || (prev && prev.logoKey) || "",
       logoHash: btn.logoHash || (prev && prev.logoHash) || ""
     };
@@ -435,6 +461,7 @@ export async function saveKioskSettings(env, session, payload) {
     upsert.bind("kioskShopName", shopName),
     upsert.bind("kioskSwishNumber", swish),
     upsert.bind("kioskTheme", theme),
+    upsert.bind("kioskSwishButtonColor", swishButtonColor),
     upsert.bind("kioskHomeQrButtons", JSON.stringify(homeQrButtons)),
     upsert.bind("kioskHomeOrder", JSON.stringify(homeOrder)),
     upsert.bind("kioskCategories", JSON.stringify(categories))

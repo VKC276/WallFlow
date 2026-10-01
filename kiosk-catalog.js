@@ -351,9 +351,12 @@ function kioskHomeOrderLabel_(slot, settings) {
 
 function kioskHomeOrderHtml_(settings) {
   const order = kioskHomeOrder_(settings);
+  const swishColor = String((settings && settings.swishButtonColor) || "#1a9f4b");
   const rows = order.map((slot, index) => `
     <div class="d-flex align-items-center gap-2 mb-2" data-home-slot="${escapeHtml_(slot)}" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;">
+      <span style="width:16px;height:16px;border-radius:4px;background:${escapeHtml_(slot === "swish" ? swishColor : ((kioskQrButtons_(settings).find((b) => b.id === slot) || {}).color || "#1f6f8b"))};flex-shrink:0;"></span>
       <span style="flex:1;">${escapeHtml_(kioskHomeOrderLabel_(slot, settings))}${slot === "swish" ? ` <span class="small" style="color:var(--muted);">(fast)</span>` : ""}</span>
+      ${slot === "swish" ? `<label class="small mb-0 d-flex align-items-center gap-1">Färg <input id="kiosk-swish-color" type="color" value="${escapeHtml_(swishColor)}" style="width:40px;height:28px;padding:0;border:0;background:transparent;"></label>` : ""}
       <button type="button" class="btn btn-sm btn-ghost" data-home-up ${index === 0 ? "disabled" : ""} aria-label="Flytta upp">↑</button>
       <button type="button" class="btn btn-sm btn-ghost" data-home-down ${index === order.length - 1 ? "disabled" : ""} aria-label="Flytta ner">↓</button>
     </div>`).join("");
@@ -365,7 +368,8 @@ function kioskQrButtonsEditorHtml_(settings) {
   if (!buttons.length) {
     return `<p class="small" style="color:var(--muted);">Inga QR-knappar ännu. Lägg till en nedan. Swish-knappen finns alltid kvar.</p>`;
   }
-  return buttons.map((btn) => `
+  const defaults = ["#1f6f8b", "#c45c26", "#2f6b3a", "#5b4b8a"];
+  return buttons.map((btn, index) => `
     <div class="admin-card" data-qr-button="${escapeHtml_(btn.id)}" style="margin-bottom:12px;">
       <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
         <strong>${escapeHtml_(btn.title || "QR-knapp")}</strong>
@@ -385,6 +389,10 @@ function kioskQrButtonsEditorHtml_(settings) {
           <textarea class="form-control" rows="2" data-qr-field="body">${escapeHtml_(btn.body || "")}</textarea>
         </div>
         <div class="detail-cell">
+          <label>Knappfärg</label>
+          <input class="form-control form-control-color" type="color" data-qr-field="color" value="${escapeHtml_(btn.color || defaults[index % defaults.length])}" style="width:64px;height:38px;padding:2px;">
+        </div>
+        <div class="detail-cell">
           <label>Logga</label>
           ${btn.logoUrl ? `<img src="${escapeHtml_(btn.logoUrl)}" alt="" style="height:40px;object-fit:contain;display:block;margin-bottom:8px;">` : ""}
           <input type="file" accept="image/*" class="form-control form-control-sm" data-qr-logo="${escapeHtml_(btn.id)}">
@@ -402,17 +410,20 @@ function readKioskHomeOrderFromDom_() {
 function readKioskQrButtonsFromDom_() {
   const cards = Array.from(document.querySelectorAll("[data-qr-button]"));
   if (!cards.length) return kioskQrButtons_(catalogState_.settings);
-  return cards.map((card) => {
+  const defaults = ["#1f6f8b", "#c45c26", "#2f6b3a", "#5b4b8a"];
+  return cards.map((card, index) => {
     const id = card.getAttribute("data-qr-button");
     const prev = kioskQrButtons_(catalogState_.settings).find((b) => b.id === id) || {};
     const title = card.querySelector('[data-qr-field="title"]');
     const url = card.querySelector('[data-qr-field="url"]');
     const body = card.querySelector('[data-qr-field="body"]');
+    const color = card.querySelector('[data-qr-field="color"]');
     return {
       id,
       title: title ? title.value : prev.title || "QR-knapp",
       url: url ? url.value : prev.url || "",
       body: body ? body.value : prev.body || "",
+      color: color ? color.value : prev.color || defaults[index % defaults.length],
       logoKey: prev.logoKey || "",
       logoHash: prev.logoHash || "",
       logoUrl: prev.logoUrl || null
@@ -857,10 +868,12 @@ function kioskSettingsPayload_(categories) {
   const shop = document.getElementById("kiosk-shop-name");
   const swish = document.getElementById("kiosk-swish");
   const theme = document.getElementById("kiosk-theme");
+  const swishColor = document.getElementById("kiosk-swish-color");
   return {
     shopName: shop ? shop.value : s.shopName,
     swishNumber: swish ? swish.value : s.swishNumber,
     theme: theme ? theme.value : s.theme,
+    swishButtonColor: swishColor ? swishColor.value : s.swishButtonColor || "#1a9f4b",
     homeQrButtons: readKioskQrButtonsFromDom_(),
     homeOrder: readKioskHomeOrderFromDom_(),
     categories: categories || s.categories || []
@@ -1030,7 +1043,7 @@ function bindCatalogTool_(root) {
       const buttons = kioskQrButtons_(catalogState_.settings);
       if (buttons.length >= 8) return showToast("Max 8 QR-knappar");
       const id = "qr-" + Date.now().toString(36);
-      buttons.push({ id, title: "Ny QR-knapp", body: "", url: "", logoUrl: null });
+      buttons.push({ id, title: "Ny QR-knapp", body: "", url: "", color: "#1f6f8b", logoUrl: null });
       catalogState_.settings.homeQrButtons = buttons;
       const order = kioskHomeOrder_(catalogState_.settings).filter((slot) => slot !== id);
       const swishAt = order.indexOf("swish");
