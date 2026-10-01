@@ -298,6 +298,59 @@ function renderCatalogTool_() {
   bindCatalogTool_(main);
 }
 
+function kioskHomeOrder_(settings) {
+  const allowed = ["member", "epassi", "swish"];
+  const raw = (settings && settings.homeOrder) || [];
+  const out = [];
+  const seen = new Set();
+  (Array.isArray(raw) ? raw : []).forEach((item) => {
+    const slot = String(item || "").trim();
+    if (allowed.indexOf(slot) < 0 || seen.has(slot)) return;
+    seen.add(slot);
+    out.push(slot);
+  });
+  allowed.forEach((slot) => {
+    if (!seen.has(slot)) out.push(slot);
+  });
+  return out;
+}
+
+function kioskHomeOrderLabel_(slot, settings) {
+  const s = settings || {};
+  if (slot === "member") return String((s.memberPage && s.memberPage.title) || s.memberTitle || "Bli medlem").trim() || "Bli medlem";
+  if (slot === "epassi") return String((s.epassiPage && s.epassiPage.title) || s.epassiTitle || "Betala med Epassi").trim() || "Betala med Epassi";
+  return "Betala med Swish";
+}
+
+function kioskHomeOrderHtml_(settings) {
+  const order = kioskHomeOrder_(settings);
+  const rows = order.map((slot, index) => `
+    <div class="d-flex align-items-center gap-2 mb-2" data-home-slot="${escapeHtml_(slot)}" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;">
+      <span style="flex:1;">${escapeHtml_(kioskHomeOrderLabel_(slot, settings))}</span>
+      <button type="button" class="btn btn-sm btn-ghost" data-home-up ${index === 0 ? "disabled" : ""} aria-label="Flytta upp">↑</button>
+      <button type="button" class="btn btn-sm btn-ghost" data-home-down ${index === order.length - 1 ? "disabled" : ""} aria-label="Flytta ner">↓</button>
+    </div>`).join("");
+  return `<div id="kiosk-home-order">${rows}</div>`;
+}
+
+function readKioskHomeOrderFromDom_() {
+  const root = document.getElementById("kiosk-home-order");
+  if (!root) return kioskHomeOrder_(catalogState_.settings);
+  return Array.from(root.querySelectorAll("[data-home-slot]")).map((el) => el.getAttribute("data-home-slot")).filter(Boolean);
+}
+
+function refreshKioskHomeOrderButtons_() {
+  const root = document.getElementById("kiosk-home-order");
+  if (!root) return;
+  const rows = Array.from(root.querySelectorAll("[data-home-slot]"));
+  rows.forEach((row, index) => {
+    const up = row.querySelector("[data-home-up]");
+    const down = row.querySelector("[data-home-down]");
+    if (up) up.disabled = index === 0;
+    if (down) down.disabled = index === rows.length - 1;
+  });
+}
+
 function renderKioskSettings_(main) {
   const s = catalogState_.settings || {};
   main.innerHTML = `
@@ -330,6 +383,9 @@ function renderKioskSettings_(main) {
         <input id="kiosk-logo" type="file" accept="image/*" class="form-control form-control-sm">
       </div>
     </div>
+    <h4>Startsidans knappar</h4>
+    <p class="small" style="color:var(--muted);">Ändra ordningen med upp/ner. Spara kassainställningar för att publicera.</p>
+    <div class="mb-3" style="max-width:420px;">${kioskHomeOrderHtml_(s)}</div>
     <button class="btn btn-accent mb-3" type="button" id="kiosk-settings-save">Spara kassainställningar</button>
     <h4>Startsida — Bli medlem</h4>
     <p class="small" style="color:var(--muted);">Visas när kunden trycker Bli medlem. Ordning: logga → rubrik → QR → text.</p>
@@ -755,6 +811,7 @@ function kioskSettingsPayload_(categories) {
     epassiUrl: epassiUrl ? epassiUrl.value : (s.epassiPage && s.epassiPage.url) || s.epassiUrl || "",
     epassiTitle: epassiTitle ? epassiTitle.value : (s.epassiPage && s.epassiPage.title) || "Betala med Epassi",
     epassiBody: epassiBody ? epassiBody.value : (s.epassiPage && s.epassiPage.body) || "",
+    homeOrder: readKioskHomeOrderFromDom_(),
     categories: categories || s.categories || []
   };
 }
@@ -845,6 +902,25 @@ function bindCatalogFilters_(root) {
 function bindCatalogTool_(root) {
   bindCatalogFilters_(root);
   bindCatalogProductRows_(root);
+  const homeOrderRoot = root.querySelector("#kiosk-home-order");
+  if (homeOrderRoot) {
+    homeOrderRoot.querySelectorAll("[data-home-up]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest("[data-home-slot]");
+        if (!row || !row.previousElementSibling) return;
+        homeOrderRoot.insertBefore(row, row.previousElementSibling);
+        refreshKioskHomeOrderButtons_();
+      });
+    });
+    homeOrderRoot.querySelectorAll("[data-home-down]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest("[data-home-slot]");
+        if (!row || !row.nextElementSibling) return;
+        homeOrderRoot.insertBefore(row.nextElementSibling, row);
+        refreshKioskHomeOrderButtons_();
+      });
+    });
+  }
   const saveSettings = root.querySelector("#kiosk-settings-save");
   if (saveSettings) {
     saveSettings.addEventListener("click", () => {

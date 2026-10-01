@@ -7,6 +7,33 @@ import { hasRole, roleOf } from "./auth.js";
 import { deleteKioskLogoBilder, deleteKioskProductBilder, deleteKioskEntryLogoBilder, isR2ImageKey } from "./images.js";
 
 const DEFAULT_CATEGORIES = ["Entre", "Hyra", "Dryck", "Snacks", "Utrustning", "Övrigt"];
+const DEFAULT_HOME_ORDER = ["member", "epassi", "swish"];
+
+function parseHomeOrder(raw) {
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+  }
+  const allowed = new Set(DEFAULT_HOME_ORDER);
+  const out = [];
+  const seen = new Set();
+  if (Array.isArray(parsed)) {
+    for (const item of parsed) {
+      const slot = String(item || "").trim();
+      if (!allowed.has(slot) || seen.has(slot)) continue;
+      seen.add(slot);
+      out.push(slot);
+    }
+  }
+  for (const slot of DEFAULT_HOME_ORDER) {
+    if (!seen.has(slot)) out.push(slot);
+  }
+  return out;
+}
 
 export function canManageKioskCatalog(session) {
   const r = roleOf(session);
@@ -102,6 +129,7 @@ export async function publicCatalog(env, origin) {
     epassiBody,
     epassiLogoKey,
     epassiLogoHash,
+    homeOrderRaw,
     products
   ] = await Promise.all([
     readCatalogRevision(env),
@@ -121,6 +149,7 @@ export async function publicCatalog(env, origin) {
     setting(env, "kioskEpassiBody", ""),
     setting(env, "kioskEpassiLogoKey", ""),
     setting(env, "kioskEpassiLogoHash", ""),
+    setting(env, "kioskHomeOrder", JSON.stringify(DEFAULT_HOME_ORDER)),
     env.DB.prepare(
       "SELECT id, name, price, category, sort, active, featured, image_key, image_hash FROM kiosk_products WHERE active = 1 ORDER BY featured DESC, category, sort, name"
     ).all()
@@ -134,6 +163,7 @@ export async function publicCatalog(env, origin) {
     theme: normalizeTheme(theme),
     swishNumber: swish,
     swishConfigured: Boolean(swish),
+    homeOrder: parseHomeOrder(homeOrderRaw),
     memberPage: {
       title: String(memberTitle || "Bli medlem").trim() || "Bli medlem",
       body: String(memberBody || "").trim(),
@@ -284,6 +314,7 @@ export async function saveKioskSettings(env, session, payload) {
   const epassiUrl = String(payload.epassiUrl || "").trim();
   const epassiTitle = String(payload.epassiTitle || "").trim() || "Betala med Epassi";
   const epassiBody = String(payload.epassiBody || "").trim();
+  const homeOrder = parseHomeOrder(payload.homeOrder);
   const categories = parseCategories(JSON.stringify(payload.categories || DEFAULT_CATEGORIES));
   const upsert = env.DB.prepare(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
@@ -298,6 +329,7 @@ export async function saveKioskSettings(env, session, payload) {
     upsert.bind("kioskEpassiUrl", epassiUrl),
     upsert.bind("kioskEpassiTitle", epassiTitle),
     upsert.bind("kioskEpassiBody", epassiBody),
+    upsert.bind("kioskHomeOrder", JSON.stringify(homeOrder)),
     upsert.bind("kioskCategories", JSON.stringify(categories))
   ]);
   const revision = await bumpRevision(env);
