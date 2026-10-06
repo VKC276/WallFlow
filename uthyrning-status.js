@@ -15,7 +15,7 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'statusBar';
-      document.body.appendChild(el);
+      (document.getElementById('app-rental') || document.body).appendChild(el);
     }
     el.className = 'status-bar';
     el.setAttribute('role', 'status');

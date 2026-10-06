@@ -130,17 +130,20 @@
   }
 
   function showLogin(show) {
-    if (show) {
-      window.location.replace('index.html#relogin');
+    if (!show) {
+      if ($('app')) $('app').hidden = false;
+      if ($('nav')) $('nav').hidden = false;
+      showView(activeView);
       return;
     }
-    $('app').hidden = false;
-    $('nav').hidden = false;
-    showView(currentView());
+    if (typeof forceRelogin_ === 'function') {
+      forceRelogin_('Du har loggats ut. Logga in igen för att fortsätta.');
+    }
   }
 
   function renderAdminUser(user) {
     var el = $('adminUser');
+    if (!el) return;
     if (!user) {
       el.hidden = true;
       el.textContent = '';
@@ -154,33 +157,25 @@
   }
 
   var VIEWS = { bookings: true, doorpass: true, settings: true, stats: true };
+  var activeView = 'bookings';
 
-  function currentView() {
-    var hash = (location.hash || '').replace(/^#/, '');
-    if (hash.indexOf('reset=') === 0) return 'bookings';
-    if (hash === 'pricing' || hash === 'users') return 'settings';
-    return VIEWS[hash] ? hash : 'bookings';
+  function rentalRoot() {
+    return document.getElementById('app-rental') || document;
   }
 
   function showView(name) {
     var view = VIEWS[name] ? name : 'bookings';
-    document.querySelectorAll('.admin-view').forEach(function (el) {
+    activeView = view;
+    rentalRoot().querySelectorAll('.admin-view').forEach(function (el) {
       el.hidden = el.getAttribute('data-view') !== view;
     });
-    document.querySelectorAll('#nav a[data-view]').forEach(function (a) {
+    rentalRoot().querySelectorAll('#nav [data-view]').forEach(function (a) {
       a.classList.toggle('is-active', a.getAttribute('data-view') === view);
     });
-    if (location.hash !== '#' + view) {
-      history.replaceState(null, '', '#' + view);
-    }
     if (view === 'stats') loadStats();
   }
 
-  window.addEventListener('hashchange', function () {
-    if (!$('app').hidden) showView(currentView());
-  });
-
-  document.querySelectorAll('#nav a[data-view]').forEach(function (a) {
+  document.querySelectorAll('#app-rental #nav [data-view]').forEach(function (a) {
     a.addEventListener('click', function () {
       showView(a.getAttribute('data-view'));
     });
@@ -206,7 +201,7 @@
   }
 
   var back = $('logout');
-  if (rentalOnly()) {
+  if (back && rentalOnly()) {
     back.textContent = 'Logga ut';
     back.onclick = function (e) {
       e.preventDefault();
@@ -216,7 +211,7 @@
       } catch (err) { /* ignore */ }
       window.location.href = 'index.html';
     };
-  } else {
+  } else if (back) {
     back.textContent = 'Tillbaka';
     back.onclick = function (e) {
       e.preventDefault();
@@ -1417,11 +1412,17 @@
 
   fillStatusFilter();
 
-  if (!hasUthyrare(wallflowUser)) {
-    showLogin(true);
-  } else {
-    showLogin(false);
+  window.startRentalAdmin_ = function () {
+    wallflowUser = readWallflowSession();
+    if (!hasUthyrare(wallflowUser)) {
+      showLogin(true);
+      return;
+    }
+    if ($('app')) $('app').hidden = false;
+    if ($('nav')) $('nav').hidden = false;
     renderAdminUser(wallflowUser);
+    showView(activeView);
     refreshAll();
-  }
+  };
+  if (window.__openRentalOnLoad) window.startRentalAdmin_();
 })();

@@ -16,6 +16,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="description" content="WallFlow — följ ledbyggnationen i klätterhallen.">
   <title>WallFlow</title>
+  <link rel="stylesheet" href="rental-admin.css?v=20261006b">
   <script>
     (function () {
       try {
@@ -573,14 +574,14 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp, #app-catalog { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp, #app-catalog, #app-rental { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show, #app-catalog.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show, #app-catalog.show, #app-rental.show { display: flex; }
     body.time-open .filters-block,
     body.time-open .search-toggle,
     body.time-open .search-wrap,
@@ -593,6 +594,9 @@
     body.catalog-open .filters-block,
     body.catalog-open .search-toggle,
     body.catalog-open .search-wrap,
+    body.rental-open .filters-block,
+    body.rental-open .search-toggle,
+    body.rental-open .search-wrap,
     body.wellness-open .filters-block,
     body.wellness-open .search-toggle,
     body.wellness-open .search-wrap,
@@ -606,6 +610,7 @@
     body.verif-open .topbar,
     body.tencard-open .topbar,
     body.catalog-open .topbar,
+    body.rental-open .topbar,
     body.wellness-open .topbar,
     body.insp-open .topbar,
     body.no-routes .topbar {
@@ -1939,6 +1944,221 @@
     </div>
     <div id="app-catalog">
       <div class="admin-shell wide" id="catalog-main"></div>
+    </div>
+    <div id="app-rental">
+      <nav class="time-view-tabs" id="nav" aria-label="Uthyrning">
+        <button type="button" data-view="bookings" class="is-active">Bokningar</button>
+        <button type="button" data-view="doorpass">Dörrlänk</button>
+        <button type="button" data-view="stats">Statistik</button>
+        <button type="button" data-view="settings">Inställningar</button>
+      </nav>
+      <div class="admin-shell wide" id="app">
+      <div class="panel admin-view" id="bookingsSection" data-view="bookings">
+        <h2>Bokningar</h2>
+        <div class="timeline" id="timeline">
+          <div class="timeline-head">
+            <strong>Tidslinje</strong>
+            <span class="muted" id="timelineRange">Nästa 14 dagar</span>
+          </div>
+          <div class="timeline-scroll" id="timelineScroll">
+            <p class="muted" id="timelineEmpty">Inga aktiva bokningar i perioden.</p>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Sök bokningsnummer</label><input id="searchNo" placeholder="2026-00001" /></div>
+          <div><label>Visa</label>
+            <!-- Filter keys are filled in from admin.js; values are English keys the API understands. -->
+            <select id="filterStatus">
+              <option value="">Alla</option>
+            </select>
+          </div>
+        </div>
+        <p><button type="button" id="btnReload">Uppdatera</button></p>
+        <div class="list-rows" id="bookingsList"></div>
+        <p class="muted" id="bookingsEmpty" hidden>Inga bokningar matchar.</p>
+      </div>
+
+      <div class="panel admin-view" id="doorPassSection" data-view="doorpass" hidden>
+        <h2>Skicka dörrlänk</h2>
+        <p class="muted">Mejl med länk till en sida där mottagaren kan öppna entredörren. Giltig mellan start- och slutdatum (inklusive) och inom angivna klockslag (standard 06:00–22:00).</p>
+        <div class="row">
+          <div><label>Namn</label><input id="dpName" placeholder="För- och efternamn" /></div>
+          <div><label>E-post</label><input id="dpEmail" type="email" /></div>
+        </div>
+        <div class="row">
+          <div><label>Giltig från</label><input id="dpStart" type="date" /></div>
+          <div><label>Giltig till</label><input id="dpEnd" type="date" /></div>
+          <div>
+            <label>Språk i mejl</label>
+            <select id="dpLocale">
+              <option value="sv">Svenska</option>
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Öppen från</label><input id="dpStartTime" type="time" value="06:00" /></div>
+          <div><label>Öppen till</label><input id="dpEndTime" type="time" value="22:00" /></div>
+        </div>
+        <p style="margin-top:1rem;"><button type="button" id="btnSendDoorPass">Skicka mejl med länk</button></p>
+        <p class="ok" id="dpOk" hidden></p>
+        <p class="err" id="dpErr" hidden></p>
+        <h3>Skickade länkar</h3>
+        <div class="list-rows" id="dpList"></div>
+        <p class="muted" id="dpEmpty" hidden>Inga länkar har skickats.</p>
+      </div>
+
+      <div class="panel admin-view" id="statsSection" data-view="stats" hidden>
+        <h2>Statistik</h2>
+        <p class="muted">Uthyrda dygn och intäkt per resurs för återlämnade bokningar. Data sparas anonymiserat och finns kvar även när bokningar raderas enligt GDPR.</p>
+        <div class="row">
+          <div>
+            <label>År</label>
+            <select id="statsYear">
+              <option value="">Alla år</option>
+            </select>
+          </div>
+          <div>
+            <label>Månad</label>
+            <select id="statsMonth">
+              <option value="">Alla månader</option>
+              <option value="1">Januari</option>
+              <option value="2">Februari</option>
+              <option value="3">Mars</option>
+              <option value="4">April</option>
+              <option value="5">Maj</option>
+              <option value="6">Juni</option>
+              <option value="7">Juli</option>
+              <option value="8">Augusti</option>
+              <option value="9">September</option>
+              <option value="10">Oktober</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+          <div>
+            <label>Resurs</label>
+            <select id="statsPad">
+              <option value="">Alla resurser</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Från datum</label><input id="statsFrom" type="date" /></div>
+          <div><label>Till datum</label><input id="statsTo" type="date" /></div>
+        </div>
+        <p class="stats-actions">
+          <button type="button" id="btnStatsApply">Tillämpa filter</button>
+          <button type="button" class="ghost" id="btnStatsClear">Rensa filter</button>
+        </p>
+        <p class="err" id="statsErr" hidden></p>
+        <div class="stats-totals" id="statsTotals" hidden>
+          <div class="stats-total-item">
+            <span class="muted">Bokningar</span>
+            <strong id="statsTotalBookings">0</strong>
+          </div>
+          <div class="stats-total-item">
+            <span class="muted">Uthyrda dygn</span>
+            <strong id="statsTotalDays">0</strong>
+          </div>
+          <div class="stats-total-item">
+            <span class="muted">Total intäkt</span>
+            <strong id="statsTotalAmount">0 SEK</strong>
+          </div>
+        </div>
+        <div class="stats-table-wrap">
+          <table class="stats-table" id="statsTable">
+            <thead>
+              <tr>
+                <th>Resurs</th>
+                <th class="num">Bokningar</th>
+                <th class="num">Uthyrda dygn</th>
+                <th class="num">Intäkt</th>
+              </tr>
+            </thead>
+            <tbody id="statsBody"></tbody>
+          </table>
+        </div>
+        <p class="muted" id="statsEmpty" hidden>Ingen statistik matchar filtret.</p>
+      </div>
+
+      <div class="admin-view" id="settingsView" data-view="settings" hidden>
+      <div class="panel settings-panel">
+        <h2>Inställningar</h2>
+        <p class="muted">Öppna ett avsnitt i taget. System och priser hålls åtskilda. Konton och rollen uthyrare hanteras i WallFlow.</p>
+
+        <details class="settings-block" open>
+          <summary>System</summary>
+          <div class="settings-block-body">
+            <h3>Autorensning</h3>
+            <p class="muted">Avslutade bokningar (återlämnade, avbokade, avslagna) och dörrlänkar som passerat giltighetstiden raderas automatiskt efter angiven tid. Autorensning körs dagligen och när admin öppnas. Anonymiserad uthyrningsstatistik behålls.</p>
+            <div class="row">
+              <div><label>Behåll avslutade (månader)</label><input id="cfgRetentionMonths" type="number" min="0" max="120" step="1" value="6" /></div>
+            </div>
+            <p class="muted">Sätt till 0 för att stänga av autorensning.</p>
+            <p><button type="button" id="btnSaveConfig">Spara</button></p>
+            <p class="ok" id="cfgOk" hidden></p>
+            <p class="err" id="cfgErr" hidden></p>
+          </div>
+        </details>
+
+        <details class="settings-block" id="pricingSection">
+          <summary>Priser &amp; utrustning</summary>
+          <div class="settings-block-body">
+            <h3>Utrustning</h3>
+            <div class="pad-list" id="padsList"></div>
+            <h3>Ny utrustning</h3>
+            <div class="row">
+              <div><label>Namn</label><input id="padName" placeholder="Crashpad 13" /></div>
+              <div><label>Beskrivning</label><input id="padDesc" placeholder="Valfritt" /></div>
+              <div><label>Pris/dygn</label><input id="padPrice" type="number" min="0" step="1" value="150" /></div>
+            </div>
+            <p><button type="button" id="btnCreatePad">Lägg till utrustning</button></p>
+            <p class="err" id="padErr" hidden></p>
+            <h3>Rabattstege</h3>
+            <div id="rulesList"></div>
+            <div class="row">
+              <div>
+                <label>Dimension</label>
+                <select id="ruleDim"><option value="days">dygn</option><option value="pads">utrustning</option></select>
+              </div>
+              <div><label>Min</label><input id="ruleMin" type="number" value="3" /></div>
+              <div><label>% rabatt</label><input id="rulePct" type="number" value="10" /></div>
+              <div><label>Label</label><input id="ruleLabel" value="Ny regel" /></div>
+            </div>
+            <p><button type="button" id="btnAddRule">Lägg till regel</button></p>
+          </div>
+        </details>
+      </div>
+      </div>
+    </div>
+
+  <div class="modal" id="detailModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <div class="modal-head">
+        <h2 id="detailTitle">Bokningsdetalj</h2>
+        <button type="button" class="ghost icon" data-close-modal aria-label="Stäng">&#10005;</button>
+      </div>
+      <div class="modal-body" id="detail"></div>
+    </div>
+  </div>
+
+  <!-- Its own dialog rather than a shared one: a booking and a door pass have
+       nothing in common but the frame, and one render function per dialog is
+       easier to follow than one that switches on what it was handed. -->
+  <div class="modal" id="passModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="passTitle">
+      <div class="modal-head">
+        <h2 id="passTitle">Dörrlänk</h2>
+        <button type="button" class="ghost icon" data-close-modal aria-label="Stäng">&#10005;</button>
+      </div>
+      <div class="modal-body" id="passDetail"></div>
+    </div>
+  </div>
+
     </div>
   </div>
 
@@ -3713,7 +3933,7 @@ function currentDisplayName_() {
 function hideAppChrome_() {
   const chrome = document.getElementById("app-chrome");
   if (chrome) chrome.classList.remove("ready");
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "no-routes");
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "rental-open", "no-routes");
 }
 function showAppChrome_() {
   const chrome = document.getElementById("app-chrome");
@@ -3725,6 +3945,7 @@ function showAppChrome_() {
   document.body.classList.toggle("wellness-open", !!(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")));
   document.body.classList.toggle("insp-open", !!(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")));
   document.body.classList.toggle("catalog-open", !!(document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show")));
+  document.body.classList.toggle("rental-open", !!(document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show")));
   renderAccountMenu_();
 }
 function onTopBrandClick_() {
@@ -3734,6 +3955,7 @@ function onTopBrandClick_() {
     return;
   }
   if (hasWallflowAccess_()) {
+    closeRentalTool();
     closeTimeTool();
     closeVerifTool();
     closeTencardTool();
@@ -3746,7 +3968,9 @@ function onTopBrandClick_() {
     closeWellnessTool();
     closeInspTool();
     if (typeof closeCatalogTool === "function") closeCatalogTool();
-    openTimeTool();
+    closeRentalTool();
+    if (canManageRental_() && !canReportHallvard_() && !canTreasurer_()) openRentalTool();
+    else openTimeTool();
   }
 }
 function showAppShell_() {
@@ -3758,7 +3982,8 @@ function showAppShell_() {
   if (!hasWallflowAccess_()) {
     document.getElementById("app-public").classList.remove("ready");
     if (currentUser.firstLogin) openSettings();
-    else if (canManageRental_() && !canReportHallvard_() && !canTreasurer_()) location.replace("uthyrning.html");
+    else if (canManageRental_() && !canReportHallvard_() && !canTreasurer_()) openRentalTool();
+    else if (isRentalRoute_() && canManageRental_()) openRentalTool();
     else openTimeTool();
     if (isVerifRoute_()) openVerifTool();
     return;
@@ -3769,10 +3994,12 @@ function showAppShell_() {
   hideWellnessOverlay_();
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open");
+  hideRentalOverlay_();
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "rental-open");
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
+  else if (isRentalRoute_() && canManageRental_()) openRentalTool();
   else if (isVerifRoute_()) openVerifTool();
 }
 function renderEditToolbar_() {
@@ -6032,6 +6259,7 @@ function openTimeToolFromMenu_() {
   hideWellnessOverlay_();
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
   openTimeTool();
 }
 function openVerifToolFromMenu_() {
@@ -6057,11 +6285,50 @@ function openInspToolFromMenu_() {
   closeAccountMenu_();
   openInspTool();
 }
+function isRentalRoute_() {
+  return String(location.hash || "").replace(/^#/, "").split(/[?&]/)[0].toLowerCase() === "uthyrning";
+}
+function hideRentalOverlay_() {
+  const el = document.getElementById("app-rental");
+  if (el) el.classList.remove("show");
+  document.body.classList.remove("rental-open");
+}
+function openRentalTool() {
+  if (!canManageRental_()) return showToast("Saknar behörighet");
+  const admin = document.getElementById("app-admin");
+  if (admin) admin.classList.remove("show");
+  const time = document.getElementById("app-time");
+  if (time) time.classList.remove("show");
+  const verif = document.getElementById("app-verif");
+  if (verif) verif.classList.remove("show");
+  hideTencardOverlay_();
+  hideWellnessOverlay_();
+  hideInspOverlay_();
+  if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
+  const pub = document.getElementById("app-public");
+  if (pub) pub.classList.remove("ready");
+  if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
+  const rental = document.getElementById("app-rental");
+  if (rental) rental.classList.add("show");
+  showAppChrome_();
+  window.__openRentalOnLoad = true;
+  if (typeof startRentalAdmin_ === "function") startRentalAdmin_();
+  if (history.replaceState && location.hash !== "#uthyrning") {
+    history.replaceState(null, "", location.pathname + location.search + "#uthyrning");
+  }
+}
+function closeRentalTool() {
+  hideRentalOverlay_();
+  if (String(location.hash || "") === "#uthyrning" && history.replaceState) {
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+}
 function openRentalFromMenu_() {
   closeAccountMenu_();
   if (!canManageRental_()) return showToast("Saknar behörighet");
   if (currentUser.firstLogin) return showToast("Byt lösenord först");
-  location.href = "uthyrning.html";
+  openRentalTool();
 }
 function openAdministrationFromMenu_() {
   closeAccountMenu_();
@@ -6422,6 +6689,7 @@ function forceRelogin_(message) {
   hideWellnessOverlay_();
   hideInspOverlay_();
   if (typeof closeCatalogTool === "function") closeCatalogTool();
+  hideRentalOverlay_();
   closePanel();
   showLoginGate_();
   const lead = document.getElementById("login-lead");
@@ -8070,7 +8338,8 @@ function closeTimeTool() {
   const verifOpen = document.getElementById("app-verif") && document.getElementById("app-verif").classList.contains("show");
   const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
   const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
-  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen && !inspOpen && !catalogOpen) {
+  const rentalOpen = document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show");
+  if (hasWallflowAccess_() && !tencardOpen && !wellnessOpen && !verifOpen && !inspOpen && !catalogOpen && !rentalOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -8093,6 +8362,7 @@ function openTimeTool(view) {
   hideWellnessOverlay_();
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
@@ -8717,7 +8987,7 @@ function closeVerifTool() {
     showLoginGate_();
     return;
   }
-  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")) && !(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")) && !(document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show"))) {
+  if (hasWallflowAccess_() && !document.getElementById("app-time").classList.contains("show") && !(document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show")) && !(document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show")) && !(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")) && !(document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show")) && !(document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show"))) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   }
@@ -8729,6 +8999,7 @@ function openVerifTool() {
   hideWellnessOverlay_();
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
@@ -9553,7 +9824,8 @@ function closeTencardTool() {
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
   const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
   const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen && !inspOpen && !catalogOpen) {
+  const rentalOpen = document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !wellnessOpen && !inspOpen && !catalogOpen && !rentalOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -9570,6 +9842,7 @@ function openTencardTool() {
   hideWellnessOverlay_();
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-tencard").classList.add("show");
@@ -9913,7 +10186,8 @@ function closeWellnessTool() {
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
   const inspOpen = document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show");
   const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !inspOpen && !catalogOpen) {
+  const rentalOpen = document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !inspOpen && !catalogOpen && !rentalOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -9930,6 +10204,7 @@ function openWellnessTool() {
   hideTencardOverlay_();
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-wellness").classList.add("show");
@@ -10552,7 +10827,8 @@ function closeInspTool() {
   const tencardOpen = document.getElementById("app-tencard") && document.getElementById("app-tencard").classList.contains("show");
   const wellnessOpen = document.getElementById("app-wellness") && document.getElementById("app-wellness").classList.contains("show");
   const catalogOpen = document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show");
-  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !wellnessOpen && !catalogOpen) {
+  const rentalOpen = document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show");
+  if (hasWallflowAccess_() && !timeOpen && !verifOpen && !tencardOpen && !wellnessOpen && !catalogOpen && !rentalOpen) {
     document.getElementById("app-public").classList.add("ready");
     showAppChrome_();
   } else {
@@ -10569,6 +10845,7 @@ function openInspTool() {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
+  hideRentalOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-insp").classList.add("show");
@@ -10888,5 +11165,7 @@ window.addEventListener("hashchange", () => {
 });
   </script>
   <script src="kiosk-catalog.js"></script>
+  <script src="uthyrning-status.js?v=20261006b"></script>
+  <script src="uthyrning.js?v=20261006b"></script>
 </body>
 </html>
