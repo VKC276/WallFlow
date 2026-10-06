@@ -8,8 +8,20 @@
   --font: inherit;
   --display: inherit;
 }
-#app-rental #nav { padding: 12px 16px 0; }
-#app-rental #nav button.is-active { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text) 55%, transparent); }
+#app-rental #nav.time-view-tabs {
+  justify-content: center;
+  padding: 0 0 16px;
+}
+#app-rental .rental-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+#app-rental .stats-actions,
+#app-rental .actions {
+  justify-content: center;
+}
 #app-rental .admin-shell { background: transparent; }
 #app-rental [hidden] { display: none !important; }
 #app-rental html, #app-rental body {
@@ -88,9 +100,10 @@
   border-radius: 10px;
   border: 1px solid var(--line);
   background: #fff;
+  color: #1c2028;
   font: inherit;
 }
-#app-rental button, #app-rental .btn {
+#app-rental button:not(.btn):not(.list-row):not(.timeline-bar):not(.timeline-m-item) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -681,7 +694,7 @@
 }
 #app-rental .pad-price { flex: 0 0 auto; display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
 #app-rental .pad-price input { width: 6rem; padding: 0.45rem 0.55rem; }
-#app-rental .pad-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: auto; }
+#app-rental .pad-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: 0; justify-content: center; }
 @media (max-width: 640px) {
   #app-rental .pad-price { flex: 1 1 100%; }
   #app-rental .pad-actions { margin-left: 0; flex: 1 1 100%; }
@@ -692,22 +705,33 @@
 #app-rental .modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
 }
-#app-rental .modal-backdrop { position: absolute; inset: 0; background: rgba(16, 28, 34, 0.55); }
+#app-rental .modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: auto;
+  height: auto;
+  opacity: 1;
+  background: rgba(16, 28, 34, 0.55);
+}
 #app-rental .modal-card {
   position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   width: min(46rem, 100%);
   max-height: 85vh;
   padding: 1.1rem 1.25rem 1.25rem;
   border-radius: var(--radius);
-  background: #fff;
+  border: 1px solid var(--line);
+  background: var(--panel-bg);
+  color: var(--text);
   box-shadow: 0 24px 60px rgba(16, 28, 34, 0.35);
 }
 #app-rental .modal-head {

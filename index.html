@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="description" content="WallFlow — följ ledbyggnationen i klätterhallen.">
   <title>WallFlow</title>
-  <link rel="stylesheet" href="rental-admin.css?v=20261006b">
+  <link rel="stylesheet" href="rental-admin.css?v=20261006d">
   <script>
     (function () {
       try {
@@ -1946,13 +1946,14 @@
       <div class="admin-shell wide" id="catalog-main"></div>
     </div>
     <div id="app-rental">
-      <nav class="time-view-tabs" id="nav" aria-label="Uthyrning">
-        <button type="button" data-view="bookings" class="is-active">Bokningar</button>
-        <button type="button" data-view="doorpass">Dörrlänk</button>
-        <button type="button" data-view="stats">Statistik</button>
-        <button type="button" data-view="settings">Inställningar</button>
-      </nav>
       <div class="admin-shell wide" id="app">
+        <p class="admin-kicker">Uthyrning</p>
+        <nav class="time-view-tabs" id="nav" aria-label="Uthyrning">
+          <button type="button" class="btn btn-sm btn-accent" data-view="bookings">Bokningar</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-view="doorpass">Dörrlänk</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-view="stats">Statistik</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-view="settings">Inställningar</button>
+        </nav>
       <div class="panel admin-view" id="bookingsSection" data-view="bookings">
         <h2>Bokningar</h2>
         <div class="timeline" id="timeline">
@@ -1973,7 +1974,7 @@
             </select>
           </div>
         </div>
-        <p><button type="button" id="btnReload">Uppdatera</button></p>
+        <p class="rental-actions"><button type="button" class="btn btn-accent" id="btnReload">Uppdatera</button></p>
         <div class="list-rows" id="bookingsList"></div>
         <p class="muted" id="bookingsEmpty" hidden>Inga bokningar matchar.</p>
       </div>
@@ -2001,7 +2002,7 @@
           <div><label>Öppen från</label><input id="dpStartTime" type="time" value="06:00" /></div>
           <div><label>Öppen till</label><input id="dpEndTime" type="time" value="22:00" /></div>
         </div>
-        <p style="margin-top:1rem;"><button type="button" id="btnSendDoorPass">Skicka mejl med länk</button></p>
+        <p class="rental-actions" style="margin-top:1rem;"><button type="button" class="btn btn-accent" id="btnSendDoorPass">Skicka mejl med länk</button></p>
         <p class="ok" id="dpOk" hidden></p>
         <p class="err" id="dpErr" hidden></p>
         <h3>Skickade länkar</h3>
@@ -2049,8 +2050,8 @@
           <div><label>Till datum</label><input id="statsTo" type="date" /></div>
         </div>
         <p class="stats-actions">
-          <button type="button" id="btnStatsApply">Tillämpa filter</button>
-          <button type="button" class="ghost" id="btnStatsClear">Rensa filter</button>
+          <button type="button" class="btn btn-accent" id="btnStatsApply">Tillämpa filter</button>
+          <button type="button" class="btn btn-ghost" id="btnStatsClear">Rensa filter</button>
         </p>
         <p class="err" id="statsErr" hidden></p>
         <div class="stats-totals" id="statsTotals" hidden>
@@ -2097,7 +2098,7 @@
               <div><label>Behåll avslutade (månader)</label><input id="cfgRetentionMonths" type="number" min="0" max="120" step="1" value="6" /></div>
             </div>
             <p class="muted">Sätt till 0 för att stänga av autorensning.</p>
-            <p><button type="button" id="btnSaveConfig">Spara</button></p>
+            <p class="rental-actions"><button type="button" class="btn btn-accent" id="btnSaveConfig">Spara</button></p>
             <p class="ok" id="cfgOk" hidden></p>
             <p class="err" id="cfgErr" hidden></p>
           </div>
@@ -2114,7 +2115,7 @@
               <div><label>Beskrivning</label><input id="padDesc" placeholder="Valfritt" /></div>
               <div><label>Pris/dygn</label><input id="padPrice" type="number" min="0" step="1" value="150" /></div>
             </div>
-            <p><button type="button" id="btnCreatePad">Lägg till utrustning</button></p>
+            <p class="rental-actions"><button type="button" class="btn btn-accent" id="btnCreatePad">Lägg till utrustning</button></p>
             <p class="err" id="padErr" hidden></p>
             <h3>Rabattstege</h3>
             <div id="rulesList"></div>
@@ -2127,7 +2128,7 @@
               <div><label>% rabatt</label><input id="rulePct" type="number" value="10" /></div>
               <div><label>Label</label><input id="ruleLabel" value="Ny regel" /></div>
             </div>
-            <p><button type="button" id="btnAddRule">Lägg till regel</button></p>
+            <p class="rental-actions"><button type="button" class="btn btn-accent" id="btnAddRule">Lägg till regel</button></p>
           </div>
         </details>
       </div>
@@ -6202,6 +6203,7 @@ function closePanel(fromPopstate) {
 /* ---------- Auth / Settings ---------- */
 function openSettings() {
   if (!currentUser.authorized) return showLoginGate_();
+  hideRentalOverlay_();
   document.getElementById("app-admin").classList.add("show");
   if (currentUser.firstLogin) renderForcePasswordChange();
   else renderSettingsHome();
@@ -6209,6 +6211,7 @@ function openSettings() {
 function openAdministration() {
   if (!currentUser.authorized) return showLoginGate_();
   if (!canOpenAdministration_()) return showToast("Saknar behörighet");
+  hideRentalOverlay_();
   document.getElementById("app-admin").classList.add("show");
   renderAdminHome();
 }
@@ -6240,6 +6243,7 @@ function openRoutesFromMenu_() {
   if (!currentUser.authorized) return showLoginGate_();
   if (!hasWallflowAccess_()) return;
   if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  closeRentalTool();
   document.getElementById("app-admin").classList.remove("show");
   closeTimeTool();
   closeVerifTool();
@@ -11166,6 +11170,6 @@ window.addEventListener("hashchange", () => {
   </script>
   <script src="kiosk-catalog.js"></script>
   <script src="uthyrning-status.js?v=20261006b"></script>
-  <script src="uthyrning.js?v=20261006b"></script>
+  <script src="uthyrning.js?v=20261006c"></script>
 </body>
 </html>

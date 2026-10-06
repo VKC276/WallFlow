@@ -170,7 +170,10 @@
       el.hidden = el.getAttribute('data-view') !== view;
     });
     rentalRoot().querySelectorAll('#nav [data-view]').forEach(function (a) {
-      a.classList.toggle('is-active', a.getAttribute('data-view') === view);
+      var on = a.getAttribute('data-view') === view;
+      a.classList.toggle('is-active', on);
+      a.classList.toggle('btn-accent', on);
+      a.classList.toggle('btn-ghost', !on);
     });
     if (view === 'stats') loadStats();
   }
@@ -605,14 +608,14 @@
     }
     var approveBody = needsApproval
       ? '<div class="actions">' +
-        '<button type="button" id="actApprove">Godkänn</button>' +
-        '<button type="button" class="ghost" id="actReject">Avslå</button></div>' +
+        '<button type="button" class="btn btn-accent" id="actApprove">Godkänn</button>' +
+        '<button type="button" class="btn btn-ghost" id="actReject">Avslå</button></div>' +
         '<div id="rejectBox" class="detail-panel" hidden>' +
         '<label for="rejectReason">Orsak till avslag</label>' +
         '<textarea id="rejectReason" rows="3" maxlength="500" placeholder="Kort meddelande till kunden…"></textarea>' +
         '<div class="actions">' +
-        '<button type="button" class="warn" id="actRejectConfirm">Bekräfta avslag</button>' +
-        '<button type="button" class="ghost" id="actRejectCancel">Avbryt</button>' +
+        '<button type="button" class="btn btn-ghost" id="actRejectConfirm">Bekräfta avslag</button>' +
+        '<button type="button" class="btn btn-ghost" id="actRejectCancel">Avbryt</button>' +
         '</div></div>'
       : (String(b.rejectReason || '').trim()
         ? '<p class="muted">Orsak: ' + escapeHtml(String(b.rejectReason).trim()) + '</p>'
@@ -637,7 +640,7 @@
       state: payState,
       open: false,
       lead: b.paid ? 'Bokningen är markerad som betald.' : 'Ingen betalning registrerad ännu.',
-      body: '<div class="actions"><button type="button" id="actPaid"' + (b.paid ? ' class="ghost"' : '') + '>' +
+      body: '<div class="actions"><button type="button" class="' + (b.paid ? 'btn btn-ghost' : 'btn btn-accent') + '" id="actPaid">' +
         (b.paid ? 'Markera som obetald' : 'Markera som betald') + '</button></div>'
     });
 
@@ -647,15 +650,15 @@
     if (b.status === 'Approved') {
       handState = 'current';
       handLead = 'Lämna ut hela beställningen när kunden får utrustningen.';
-      handBody = '<div class="actions"><button type="button" class="warn" id="actHandover">Lämna ut</button></div>';
+      handBody = '<div class="actions"><button type="button" class="btn btn-accent" id="actHandover">Lämna ut</button></div>';
     } else if (b.status === 'HandedOut') {
       handState = 'current';
       handLead = 'Utrustningen är utlämnad. Markera när den återlämnas.';
-      handBody = '<div class="actions"><button type="button" id="actHandover">Återlämna</button></div>';
+      handBody = '<div class="actions"><button type="button" class="btn btn-accent" id="actHandover">Återlämna</button></div>';
     } else if (b.status === 'Returned') {
       handState = 'done';
       handLead = 'Återlämning är registrerad.';
-      handBody = '<div class="actions"><button type="button" class="ghost" id="actHandover">Lämna ut</button></div>' +
+      handBody = '<div class="actions"><button type="button" class="btn btn-ghost" id="actHandover">Lämna ut</button></div>' +
         '<p class="muted">Knappen ångrar återlämning.</p>';
     } else if (closed) {
       handState = 'done';
@@ -694,7 +697,7 @@
         escapeHtml(b.selfServiceEndTime || '22:00') + '" /></div>' +
         '</div>' +
         '<div class="actions" style="margin-top:0.65rem;">' +
-        '<button type="button" class="ghost" id="actSaveSelfHours">Spara tider</button></div>' +
+        '<button type="button" class="btn btn-ghost" id="actSaveSelfHours">Spara tider</button></div>' +
         '<p class="ok" id="ssHoursOk" hidden></p>' +
         '<p class="err" id="ssHoursErr" hidden></p>'
     });
@@ -713,7 +716,7 @@
           '</div>' +
           '<p class="muted" style="margin:0.75rem 0 0.35rem;">Utrustning för vald period</p>' +
           '<div id="editPadsBox"><p class="muted">Laddar…</p></div>' +
-          '<div class="actions"><button type="button" id="actSaveSchedule">Spara period &amp; utrustning</button></div>' +
+          '<div class="actions"><button type="button" class="btn btn-accent" id="actSaveSchedule">Spara period &amp; utrustning</button></div>' +
           '<p class="err" id="edErr" hidden></p>'
       });
     } else {
@@ -726,12 +729,12 @@
       lead: 'Skicka länk igen eller ta bort bokningen.',
       body:
         '<p class="muted" style="margin:0 0 0.35rem;">Mejl till kund</p>' +
-        '<div class="actions"><button type="button" class="ghost" id="actResendMail">Skicka magisk länk igen</button></div>' +
+        '<div class="actions"><button type="button" class="btn btn-ghost" id="actResendMail">Skicka magisk länk igen</button></div>' +
         '<p class="ok" id="mailOk" hidden></p>' +
         '<hr style="border:0;border-top:1px solid var(--line);margin:1rem 0;" />' +
         '<p class="muted" style="margin:0 0 0.35rem;">Radera bokning</p>' +
         '<p class="detail-section-lead muted">Tar bort bokningen permanent. Kan inte ångras.</p>' +
-        '<div class="actions"><button type="button" class="warn" id="actDelete">Radera bokning</button></div>'
+        '<div class="actions"><button type="button" class="btn btn-ghost" id="actDelete">Radera bokning</button></div>'
     });
 
     html += '</div>';
@@ -1081,10 +1084,10 @@
         '<label class="pad-price">Pris/dygn <input data-pad="' + p.id + '" type="number" min="0" step="1" value="' +
           escapeHtml(p.pricePerDay) + '" /></label>' +
         '<div class="pad-actions">' +
-          '<button type="button" class="secondary" data-save-pad="' + p.id + '">Spara</button>' +
+          '<button type="button" class="btn btn-accent" data-save-pad="' + p.id + '">Spara</button>' +
           (p.active
-            ? '<button type="button" class="ghost" data-deactivate-pad="' + p.id + '">Ta bort</button>'
-            : '<button type="button" data-activate-pad="' + p.id + '">Aktivera</button>') +
+            ? '<button type="button" class="btn btn-ghost" data-deactivate-pad="' + p.id + '">Ta bort</button>'
+            : '<button type="button" class="btn btn-accent" data-activate-pad="' + p.id + '">Aktivera</button>') +
         '</div>' +
         '</div>';
     }).join('');
@@ -1163,7 +1166,7 @@
     rules.forEach(function (r) {
       var dimLabel = r.dimension === 'pads' ? 'utrustning' : (r.dimension === 'days' ? 'dygn' : r.dimension);
       html += '<tr><td>' + escapeHtml(dimLabel) + '</td><td>' + r.minValue + '</td><td>' + r.percentOff + '</td><td>' + escapeHtml(r.label) +
-        '</td><td><button type="button" class="ghost" data-del-rule="' + r.id + '">Ta bort</button></td></tr>';
+        '</td><td><button type="button" class="btn btn-ghost" data-del-rule="' + r.id + '">Ta bort</button></td></tr>';
     });
     html += '</tbody></table></div>';
     $('rulesList').innerHTML = html;
@@ -1333,10 +1336,10 @@
     html += '<p>Giltig ' + p.startDate + ' – ' + p.endDate + ' (inkl.)</p>';
     html += '<p>Öppen kl ' + escapeHtml(p.startTime || '06:00') + '–' + escapeHtml(p.endTime || '22:00') + '</p>';
     if (!p.revoked) {
-      html += '<div class="actions"><button type="button" class="ghost" id="passRevoke">Återkalla länken</button></div>';
+      html += '<div class="actions"><button type="button" class="btn btn-ghost" id="passRevoke">Återkalla länken</button></div>';
     } else {
       html += '<p class="muted">Länken är spärrad. Radera den för att ta bort den från listan.</p>';
-      html += '<div class="actions"><button type="button" class="warn" id="passDelete">Radera länken</button></div>';
+      html += '<div class="actions"><button type="button" class="btn btn-ghost" id="passDelete">Radera länken</button></div>';
     }
     html += '<p class="err" id="passErr" hidden></p>';
     $('passDetail').innerHTML = html;

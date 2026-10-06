@@ -32,6 +32,7 @@ function openCatalogTool(view) {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
+  if (typeof hideRentalOverlay_ === "function") hideRentalOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-catalog").classList.add("show");
