@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="description" content="WallFlow — följ ledbyggnationen i klätterhallen.">
   <title>WallFlow</title>
-  <link rel="stylesheet" href="rental-admin.css?v=20261006g">
+  <link rel="stylesheet" href="rental-admin.css?v=20261006h">
   <script>
     (function () {
       try {
@@ -1965,7 +1965,7 @@
             <p class="muted" id="timelineEmpty">Inga aktiva bokningar i perioden.</p>
           </div>
         </div>
-        <div class="row">
+        <div class="row bookings-toolbar">
           <div><label>Sök bokningsnummer</label><input id="searchNo" placeholder="2026-00001" /></div>
           <div><label>Visa</label>
             <!-- Filter keys are filled in from admin.js; values are English keys the API understands. -->
@@ -1973,8 +1973,8 @@
               <option value="">Alla</option>
             </select>
           </div>
+          <div class="rental-actions"><button type="button" class="btn btn-accent" id="btnReload">Uppdatera</button></div>
         </div>
-        <p class="rental-actions"><button type="button" class="btn btn-accent" id="btnReload">Uppdatera</button></p>
         <div class="list-rows" id="bookingsList"></div>
         <p class="muted" id="bookingsEmpty" hidden>Inga bokningar matchar.</p>
       </div>

@@ -28,6 +28,17 @@ html:not([data-theme="light"]) #app-rental {
   justify-content: center;
   gap: 0.5rem;
 }
+#app-rental .bookings-toolbar {
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+#app-rental .bookings-toolbar .rental-actions {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  justify-content: flex-end;
+}
 #app-rental .stats-actions,
 #app-rental .actions {
   justify-content: center;
