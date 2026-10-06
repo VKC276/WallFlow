@@ -3,10 +3,20 @@
   --card: var(--surface);
   --ok: #1b7f4e;
   --warn: #a66b00;
+  --danger: #b42323;
+  --ok-ink: #146c43;
+  --warn-ink: #8a5a00;
+  --danger-ink: #9f2d2d;
   --accent2: #c45c26;
   --radius: 16px;
   --font: inherit;
   --display: inherit;
+}
+html:not([data-theme="light"]) #app-rental {
+  --ok-ink: #8ed4b0;
+  --warn-ink: #f0c36a;
+  --danger-ink: #ffb4b4;
+  --danger: #e15d5d;
 }
 #app-rental #nav.time-view-tabs {
   justify-content: center;
@@ -104,17 +114,27 @@
   font: inherit;
 }
 #app-rental input[type="checkbox"] {
+  -webkit-appearance: auto;
+  appearance: auto;
   width: 1.05rem;
   height: 1.05rem;
-  min-height: 0;
+  min-width: 1.05rem;
+  min-height: 1.05rem;
   padding: 0;
   margin: 0;
   flex: 0 0 auto;
   accent-color: var(--accent);
-  border-radius: 0.25rem;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   vertical-align: middle;
+  cursor: pointer;
+  color-scheme: var(--color-scheme);
+}
+#app-rental input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 #app-rental button:not(.btn):not(.list-row):not(.timeline-bar):not(.timeline-m-item) {
   display: inline-flex;
@@ -324,7 +344,7 @@
 #app-rental .ds-price-list { display: grid; gap: 0.3rem; }
 #app-rental .ds-price-row { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.95rem; }
 #app-rental .ds-price-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
-#app-rental .ds-price-row.is-discount { color: var(--ok); }
+#app-rental .ds-price-row.is-discount { color: var(--ok-ink); }
 #app-rental .ds-price-row.is-total { font-size: 1.1rem; font-weight: 700; }
 #app-rental .ds-price-head { font-size: 0.85rem; margin-bottom: 0.5rem; }
 #app-rental .ds-pending { margin: 0; font-size: 0.9rem; }
@@ -399,7 +419,7 @@
   display: block;
   font-family: var(--display);
   font-size: 1.15rem;
-  color: var(--danger);
+  color: var(--danger-ink);
 }
 #app-rental .alert-text { display: block; margin-top: 0.25rem; font-size: 0.95rem; }
 #app-rental .alert-hint { color: var(--muted); font-size: 0.9rem; }
@@ -822,7 +842,7 @@
   border-top: 1px dashed var(--line);
 }
 #app-rental .detail-section-foot .actions { margin-top: 0.55rem; }
-#app-rental .detail-section-danger h3 { color: var(--danger); }
+#app-rental .detail-section-danger h3 { color: var(--danger-ink); }
 #app-rental .detail-section {
   padding: 1rem 0;
   border-bottom: 1px solid var(--line);
@@ -921,7 +941,7 @@
   background: rgba(13, 110, 110, 0.1);
 }
 #app-rental .process-step.is-done .process-step-badge {
-  color: var(--ok);
+  color: var(--ok-ink);
   background: rgba(27, 127, 78, 0.1);
 }
 #app-rental .process-step-body, #app-rental .detail-accordion-body {
@@ -931,7 +951,7 @@
 #app-rental .process-step-body .detail-section-lead, #app-rental .detail-accordion-body .detail-section-lead {
   margin-top: 0.75rem;
 }
-#app-rental .detail-accordion.is-danger > summary { color: var(--danger); }
+#app-rental .detail-accordion.is-danger > summary { color: var(--danger-ink); }
 #app-rental .detail-more { margin-top: 1.25rem; }
 
 #app-rental .detail-panel {
@@ -1006,7 +1026,7 @@
   color: var(--muted);
   font-size: 0.95rem;
 }
-#app-rental .door-state.is-active { color: var(--ok); font-weight: 600; }
+#app-rental .door-state.is-active { color: var(--ok-ink); font-weight: 600; }
 #app-rental label.check {
   display: inline-flex;
   align-items: center;
@@ -1016,11 +1036,11 @@
   color: var(--ink);
   cursor: pointer;
 }
-#app-rental label.check input { width: auto; margin: 0; }
+#app-rental label.check input { width: 1.05rem; min-width: 1.05rem; margin: 0; }
 
 #app-rental .check-note { font-size: 0.8rem; color: var(--muted); }
-#app-rental .check-note.is-ok { color: var(--ok); }
-#app-rental .check-note.is-err { color: var(--danger); }
+#app-rental .check-note.is-ok { color: var(--ok-ink); }
+#app-rental .check-note.is-err { color: var(--danger-ink); }
 #app-rental button.icon { padding: 0.4rem 0.6rem; line-height: 1; }
 #app-rental body.modal-open { overflow: hidden; }
 @media (max-width: 640px) {
@@ -1144,8 +1164,8 @@
   #app-rental .status-bar { transition: none; }
 }
 
-#app-rental .err { color: #a32020; margin: 0.5rem 0; }
-#app-rental .ok { color: var(--ok); }
+#app-rental .err { color: var(--danger-ink); margin: 0.5rem 0; }
+#app-rental .ok { color: var(--ok-ink); }
 
 #app-rental .admin-user {
   font-size: 0.9rem;
@@ -1261,4 +1281,80 @@
 @media (max-width: 640px) {
   #app-rental .brand { font-size: 1.25rem; }
   #app-rental .brand-logo { height: 1.85rem; }
+}
+
+/* Mörkt tema: samma ytor som övriga appen, ljus text på mörk botten. */
+html:not([data-theme="light"]) #app-rental input:not([type="checkbox"]),
+html:not([data-theme="light"]) #app-rental select,
+html:not([data-theme="light"]) #app-rental textarea {
+  background: var(--input-bg);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
+html:not([data-theme="light"]) #app-rental input::placeholder,
+html:not([data-theme="light"]) #app-rental textarea::placeholder {
+  color: var(--placeholder);
+}
+html:not([data-theme="light"]) #app-rental select option,
+html:not([data-theme="light"]) #app-rental select optgroup {
+  color: #12151a;
+  background: #fff;
+}
+html:not([data-theme="light"]) #app-rental .list-row,
+html:not([data-theme="light"]) #app-rental .pad,
+html:not([data-theme="light"]) #app-rental .pad-item,
+html:not([data-theme="light"]) #app-rental .pad-pick,
+html:not([data-theme="light"]) #app-rental .process-step,
+html:not([data-theme="light"]) #app-rental .detail-accordion,
+html:not([data-theme="light"]) #app-rental .booking-chapter,
+html:not([data-theme="light"]) #app-rental .settings-panel .settings-block,
+html:not([data-theme="light"]) #app-rental .cal-day,
+html:not([data-theme="light"]) #app-rental .detail-guest-message {
+  background: var(--row-bg);
+  color: var(--text);
+}
+html:not([data-theme="light"]) #app-rental .pad-item.is-inactive,
+html:not([data-theme="light"]) #app-rental .pad-pick.is-disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+html:not([data-theme="light"]) #app-rental .cal-day.blank,
+html:not([data-theme="light"]) #app-rental .cal-day.past {
+  background: transparent;
+}
+html:not([data-theme="light"]) #app-rental .cal-day.full {
+  background: color-mix(in srgb, var(--danger) 28%, var(--row-bg));
+  color: var(--text);
+}
+html:not([data-theme="light"]) #app-rental .detail-guest-message-label {
+  background: var(--surface-3);
+  color: var(--accent);
+  border-bottom-color: var(--line);
+}
+html:not([data-theme="light"]) #app-rental .guest-notes {
+  background: transparent;
+  color: var(--text);
+}
+html:not([data-theme="light"]) #app-rental .process-step-num,
+html:not([data-theme="light"]) #app-rental .process-step-badge {
+  background: var(--surface-3);
+  color: var(--text);
+}
+html:not([data-theme="light"]) #app-rental .process-step.is-current .process-step-badge {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+html:not([data-theme="light"]) #app-rental .process-step.is-done .process-step-badge {
+  color: var(--ok-ink);
+  background: color-mix(in srgb, var(--ok-ink) 16%, transparent);
+}
+html:not([data-theme="light"]) #app-rental .alert {
+  background: color-mix(in srgb, var(--danger) 22%, var(--panel-bg));
+  color: var(--text);
+}
+html:not([data-theme="light"]) #app-rental .nav a:hover {
+  background: var(--surface-3);
+}
+html:not([data-theme="light"]) #app-rental .panel {
+  background: var(--bg-elevated);
 }
