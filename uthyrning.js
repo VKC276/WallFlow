@@ -40,6 +40,14 @@
     return STATUS_LABELS[status] || status;
   }
 
+  function statusBadgeHtml(status) {
+    return '<span class="badge status-' + escapeHtml(status) + '">' + escapeHtml(statusLabel(status)) + '</span>';
+  }
+
+  function paidBadgeHtml(paid) {
+    return '<span class="badge ' + (paid ? 'paid' : 'unpaid') + '">' + (paid ? 'Betald' : 'Obetald') + '</span>';
+  }
+
   /** Closed is a filter key, not a stored status. */
   var FILTER_STATUSES = ['Requested', 'Approved', 'HandedOut', 'Closed'];
 
@@ -445,13 +453,12 @@
     var wrap = $('bookingsList');
     wrap.innerHTML = bookings.map(function (b) {
       var shown = displayStatus(b);
-      var badgeClass = b.doubleBooked ? ' badge-double' : '';
       return '<button type="button" class="list-row booking' + (b.doubleBooked ? ' is-double' : '') + '" data-id="' + b.id + '">' +
         '<span class="r-no">' +
           '<span class="r-no-id">' + escapeHtml(b.bookingNumber) + '</span>' +
           '<span class="r-tags">' +
-            '<span class="badge' + badgeClass + '">' + escapeHtml(statusLabel(shown)) + '</span>' +
-            '<span class="badge ' + (b.paid ? 'paid' : 'unpaid') + '">' + (b.paid ? 'Betald' : 'Obetald') + '</span>' +
+            statusBadgeHtml(shown) +
+            paidBadgeHtml(b.paid) +
           '</span>' +
         '</span>' +
         '<span class="r-guest">' + escapeHtml(b.firstName + ' ' + b.lastName) +
@@ -577,8 +584,8 @@
 
     html += '<div class="detail-summary">';
     html += '<p class="detail-meta">';
-    html += '<span class="badge">' + escapeHtml(statusLabel(b.status)) + '</span> ';
-    html += '<span class="badge ' + (b.paid ? 'paid' : 'unpaid') + '">' + (b.paid ? 'Betald' : 'Obetald') + '</span>';
+    html += statusBadgeHtml(b.status) + ' ';
+    html += paidBadgeHtml(b.paid);
     html += '</p>';
     html += '<p class="detail-guest"><strong>' + escapeHtml(b.firstName + ' ' + b.lastName) + '</strong></p>';
     html += '<p class="muted">' + escapeHtml(b.phone) + ' · ' + escapeHtml(b.email) + '</p>';
@@ -1316,7 +1323,7 @@
         '<span class="r-period">' + p.startDate + ' – ' + p.endDate +
           '<span class="sub">kl ' + escapeHtml(p.startTime || '06:00') + '–' +
           escapeHtml(p.endTime || '22:00') + '</span></span>' +
-        '<span class="r-status"><span class="badge">' + escapeHtml(passState(p)) + '</span></span>' +
+        '<span class="r-status"><span class="badge ' + (p.revoked ? 'status-revoked' : (p.validToday ? 'status-active' : 'status-Returned')) + '">' + escapeHtml(passState(p)) + '</span></span>' +
         '</button>';
     }).join('');
     $('dpEmpty').hidden = passes.length > 0;

@@ -103,6 +103,19 @@
   color: #1c2028;
   font: inherit;
 }
+#app-rental input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  border-radius: 0.25rem;
+  background: transparent;
+  box-shadow: none;
+  vertical-align: middle;
+}
 #app-rental button:not(.btn):not(.list-row):not(.timeline-bar):not(.timeline-m-item) {
   display: inline-flex;
   align-items: center;
@@ -1025,15 +1038,28 @@
 #app-rental .table th, #app-rental .table td { text-align: left; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--line); }
 #app-rental .badge {
   display: inline-block;
-  padding: 0.15rem 0.5rem;
+  padding: 0.22rem 0.6rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
-  background: #dfe8ec;
+  letter-spacing: 0.01em;
+  background: #5c6570;
+  color: #fff;
 }
-#app-rental .badge.paid { background: #c8ebd9; color: var(--ok); }
-#app-rental .badge.unpaid { background: #f5dfc8; color: var(--warn); }
-#app-rental .badge.badge-double { background: #f5c8c8; color: var(--danger); }
+#app-rental .badge.status-Requested { background: #8a5a00; color: #fff; }
+#app-rental .badge.status-Approved { background: #146c43; color: #fff; }
+#app-rental .badge.status-ChangePending { background: #1d4f91; color: #fff; }
+#app-rental .badge.status-CancelPending { background: #b45309; color: #fff; }
+#app-rental .badge.status-HandedOut { background: #0f5c5c; color: #fff; }
+#app-rental .badge.status-Returned { background: #3d4c59; color: #fff; }
+#app-rental .badge.status-Cancelled { background: #6b645c; color: #fff; }
+#app-rental .badge.status-Rejected,
+#app-rental .badge.status-revoked { background: #9f2d2d; color: #fff; }
+#app-rental .badge.status-DoubleBooked,
+#app-rental .badge.badge-double { background: #7a1c1c; color: #fff; }
+#app-rental .badge.status-active { background: #146c43; color: #fff; }
+#app-rental .badge.paid { background: #0f6b3c; color: #fff; }
+#app-rental .badge.unpaid { background: #9a5b00; color: #fff; }
 #app-rental .list-row.is-double { border-color: rgba(163, 32, 32, 0.35); }
 #app-rental .conflict-box {
   margin: 0.75rem 0 1rem;
