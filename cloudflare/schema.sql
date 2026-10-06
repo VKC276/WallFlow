@@ -30,7 +30,7 @@ CREATE TABLE users (
   username TEXT PRIMARY KEY COLLATE NOCASE,
   password_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'scout', 'kassor', 'hallvard')),
+  role TEXT NOT NULL CHECK (role IN ('superadmin', 'admin', 'scout', 'kassor', 'hallvard', 'uthyrare')),
   extra_roles TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',

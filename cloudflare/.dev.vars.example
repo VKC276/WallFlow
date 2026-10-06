@@ -6,3 +6,5 @@ MAIL_WEBHOOK_URL=
 MAIL_WEBHOOK_SECRET=
 KIOSK_API_URL=https://vkc-kiosk.muddy-rice-38d4.workers.dev
 ADMIN_TOKEN=
+RENTR_API_URL=https://rentr-api.muddy-rice-38d4.workers.dev
+RENTAL_BRIDGE_SECRET=

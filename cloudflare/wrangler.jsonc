@@ -10,13 +10,16 @@
   },
   "vars": {
     "APP_BASE_URL": "https://wallflow.vastervikclimbing.se",
-    "KIOSK_API_URL": "https://vkc-kiosk.muddy-rice-38d4.workers.dev"
+    "KIOSK_API_URL": "https://vkc-kiosk.muddy-rice-38d4.workers.dev",
+    "RENTR_API_URL": "https://rentr-api.muddy-rice-38d4.workers.dev"
   },
   // 10-kort: npx wrangler secret put ADMIN_TOKEN
   // Samma ADMIN_TOKEN som på kiosk-Workern. Inte KIOSK_TOKEN (den är bara för Pi:ns klipp).
   // Mejl: samma GAS-relay som RentR. Sätt secrets (samma värden som rentr-api):
   //   npx wrangler secret put MAIL_WEBHOOK_URL
   //   npx wrangler secret put MAIL_WEBHOOK_SECRET
+  // Uthyrning: samma hemlighet på wallflow och rentr-api.
+  //   npx wrangler secret put RENTAL_BRIDGE_SECRET
   // Fyll i riktiga ID:n efter `wrangler d1 create` / `kv namespace create` (eller kör migrate.mjs).
   // Lokalt (`wrangler dev`) fungerar med placeholder-ID:n.
   "d1_databases": [
@@ -46,6 +49,10 @@
     {
       "binding": "KIOSK",
       "service": "vkc-kiosk"
+    },
+    {
+      "binding": "RENTR",
+      "service": "rentr-api"
     }
   ]
 }

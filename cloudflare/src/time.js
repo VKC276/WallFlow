@@ -541,6 +541,7 @@ export function publicSessionFlags(session) {
     timeAdmin: canManageTimeSettings(session),
     tencards: canManageTencards(session),
     wellness: canIssueWellnessReceipt(session),
-    kioskCatalog: roleOf(session) === "superadmin" || roleOf(session) === "admin" || hasRole(session, "kassor")
+    kioskCatalog: roleOf(session) === "superadmin" || roleOf(session) === "admin" || hasRole(session, "kassor"),
+    rental: hasRole(session, "uthyrare")
   };
 }

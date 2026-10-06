@@ -2233,6 +2233,13 @@ function createRunProxy_() {
         apiCall_(String(prop), args)
           .then((res) => {
             if (String(prop) === "verifyAdminPassword" && res && res.token) __sessionToken = res.token;
+            if (
+              res && res.ok === false && currentUser.authorized &&
+              /ej inloggad/i.test(String(res.error || ""))
+            ) {
+              forceRelogin_("Du har loggats ut. Logga in igen för att fortsätta.");
+              return;
+            }
             if (successHandler) successHandler(res);
           })
           .catch((err) => { if (failureHandler) failureHandler(err); });
@@ -3084,7 +3091,7 @@ function demoApi_(action, args) {
         if (meRole !== "admin" && Array.isArray(payload.extraRoles)) {
           payload.extraRoles.forEach((x) => {
             const n = String(x).trim().toLowerCase().replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o");
-            if ((n === "kassor" || n === "hallvard") && extraRoles.indexOf(n) < 0) extraRoles.push(n);
+            if ((n === "kassor" || n === "hallvard" || n === "uthyrare") && extraRoles.indexOf(n) < 0) extraRoles.push(n);
           });
         }
         store.users.push({ username: payload.username, name: payload.name || "", email, role: newRole, extraRoles, password: payload.password || "changeme", FirstLogin: true, active: true });
@@ -3139,7 +3146,7 @@ function demoApi_(action, args) {
         const extras = [];
         (payload.extraRoles || []).forEach((x) => {
           const n = String(x).trim().toLowerCase().replace(/å/g, "a").replace(/ä/g, "a").replace(/ö/g, "o");
-          if ((n === "kassor" || n === "hallvard") && extras.indexOf(n) < 0) extras.push(n);
+          if ((n === "kassor" || n === "hallvard" || n === "uthyrare") && extras.indexOf(n) < 0) extras.push(n);
         });
         u.extraRoles = extras;
         saveDemoDb_(store);
@@ -3334,8 +3341,10 @@ function normalizeRole_(role) {
   if (r === "scout" || r === "developer" || r === "ledbyggare" || r === "sattare" || r === "setter") return "scout";
   if (r === "kassor" || r === "treasurer") return "kassor";
   if (r === "hallvard" || r === "host") return "hallvard";
+  if (r === "uthyrare" || r === "uthyrning" || r === "rental") return "uthyrare";
   if (r === "admin" || r === "administrator" || r === "administratoer") return "admin";
   if (r.includes("super")) return "superadmin";
+  if (r.includes("uthyr") || r.includes("rental")) return "uthyrare";
   if (r.includes("kassor")) return "kassor";
   if (r.includes("hallv")) return "hallvard";
   if (r.includes("ledbygg") || r.includes("satt") || r.includes("scout")) return "scout";
@@ -3367,7 +3376,7 @@ function parseExtraRoles_(raw) {
   const out = [];
   parts.forEach((part) => {
     const n = normalizeRole_(part);
-    if ((n === "kassor" || n === "hallvard") && out.indexOf(n) < 0) out.push(n);
+    if ((n === "kassor" || n === "hallvard" || n === "uthyrare") && out.indexOf(n) < 0) out.push(n);
   });
   return out;
 }
@@ -3397,6 +3406,7 @@ function canManageKioskCatalog_() {
   const r = userRole_();
   return r === "superadmin" || r === "admin" || hasAppRole_("kassor");
 }
+function canManageRental_() { return hasAppRole_("uthyrare"); }
 function canIssueWellnessReceipt_() {
   return canManageTencards_();
 }
@@ -3428,6 +3438,9 @@ function renderAccountMenu_() {
   if (hasWallflowAccess_()) {
     hall.push(`<button type="button" role="menuitem" onclick="openRoutesFromMenu_()">Ledbyggnation</button>`);
     hall.push(`<button type="button" role="menuitem" onclick="openInspToolFromMenu_()">Inspirationskort</button>`);
+  }
+  if (canManageRental_()) {
+    hall.push(`<button type="button" role="menuitem" onclick="openRentalFromMenu_()">Uthyrning</button>`);
   }
   const ekonomi = [
     `<button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>`,
@@ -3461,6 +3474,7 @@ function adminRoleLabelSv(role) {
   if (r === "scout") return "Ledbyggare";
   if (r === "kassor") return "Kassör";
   if (r === "hallvard") return "Hallvärd";
+  if (r === "uthyrare") return "Uthyrare";
   return "Admin";
 }
 function extraRolesLabel_(extras) {
@@ -3486,14 +3500,16 @@ function packRolesFromChecks_(checked) {
   else if (set.scout) primary = "scout";
   else if (set.kassor) primary = "kassor";
   else if (set.hallvard) primary = "hallvard";
+  else if (set.uthyrare) primary = "uthyrare";
   if (!primary) return { ok: false, error: "Minst en roll måste vara ikryssad" };
   const extraRoles = [];
   if (set.kassor && primary !== "kassor") extraRoles.push("kassor");
   if (set.hallvard && primary !== "hallvard") extraRoles.push("hallvard");
+  if (set.uthyrare && primary !== "uthyrare") extraRoles.push("uthyrare");
   return { ok: true, role: primary, extraRoles };
 }
 function collectCheckedRoles_(idPrefix, ids) {
-  return (ids || ["scout", "admin", "superadmin", "kassor", "hallvard"]).filter((id) => {
+  return (ids || ["scout", "admin", "superadmin", "kassor", "hallvard", "uthyrare"]).filter((id) => {
     const el = document.getElementById(idPrefix + id);
     return !!(el && el.checked);
   });
@@ -3526,7 +3542,8 @@ function roleCheckboxesHtml_(idPrefix, checkedRoles, opts) {
         { id: "admin", label: "Admin" },
         { id: "superadmin", label: "Superadmin" },
         { id: "kassor", label: "Kassör" },
-        { id: "hallvard", label: "Hallvärd" }
+        { id: "hallvard", label: "Hallvärd" },
+        { id: "uthyrare", label: "Uthyrare" }
       ];
   return `<div class="small mb-1" style="color:var(--muted);">Roller — kryssa alla som ska gälla</div>
     <div class="d-flex flex-wrap gap-3">
@@ -3665,6 +3682,7 @@ function showLoginGate_() {
   hideWellnessOverlay_();
   hideInspOverlay_();
   document.getElementById("app-admin").classList.remove("show");
+  hideLoadingScreen();
   document.getElementById("login-panel").classList.add("show");
   document.getElementById("login-error").style.display = "none";
   loginInFlight_ = false;
@@ -3740,6 +3758,7 @@ function showAppShell_() {
   if (!hasWallflowAccess_()) {
     document.getElementById("app-public").classList.remove("ready");
     if (currentUser.firstLogin) openSettings();
+    else if (canManageRental_() && !canReportHallvard_() && !canTreasurer_()) location.replace("uthyrning.html");
     else openTimeTool();
     if (isVerifRoute_()) openVerifTool();
     return;
@@ -3955,6 +3974,12 @@ function normalizeRoute_(r) {
 function startAppBoot_() {
   if (startAppBoot_._started) return;
   startAppBoot_._started = true;
+  if ((location.hash || "") === "#relogin") {
+    if (history.replaceState) history.replaceState(null, "", location.pathname + location.search);
+    hideLoadingScreen();
+    forceRelogin_("Du har loggats ut. Logga in igen för att fortsätta.");
+    return;
+  }
   if (USE_DEMO) {
     var banner = document.getElementById("demo-banner");
     if (banner) banner.style.display = "block";
@@ -3990,6 +4015,10 @@ function bootAppData_() {
         if (data.me.role) currentUser.role = normalizeRole_(data.me.role);
         currentUser.extraRoles = parseExtraRoles_(data.me.extraRoles);
         saveSession_(!!(localStorage.getItem(SESSION_STORAGE_KEY)));
+      } else if (currentUser.authorized && __sessionToken) {
+        hideLoadingScreen();
+        forceRelogin_("Sessionen har gått ut. Logga in igen för att fortsätta.");
+        return;
       }
       showAppShell_();
       filterData();
@@ -4002,8 +4031,7 @@ function bootAppData_() {
         currentUser = { authorized: false, role: null, extraRoles: [], username: null, firstLogin: false };
         __sessionToken = null;
         hideLoadingScreen();
-        showLoginGate_();
-        showToast("Sessionen har gått ut — logga in igen");
+        forceRelogin_("Sessionen har gått ut. Logga in igen för att fortsätta.");
         return;
       }
       const seeded = seedDemoDb_();
@@ -6029,6 +6057,12 @@ function openInspToolFromMenu_() {
   closeAccountMenu_();
   openInspTool();
 }
+function openRentalFromMenu_() {
+  closeAccountMenu_();
+  if (!canManageRental_()) return showToast("Saknar behörighet");
+  if (currentUser.firstLogin) return showToast("Byt lösenord först");
+  location.href = "uthyrning.html";
+}
 function openAdministrationFromMenu_() {
   closeAccountMenu_();
   openAdministration();
@@ -6338,11 +6372,12 @@ function checkLogin() {
 
   google.script.run
     .withSuccessHandler((res) => {
-      if (!loginInFlight_) return; // timeout har redan låst upp
+      if (!loginInFlight_) return;
       if (!res || !res.authorized) {
         endLoginAttempt_({ error: (res && res.error) || true });
         return;
       }
+      reloginPending_ = false;
       currentUser = {
         authorized: true,
         role: normalizeRole_(res.role || "admin"),
@@ -6370,19 +6405,30 @@ function checkLogin() {
     })
     .verifyAdminPassword(user, pw);
 }
-function logoutAdmin() {
+let reloginPending_ = false;
+function forceRelogin_(message) {
+  if (reloginPending_) return;
+  reloginPending_ = true;
   currentUser = { authorized: false, role: null, extraRoles: [], username: null, firstLogin: false };
   __sessionToken = null;
   clearStoredSession_();
-  document.getElementById("app-admin").classList.remove("show");
-  document.getElementById("app-time").classList.remove("show");
-  document.getElementById("app-verif").classList.remove("show");
+  const admin = document.getElementById("app-admin");
+  if (admin) admin.classList.remove("show");
+  const time = document.getElementById("app-time");
+  if (time) time.classList.remove("show");
+  const verif = document.getElementById("app-verif");
+  if (verif) verif.classList.remove("show");
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
+  if (typeof closeCatalogTool === "function") closeCatalogTool();
   closePanel();
   showLoginGate_();
-  showToast("Utloggad");
+  const lead = document.getElementById("login-lead");
+  if (lead) lead.textContent = message || "Du har loggats ut. Logga in igen för att fortsätta.";
+}
+function logoutAdmin() {
+  forceRelogin_("Du är utloggad. Logga in igen för att fortsätta.");
 }
 
 function renderForcePasswordChange() {
@@ -7840,7 +7886,8 @@ function createUser() {
       let msg =
         payload.role === "hallvard" ? "Hallvärd skapad"
           : (payload.role === "kassor" ? "Kassör skapad"
-            : (userRole_() === "admin" ? "Ledbyggare skapad" : "Användare skapad"));
+            : (payload.role === "uthyrare" ? "Uthyrare skapad"
+              : (userRole_() === "admin" ? "Ledbyggare skapad" : "Användare skapad")));
       if (payload.sendInvite) {
         msg += res.mailSent ? " — välkomstmejl skickat" : (" men mejlet gick inte: " + ((res && res.mailError) || "okänt fel"));
       }

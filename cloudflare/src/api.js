@@ -117,6 +117,7 @@ import {
   uploadKioskProductImage,
   voidKioskSale
 } from "./catalog.js";
+import { rentalAdmin } from "./rental.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -193,6 +194,8 @@ export async function dispatch(env, action, token, args, extras) {
       return updateUserEmail(env, args[0], args[1], session);
     case "updateUserRoles":
       return updateUserRoles(env, args[0], session);
+    case "rentalAdmin":
+      return rentalAdmin(env, args[0], session);
     case "setRouteLifetimeDays":
       return setRouteLifetimeDays(env, args[0], session);
     case "setBaseUrlQr":
@@ -504,8 +507,11 @@ async function createNewAdmin(env, payload, session) {
     role = "scout";
   }
 
-  if ((role === "kassor" || role === "hallvard") && !isSuperadminRole(roleOf(session))) {
-    return { ok: false, error: "Bara superadmin kan lägga till kassör och hallvärd" };
+  if ((role === "kassor" || role === "hallvard" || role === "uthyrare") && !isSuperadminRole(roleOf(session))) {
+    return { ok: false, error: "Bara superadmin kan lägga till kassör, hallvärd och uthyrare" };
+  }
+  if (extraRoles.indexOf("uthyrare") >= 0 && !isSuperadminRole(roleOf(session))) {
+    return { ok: false, error: "Bara superadmin kan lägga till uthyrare" };
   }
 
   if (await findUser(env, username)) {

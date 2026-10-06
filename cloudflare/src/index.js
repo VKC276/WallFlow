@@ -12,6 +12,7 @@ import { publicCatalog, readCatalogRevision } from "./catalog.js";
 import { serveImage } from "./images.js";
 import { serveVerifPdf } from "./verif.js";
 import { purgeExpiredWellnessReceipts } from "./friskvard.js";
+import { bridgeAuthorized, listUthyrareEmails } from "./rental.js";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -84,6 +85,18 @@ export default {
             ...CORS_HEADERS
           }
         });
+      } catch (err) {
+        return jsonResponse({ ok: false, error: String(err && err.message ? err.message : err) }, 500);
+      }
+    }
+
+    if (url.pathname === "/internal/uthyrare-emails") {
+      if (!bridgeAuthorized(env, request)) {
+        return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
+      }
+      try {
+        const emails = await listUthyrareEmails(env);
+        return jsonResponse({ ok: true, emails });
       } catch (err) {
         return jsonResponse({ ok: false, error: String(err && err.message ? err.message : err) }, 500);
       }

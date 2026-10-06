@@ -4,8 +4,9 @@ export const SESSION_HOURS = 24 * 14;
 export const SESSION_PREFIX = "wf_sess_";
 export const RESET_PREFIX = "wf_reset_";
 export const RESET_HOURS = 2;
-export const ALL_PRIMARY_ROLES = ["superadmin", "admin", "scout", "kassor", "hallvard"];
+export const ALL_PRIMARY_ROLES = ["superadmin", "admin", "scout", "kassor", "hallvard", "uthyrare"];
 export const APPLICANT_ROLES = ["scout", "kassor", "hallvard"];
+const EXTRA_ROLES = ["kassor", "hallvard", "uthyrare"];
 
 export function normalizeRole(role) {
   let r = String(role == null ? "" : role).trim().toLowerCase();
@@ -15,8 +16,10 @@ export function normalizeRole(role) {
   if (r === "scout" || r === "developer" || r === "ledbyggare" || r === "sattare" || r === "setter") return "scout";
   if (r === "kassor" || r === "treasurer") return "kassor";
   if (r === "hallvard" || r === "host") return "hallvard";
+  if (r === "uthyrare" || r === "uthyrning" || r === "rental") return "uthyrare";
   if (r === "admin" || r === "administrator" || r === "administratoer") return "admin";
   if (r.indexOf("super") >= 0) return "superadmin";
+  if (r.indexOf("uthyr") >= 0 || r.indexOf("rental") >= 0) return "uthyrare";
   if (r.indexOf("kassor") >= 0) return "kassor";
   if (r.indexOf("hallv") >= 0) return "hallvard";
   if (r.indexOf("ledbygg") >= 0 || r.indexOf("satt") >= 0 || r.indexOf("scout") >= 0) return "scout";
@@ -31,7 +34,7 @@ export function parseExtraRoles(raw) {
   const out = [];
   for (const part of parts) {
     const n = normalizeRole(part);
-    if ((n === "kassor" || n === "hallvard") && out.indexOf(n) < 0) out.push(n);
+    if (EXTRA_ROLES.indexOf(n) >= 0 && out.indexOf(n) < 0) out.push(n);
   }
   return out;
 }
@@ -98,6 +101,15 @@ export function isKassorRole(role) {
 
 export function isHallvardRole(role) {
   return normalizeRole(role) === "hallvard";
+}
+
+export function isUthyrareRole(role) {
+  return normalizeRole(role) === "uthyrare";
+}
+
+/** Uthyrningens admin. Superadmin får den bara om rollen är ikryssad. */
+export function canManageRental(session) {
+  return hasRole(session, "uthyrare");
 }
 
 export function isAdminActor(session) {
