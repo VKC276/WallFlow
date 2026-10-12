@@ -220,6 +220,35 @@ export async function mailVerification(env, opts) {
   await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
 }
 
+/** Kassör notifieras om ett utlägg som ska betalas ut. Länk till den sparade PDF:en, ingen bilaga. */
+export async function mailPayoutUnderlag(env, opts) {
+  const meta = opts.meta || {};
+  const member = [meta.firstName, meta.lastName].filter(Boolean).join(" ") || String(meta.purchaser || "");
+  const messages = [];
+  for (const person of opts.recipients || []) {
+    const to = String(person && person.email || "").trim();
+    if (!to) continue;
+    const composed = compose({
+      name: person.name || "Kassör",
+      subject: "nytt utläggsunderlag",
+      intro: "Ett nytt underlag har skapats för ett utlägg som ska betalas ut till medlem. Länken öppnar PDF:en med försättsblad och kvitton.",
+      rows: [
+        { label: "Medlem", value: member || "—" },
+        { label: "Datum", value: String(meta.purchaseDate || "") },
+        { label: "Belopp", value: formatSekSv(meta.total) },
+        { label: "Inskickat av", value: String(opts.submitterName || "") },
+        { label: "Bokföringsinkorg", value: String(opts.archiveEmail || "") }
+      ],
+      notes: ["Länken går till det skapade underlaget. Medlemmen tar bara hem en kopia och ska inte skicka den till dig."],
+      ctaLabel: "Öppna underlaget",
+      ctaUrl: opts.downloadUrl
+    });
+    messages.push(toMessage(to, composed));
+  }
+  if (!messages.length) throw new Error("Ingen kassör med e-post");
+  await sendMessages(env, messages);
+}
+
 export async function mailWellnessReceipt(env, opts) {
   const meta = opts.meta || {};
   const composed = compose({

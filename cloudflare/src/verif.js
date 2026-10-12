@@ -1,9 +1,9 @@
 /** Utlägg och verifikationer: inställningar, PDF-lagring, mejl. */
 
-import { getSetting, setSetting, todayStockholm } from "./db.js";
-import { isSuperadminRole, roleOf, validateEmail } from "./auth.js";
+import { getSetting, readUsers, setSetting, todayStockholm } from "./db.js";
+import { hasRole, isSuperadminRole, isUserActive, roleOf, validateEmail } from "./auth.js";
 import { roundMoney } from "./time.js";
-import { mailVerification } from "./mail.js";
+import { mailPayoutUnderlag, mailVerification } from "./mail.js";
 
 export const VERIF_ARCHIVE_EMAIL_KEY = "verifArchiveEmail";
 export const DEFAULT_VERIF_ARCHIVE_EMAIL = "inbox.ver.1624638@arkivplats.se";
@@ -23,6 +23,23 @@ export function isVerifPdfKey(key) {
   return /^verif\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/i.test(
     String(key || "").trim()
   );
+}
+
+async function listKassorRecipients(env) {
+  const users = await readUsers(env);
+  const out = [];
+  const seen = new Set();
+  for (const u of users) {
+    if (!isUserActive(u) || !hasRole(u, "kassor")) continue;
+    const check = validateEmail(u.email);
+    if (!check.ok || seen.has(check.email)) continue;
+    seen.add(check.email);
+    out.push({
+      email: check.email,
+      name: String(u.name || u.username || "Kassör").trim() || "Kassör"
+    });
+  }
+  return out;
 }
 
 export async function readVerifArchiveEmail(env) {
@@ -185,16 +202,37 @@ export async function submitVerification(env, payload, session, user, origin) {
     orgNr: VERIF_ORG_NR
   };
 
+  let notifiedKassor = 0;
   try {
-    await mailVerification(env, {
-      to: mailCheck.email,
-      name: user.name || user.username,
-      archiveEmail,
-      downloadUrl,
-      filename,
-      pdfBytes: bytes,
-      meta
-    });
+    if (clubCard) {
+      await mailVerification(env, {
+        to: mailCheck.email,
+        name: user.name || user.username,
+        archiveEmail,
+        downloadUrl,
+        filename,
+        pdfBytes: bytes,
+        meta
+      });
+    } else {
+      const recipients = await listKassorRecipients(env);
+      if (!recipients.length) {
+        return {
+          ok: false,
+          error: "Underlaget är sparat, men ingen aktiv kassör med e-post kunde notifieras.",
+          downloadUrl,
+          filename
+        };
+      }
+      await mailPayoutUnderlag(env, {
+        recipients,
+        downloadUrl,
+        archiveEmail,
+        submitterName: (user && (user.name || user.username)) || "",
+        meta
+      });
+      notifiedKassor = recipients.length;
+    }
   } catch (err) {
     return {
       ok: false,
@@ -211,7 +249,8 @@ export async function submitVerification(env, payload, session, user, origin) {
     total,
     archiveEmail,
     downloadUrl,
-    filename
+    filename,
+    notifiedKassor
   };
 }
 
