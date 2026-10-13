@@ -9909,12 +9909,12 @@ function renderVerifReview_(item, pendingCount) {
     ? `<p class="small mb-0" style="color:var(--muted);">Skickad till bokföringsinkorgen.</p>`
     : `<p class="small mb-0" style="color:var(--muted);">När underlaget stämmer skickas PDF:en till <strong>${escapeHtml_(verifArchiveEmail_)}</strong>.</p>
        <button class="btn btn-accent w-100" type="button" id="verif-send-archive" onclick="sendVerifUnderlag_('${escapeHtml_(item.id)}')">Granskad - skicka till bokföringsinkorg</button>
+       <button class="btn btn-outline-danger w-100" type="button" id="verif-reject" onclick="rejectVerifUnderlag_('${escapeHtml_(item.id)}')">Avslå</button>
        <div>
          <label class="form-label" for="verif-reject-reason">Orsak till avslag</label>
          <textarea id="verif-reject-reason" class="form-control" rows="3" maxlength="500" placeholder="Valfritt. Skickas till den som lämnade in underlaget."></textarea>
          <p class="small mt-2 mb-0" style="color:var(--muted);">Avslag meddelar den som skickade in och tar bort blanketten från kön.</p>
-       </div>
-       <button class="btn btn-outline-danger w-100" type="button" id="verif-reject" onclick="rejectVerifUnderlag_('${escapeHtml_(item.id)}')">Avslå</button>`;
+       </div>`;
   const remove = sent
     ? `<button class="btn btn-outline-danger w-100" type="button" id="verif-delete" onclick="deleteVerifUnderlag_('${escapeHtml_(item.id)}')">Rensa från listan</button>`
     : "";
