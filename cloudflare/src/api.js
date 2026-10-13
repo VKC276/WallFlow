@@ -78,7 +78,9 @@ import {
 import { clipInviteMessage, mailAccountActivated, mailAccountApplication, mailPasswordReset, mailWelcome } from "./mail.js";
 import {
   getVerifApp,
+  listVerifUnderlag,
   saveVerifSettingsAction,
+  sendVerifUnderlag,
   submitVerification
 } from "./verif.js";
 import {
@@ -217,6 +219,12 @@ export async function dispatch(env, action, token, args, extras) {
     case "submitVerification": {
       const me = await findUser(env, session.username);
       return submitVerification(env, args[0], session, me, extras && extras.origin);
+    }
+    case "listVerifUnderlag":
+      return listVerifUnderlag(env, session, extras && extras.origin);
+    case "sendVerifUnderlag": {
+      const reviewer = await findUser(env, session.username);
+      return sendVerifUnderlag(env, args[0], session, reviewer);
     }
     case "listTencards":
       return listTencardsAction(env, session);

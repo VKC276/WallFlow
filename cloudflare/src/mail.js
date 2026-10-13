@@ -220,33 +220,70 @@ export async function mailVerification(env, opts) {
   await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
 }
 
-/** Kassör notifieras om ett utlägg som ska betalas ut. Länk till den sparade PDF:en, ingen bilaga. */
-export async function mailPayoutUnderlag(env, opts) {
+export function underlagReviewUrl(env, id) {
+  return appBaseUrl(env) + "/#utlagg=" + encodeURIComponent(id);
+}
+
+/** Kassör notifieras om utlägg och klubbkort. Länken öppnar granskningen i appen. */
+export async function mailUnderlagNotice(env, opts) {
   const meta = opts.meta || {};
-  const member = [meta.firstName, meta.lastName].filter(Boolean).join(" ") || String(meta.purchaser || "");
+  const clubCard = !!meta.clubCard;
+  const member = clubCard
+    ? String(meta.purchaser || "")
+    : ([meta.firstName, meta.lastName].filter(Boolean).join(" ") || String(meta.purchaser || ""));
   const messages = [];
   for (const person of opts.recipients || []) {
-    const to = String(person && person.email || "").trim();
+    const to = String((person && person.email) || "").trim();
     if (!to) continue;
     const composed = compose({
       name: person.name || "Kassör",
-      subject: "nytt utläggsunderlag",
-      intro: "Ett nytt underlag har skapats för ett utlägg som ska betalas ut till medlem. Länken öppnar PDF:en med försättsblad och kvitton.",
+      subject: "nytt underlag att granska",
+      intro: "Ett nytt underlag väntar i WallFlow. Öppna granskningen, ladda ner PDF:en om du vill, och skicka den till bokföringsinkorgen när den är granskad.",
       rows: [
-        { label: "Medlem", value: member || "—" },
+        { label: "Typ", value: clubCard ? "Klubbkort — redan betalt" : "Utlägg — utbetalning till medlem" },
+        { label: clubCard ? "Köpare" : "Medlem", value: member || "—" },
         { label: "Datum", value: String(meta.purchaseDate || "") },
         { label: "Belopp", value: formatSekSv(meta.total) },
-        { label: "Inskickat av", value: String(opts.submitterName || "") },
-        { label: "Bokföringsinkorg", value: String(opts.archiveEmail || "") }
+        { label: "Inskickat av", value: String(opts.submitterName || "") }
       ],
-      notes: ["Länken går till det skapade underlaget. Medlemmen tar bara hem en kopia och ska inte skicka den till dig."],
-      ctaLabel: "Öppna underlaget",
-      ctaUrl: opts.downloadUrl
+      notes: ["Medlemmen tar bara hem en kopia och ska inte skicka underlaget till dig."],
+      ctaLabel: "Öppna granskningen",
+      ctaUrl: opts.reviewUrl
     });
     messages.push(toMessage(to, composed));
   }
   if (!messages.length) throw new Error("Ingen kassör med e-post");
   await sendMessages(env, messages);
+}
+
+/** Granskat underlag, med PDF bifogad, till bokföringsinkorgen. */
+export async function mailUnderlagToArchive(env, opts) {
+  const meta = opts.meta || {};
+  const clubCard = !!meta.clubCard;
+  const composed = compose({
+    name: "bokföring",
+    subject: clubCard ? "verifikation (klubbkort)" : "utlägg att bokföra",
+    intro: "Kassör har granskat underlaget. PDF:en med försättsblad och kvitton ligger bifogad.",
+    rows: [
+      { label: "Typ", value: clubCard ? "Klubbkort — redan betalt" : "Utlägg — utbetalning till medlem" },
+      { label: clubCard ? "Köpare" : "Medlem", value: String(meta.memberName || "—") },
+      { label: "Datum", value: String(meta.purchaseDate || "") },
+      { label: "Belopp", value: formatSekSv(meta.total) },
+      { label: "Granskad av", value: String(opts.reviewerName || "") }
+    ],
+    notes: ["Bilagan är underlaget som ska in i bokföringen."]
+  });
+  const attachments = [];
+  if (opts.pdfBytes && opts.filename) {
+    attachments.push({
+      filename: String(opts.filename),
+      name: String(opts.filename),
+      mimeType: "application/pdf",
+      type: "application/pdf",
+      content: bytesToBase64(opts.pdfBytes)
+    });
+  }
+  await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
 }
 
 export async function mailWellnessReceipt(env, opts) {

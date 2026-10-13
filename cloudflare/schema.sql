@@ -4,6 +4,7 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS verif_underlag;
 DROP TABLE IF EXISTS wellness_receipts;
 DROP TABLE IF EXISTS time_entries;
 DROP TABLE IF EXISTS routes;
@@ -75,6 +76,27 @@ CREATE TABLE wellness_receipts (
   emailed_at TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE verif_underlag (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('payout', 'club-card')),
+  pdf_key TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  purchase_date TEXT NOT NULL,
+  member_name TEXT NOT NULL,
+  member_address TEXT NOT NULL DEFAULT '',
+  purchaser TEXT NOT NULL DEFAULT '',
+  bank TEXT NOT NULL DEFAULT '',
+  clearing TEXT NOT NULL DEFAULT '',
+  account TEXT NOT NULL DEFAULT '',
+  submitter_username TEXT NOT NULL DEFAULT '',
+  submitter_name TEXT NOT NULL DEFAULT '',
+  total REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent')),
+  reviewed_at TEXT NOT NULL DEFAULT '',
+  reviewed_by TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX idx_routes_gradering ON routes (gradering);
 CREATE INDEX idx_grades_order ON grades (sort_order);
 CREATE INDEX idx_users_role ON users (role);
@@ -84,6 +106,7 @@ CREATE INDEX idx_time_entries_date ON time_entries (work_date);
 CREATE INDEX idx_time_entries_kind ON time_entries (kind);
 CREATE INDEX idx_wellness_issued ON wellness_receipts (issued_at DESC);
 CREATE INDEX idx_wellness_receipt_no ON wellness_receipts (receipt_no);
+CREATE INDEX idx_verif_underlag_status ON verif_underlag (status, created_at);
 
 INSERT INTO settings (key, value) VALUES ('timeLedbyggHourlyRate', '0');
 INSERT INTO settings (key, value) VALUES ('timeMinPayout', '0');

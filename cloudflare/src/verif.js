@@ -3,7 +3,7 @@
 import { getSetting, readUsers, setSetting, todayStockholm } from "./db.js";
 import { hasRole, isSuperadminRole, isUserActive, roleOf, validateEmail } from "./auth.js";
 import { roundMoney } from "./time.js";
-import { mailPayoutUnderlag, mailVerification } from "./mail.js";
+import { mailUnderlagNotice, mailUnderlagToArchive, underlagReviewUrl } from "./mail.js";
 
 export const VERIF_ARCHIVE_EMAIL_KEY = "verifArchiveEmail";
 export const DEFAULT_VERIF_ARCHIVE_EMAIL = "inbox.ver.1624638@arkivplats.se";
@@ -17,6 +17,10 @@ export function canUseVerifTool(session) {
 
 export function canManageVerifSettings(session) {
   return isSuperadminRole(roleOf(session));
+}
+
+export function canReviewVerif(session) {
+  return isSuperadminRole(roleOf(session)) || hasRole(session, "kassor");
 }
 
 export function isVerifPdfKey(key) {
@@ -202,37 +206,55 @@ export async function submitVerification(env, payload, session, user, origin) {
     orgNr: VERIF_ORG_NR
   };
 
+  const memberName = clubCard
+    ? purchaser
+    : ([firstName, lastName].filter(Boolean).join(" ") || purchaser);
+  const memberAddress = clubCard ? "" : [address, postalCode, city].filter(Boolean).join(", ");
+  try {
+    await insertVerifUnderlag(env, {
+      id,
+      kind: clubCard ? "club-card" : "payout",
+      pdfKey: key,
+      filename,
+      createdAt: new Date().toISOString(),
+      purchaseDate,
+      memberName,
+      memberAddress,
+      purchaser: clubCard ? purchaser : memberName,
+      bank: clubCard ? "" : bank,
+      clearing: clubCard ? "" : clearing,
+      account: clubCard ? "" : account,
+      submitterUsername: String((session && session.username) || ""),
+      submitterName: (user && (user.name || user.username)) || "",
+      total
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: "PDF sparad men underlaget kunde inte läggas i granskningskön: " + String(err && err.message ? err.message : err),
+      downloadUrl,
+      filename
+    };
+  }
+
   let notifiedKassor = 0;
   try {
-    if (clubCard) {
-      await mailVerification(env, {
-        to: mailCheck.email,
-        name: user.name || user.username,
-        archiveEmail,
+    const recipients = await listKassorRecipients(env);
+    if (!recipients.length) {
+      return {
+        ok: false,
+        error: "Underlaget är sparat, men ingen aktiv kassör med e-post kunde notifieras.",
         downloadUrl,
-        filename,
-        pdfBytes: bytes,
-        meta
-      });
-    } else {
-      const recipients = await listKassorRecipients(env);
-      if (!recipients.length) {
-        return {
-          ok: false,
-          error: "Underlaget är sparat, men ingen aktiv kassör med e-post kunde notifieras.",
-          downloadUrl,
-          filename
-        };
-      }
-      await mailPayoutUnderlag(env, {
-        recipients,
-        downloadUrl,
-        archiveEmail,
-        submitterName: (user && (user.name || user.username)) || "",
-        meta
-      });
-      notifiedKassor = recipients.length;
+        filename
+      };
     }
+    await mailUnderlagNotice(env, {
+      recipients,
+      reviewUrl: underlagReviewUrl(env, id),
+      submitterName: (user && (user.name || user.username)) || "",
+      meta
+    });
+    notifiedKassor = recipients.length;
   } catch (err) {
     return {
       ok: false,
@@ -252,6 +274,108 @@ export async function submitVerification(env, payload, session, user, origin) {
     filename,
     notifiedKassor
   };
+}
+
+async function insertVerifUnderlag(env, row) {
+  await env.DB.prepare(
+    `INSERT INTO verif_underlag (
+      id, kind, pdf_key, filename, created_at, purchase_date, member_name, member_address,
+      purchaser, bank, clearing, account, submitter_username, submitter_name, total, status, reviewed_at, reviewed_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '', '')`
+  ).bind(
+    row.id,
+    row.kind,
+    row.pdfKey,
+    row.filename,
+    row.createdAt,
+    row.purchaseDate,
+    row.memberName,
+    row.memberAddress || "",
+    row.purchaser || "",
+    row.bank || "",
+    row.clearing || "",
+    row.account || "",
+    row.submitterUsername || "",
+    row.submitterName || "",
+    row.total
+  ).run();
+}
+
+function mapVerifUnderlag(env, row, origin) {
+  return {
+    id: row.id,
+    kind: row.kind === "club-card" ? "club-card" : "payout",
+    filename: row.filename,
+    createdAt: row.created_at || "",
+    purchaseDate: row.purchase_date || "",
+    memberName: row.member_name || "",
+    memberAddress: row.member_address || "",
+    purchaser: row.purchaser || "",
+    bank: row.bank || "",
+    clearing: row.clearing || "",
+    account: row.account || "",
+    submitterName: row.submitter_name || "",
+    total: Number(row.total) || 0,
+    status: row.status === "sent" ? "sent" : "pending",
+    reviewedAt: row.reviewed_at || "",
+    reviewedBy: row.reviewed_by || "",
+    downloadUrl: appVerifUrl(env, row.pdf_key, origin)
+  };
+}
+
+export async function listVerifUnderlag(env, session, origin) {
+  if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan granska underlag" };
+  const archiveEmail = await readVerifArchiveEmail(env);
+  try {
+    const res = await env.DB.prepare(
+      "SELECT * FROM verif_underlag ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 200"
+    ).all();
+    return {
+      ok: true,
+      archiveEmail,
+      items: (res.results || []).map((row) => mapVerifUnderlag(env, row, origin))
+    };
+  } catch (err) {
+    return { ok: false, error: "Kunde inte hämta underlag: " + String(err && err.message ? err.message : err) };
+  }
+}
+
+export async function sendVerifUnderlag(env, idOrPayload, session, user) {
+  if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan granska underlag" };
+  const id = String(typeof idOrPayload === "string" ? idOrPayload : (idOrPayload && idOrPayload.id) || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "Underlaget hittades inte" };
+  const row = await env.DB.prepare("SELECT * FROM verif_underlag WHERE id = ?").bind(id).first();
+  if (!row) return { ok: false, error: "Underlaget hittades inte" };
+  if (row.status === "sent") return { ok: false, error: "Underlaget är redan skickat till bokföringen" };
+  const obj = await env.BILDER.get(row.pdf_key);
+  if (!obj) return { ok: false, error: "PDF:en saknas" };
+  const bytes = new Uint8Array(await obj.arrayBuffer());
+  const archiveEmail = await readVerifArchiveEmail(env);
+  const reviewerName = (user && (user.name || user.username)) || (session && session.username) || "Kassör";
+  try {
+    await mailUnderlagToArchive(env, {
+      to: archiveEmail,
+      filename: row.filename,
+      pdfBytes: bytes,
+      reviewerName,
+      meta: {
+        clubCard: row.kind === "club-card",
+        memberName: row.member_name,
+        purchaseDate: row.purchase_date,
+        total: row.total
+      }
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: "Kunde inte skicka till bokföringsinkorgen: " + String(err && err.message ? err.message : err)
+    };
+  }
+  const reviewedAt = new Date().toISOString();
+  await env.DB.prepare(
+    "UPDATE verif_underlag SET status = 'sent', reviewed_at = ?, reviewed_by = ? WHERE id = ? AND status = 'pending'"
+  ).bind(reviewedAt, String((session && session.username) || ""), id).run();
+  return { ok: true, id, status: "sent", reviewedAt };
 }
 
 export function appVerifUrl(env, key, origin) {
