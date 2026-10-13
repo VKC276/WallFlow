@@ -1,9 +1,9 @@
 /** Utlägg och verifikationer: inställningar, PDF-lagring, mejl. */
 
-import { getSetting, readUsers, setSetting, todayStockholm } from "./db.js";
+import { findUser, getSetting, readUsers, setSetting, todayStockholm } from "./db.js";
 import { hasRole, isSuperadminRole, isUserActive, roleOf, validateEmail } from "./auth.js";
 import { roundMoney } from "./time.js";
-import { mailUnderlagNotice, mailUnderlagToArchive, underlagReviewUrl } from "./mail.js";
+import { mailUnderlagNotice, mailUnderlagRejected, mailUnderlagToArchive, underlagReviewUrl } from "./mail.js";
 
 export const VERIF_ARCHIVE_EMAIL_KEY = "verifArchiveEmail";
 export const VERIF_RETENTION_DAYS_KEY = "verifRetentionDays";
@@ -420,6 +420,47 @@ export async function clearSentVerifUnderlag(env, session) {
   return { ok: true, deleted: rows.length };
 }
 
+export async function rejectVerifUnderlag(env, idOrPayload, session, user) {
+  if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan avslå underlag" };
+  const payload = typeof idOrPayload === "string" ? { id: idOrPayload } : (idOrPayload || {});
+  const id = String(payload.id || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "Underlaget hittades inte" };
+  const reason = String(payload.reason || "").replace(/\s+/g, " ").trim().slice(0, 500);
+  const row = await env.DB.prepare("SELECT * FROM verif_underlag WHERE id = ?").bind(id).first();
+  if (!row) return { ok: false, error: "Underlaget hittades inte" };
+  if (row.status !== "pending") {
+    return { ok: false, error: "Bara underlag som väntar på granskning kan avslås" };
+  }
+  const submitter = await findUser(env, row.submitter_username);
+  const to = String((submitter && submitter.email) || "").trim().toLowerCase();
+  const mailCheck = validateEmail(to);
+  const reviewerName = (user && (user.name || user.username)) || (session && session.username) || "Kassör";
+  if (mailCheck.ok) {
+    try {
+      await mailUnderlagRejected(env, {
+        to: mailCheck.email,
+        name: (submitter && (submitter.name || submitter.username)) || row.submitter_name || "",
+        reason,
+        reviewerName,
+        meta: {
+          clubCard: row.kind === "club-card",
+          memberName: row.member_name,
+          purchaseDate: row.purchase_date,
+          total: row.total
+        }
+      });
+    } catch (err) {
+      return {
+        ok: false,
+        error: "Kunde inte meddela den som skickade in: " + String(err && err.message ? err.message : err)
+      };
+    }
+  }
+  await deleteVerifPdfKey(env, row.pdf_key);
+  await env.DB.prepare("DELETE FROM verif_underlag WHERE id = ? AND status = 'pending'").bind(id).run();
+  return { ok: true, id, rejected: true, notified: mailCheck.ok };
+}
+
 export async function sendVerifUnderlag(env, idOrPayload, session, user) {
   if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan granska underlag" };
   const id = String(typeof idOrPayload === "string" ? idOrPayload : (idOrPayload && idOrPayload.id) || "").trim();
@@ -427,6 +468,7 @@ export async function sendVerifUnderlag(env, idOrPayload, session, user) {
   const row = await env.DB.prepare("SELECT * FROM verif_underlag WHERE id = ?").bind(id).first();
   if (!row) return { ok: false, error: "Underlaget hittades inte" };
   if (row.status === "sent") return { ok: false, error: "Underlaget är redan skickat till bokföringen" };
+  if (row.status !== "pending") return { ok: false, error: "Underlaget kan inte skickas" };
   const obj = await env.BILDER.get(row.pdf_key);
   if (!obj) return { ok: false, error: "PDF:en saknas" };
   const bytes = new Uint8Array(await obj.arrayBuffer());

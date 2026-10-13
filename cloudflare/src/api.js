@@ -81,6 +81,7 @@ import {
   deleteVerifUnderlag,
   getVerifApp,
   listVerifUnderlag,
+  rejectVerifUnderlag,
   saveVerifSettingsAction,
   sendVerifUnderlag,
   submitVerification
@@ -227,6 +228,10 @@ export async function dispatch(env, action, token, args, extras) {
     case "sendVerifUnderlag": {
       const reviewer = await findUser(env, session.username);
       return sendVerifUnderlag(env, args[0], session, reviewer);
+    }
+    case "rejectVerifUnderlag": {
+      const rejecter = await findUser(env, session.username);
+      return rejectVerifUnderlag(env, args[0], session, rejecter);
     }
     case "deleteVerifUnderlag":
       return deleteVerifUnderlag(env, args[0], session);

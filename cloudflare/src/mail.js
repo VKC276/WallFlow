@@ -288,6 +288,29 @@ export async function mailUnderlagToArchive(env, opts) {
   await sendMessages(env, [toMessage(opts.to, composed, attachments)]);
 }
 
+/** Medlemmen notifieras när kassör avslår ett underlag. */
+export async function mailUnderlagRejected(env, opts) {
+  const meta = opts.meta || {};
+  const clubCard = !!meta.clubCard;
+  const reason = String(opts.reason || "").trim();
+  const composed = compose({
+    name: opts.name,
+    subject: "underlag avslaget",
+    intro: "Kassör har avslagit ditt underlag. Det skickas inte till bokföringen. Skapa ett nytt underlag om du vill lämna in det igen.",
+    rows: [
+      { label: "Typ", value: clubCard ? "Klubbkort — redan betalt" : "Utlägg — utbetalning till medlem" },
+      { label: clubCard ? "Köpare" : "Medlem", value: String(meta.memberName || "—") },
+      { label: "Datum", value: String(meta.purchaseDate || "") },
+      { label: "Belopp", value: formatSekSv(meta.total) },
+      { label: "Avslaget av", value: String(opts.reviewerName || "") }
+    ].concat(reason ? [{ label: "Orsak", value: reason }] : []),
+    notes: reason
+      ? []
+      : ["Ingen orsak angavs. Kontakta kassör om du behöver mer information."]
+  });
+  await sendMessages(env, [toMessage(opts.to, composed)]);
+}
+
 export async function mailWellnessReceipt(env, opts) {
   const meta = opts.meta || {};
   const composed = compose({
