@@ -2890,6 +2890,16 @@ function demoVerifApi_(store, action, args) {
     saveDemoDb_(store);
     return { ok: true, id, status: "sent", reviewedAt: item.reviewedAt };
   }
+  if (action === "rejectVerifUnderlag") {
+    if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan avslå underlag" };
+    const id = String((payload && payload.id) || args[0] || "");
+    const item = (store.verifUnderlag || []).find((x) => x.id === id);
+    if (!item) return { ok: false, error: "Underlaget hittades inte" };
+    if (item.status !== "pending") return { ok: false, error: "Bara underlag som väntar på granskning kan avslås" };
+    store.verifUnderlag = (store.verifUnderlag || []).filter((x) => x.id !== id);
+    saveDemoDb_(store);
+    return { ok: true, id, rejected: true, notified: false };
+  }
   if (action === "deleteVerifUnderlag") {
     if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan rensa underlag" };
     const id = String(args[0] || "");
@@ -3585,7 +3595,7 @@ function demoApi_(action, args) {
       if (action === "getTimeApp" || action === "addTimeEntry" || action === "getTreasurerReport" || action === "deleteTimeEntry" || action === "saveTimeSettings") {
         return ok(demoTimeApi_(store, action, args));
       }
-      if (action === "getVerifApp" || action === "saveVerifSettings" || action === "submitVerification" || action === "listVerifUnderlag" || action === "sendVerifUnderlag" || action === "deleteVerifUnderlag" || action === "clearSentVerifUnderlag") {
+      if (action === "getVerifApp" || action === "saveVerifSettings" || action === "submitVerification" || action === "listVerifUnderlag" || action === "sendVerifUnderlag" || action === "rejectVerifUnderlag" || action === "deleteVerifUnderlag" || action === "clearSentVerifUnderlag") {
         return ok(demoVerifApi_(store, action, args));
       }
       if (action === "listTencards" || action === "lookupTencard" || action === "saveTencard" || action === "clipTencard" || action === "deleteTencard") {
@@ -9249,7 +9259,7 @@ function loadVerifForm_() {
     .getVerifApp();
 }
 function verifSubmitLabel_() {
-  return "Skapa underlag och ladda ner kopia";
+  return "Skapa underlag";
 }
 function applyVerifKindCopy_() {
   const intro = document.getElementById("verif-intro");
@@ -9257,10 +9267,10 @@ function applyVerifKindCopy_() {
   const btn = document.getElementById("verif-submit");
   const login = currentUser.authorized ? "" : " Logga in först, annars kan kassör inte notifieras.";
   if (intro) {
-    intro.textContent = "Fyll i blanketten och bifoga kvitton. Kassör får underlaget i WallFlow och granskar det där. Du kan ta hem en kopia. Den är märkt som kopia, och du behöver inte skicka den till kassör." + login;
+    intro.textContent = "Fyll i blanketten och bifoga kvitton. Kassör får underlaget i WallFlow och granskar det där. Du behöver inte skicka något. Efteråt kan du ladda ner en märkt kopia om du vill." + login;
   }
   if (hint) {
-    hint.textContent = "Kassör granskar underlaget i appen och skickar det till bokföringen. Filen du tar hem är en kopia.";
+    hint.textContent = "Kassör granskar underlaget i appen och skickar det till bokföringen. Efteråt kan du ladda ner en märkt kopia om du vill.";
   }
   if (btn && !btn.disabled) btn.textContent = verifSubmitLabel_();
 }
@@ -9731,13 +9741,12 @@ async function submitVerif_() {
       total: formatSek_(pdf.total)
     });
     verifCopyDownload_ = { bytes: copyBytes, filename: copyName };
-    downloadBytes_(copyBytes, copyName);
     if (res.demo || !notified) {
-      showVerifResult_("Filen är en kopia. Kassör har inte notifierats.", "warn");
+      showVerifResult_("Underlaget är skapat. Kassör har inte notifierats. Du kan ladda ner en märkt kopia om du vill.", "warn");
     } else {
-      showVerifResult_("Kopia. Kassör granskar underlaget i WallFlow och skickar det till bokföringen. Du behöver inte skicka den här filen till kassör.", "ok");
+      showVerifResult_("Underlaget är skapat. Kassör granskar det i WallFlow. Du behöver inte skicka något. Ladda ner en märkt kopia om du vill spara den själv.", "ok");
     }
-    showToast(notified ? "Kopia nedladdad. Kassör är notifierad." : "Kopia nedladdad.");
+    showToast(notified ? "Underlag skapat. Kassör är notifierad." : "Underlag skapat.");
   } catch (err) {
     const msg = String(err && err.message ? err.message : err);
     showVerifResult_(msg, "err");
@@ -9763,13 +9772,14 @@ function showVerifResult_(message, tone) {
   if (!el) return;
   const toneClass = tone === "ok" ? "verif-banner payout" : (tone === "warn" ? "warn" : "max");
   const again = tone === "ok" || tone === "warn"
-    ? `<button class="btn btn-ghost w-100 mt-2" type="button" onclick="downloadVerifCopy_()">Ladda ner kopian igen</button>`
+    ? `<button class="btn btn-ghost w-100 mt-2" type="button" onclick="downloadVerifCopy_()">Ladda ner kopia</button>`
     : "";
   el.innerHTML = `<div class="time-banner ${toneClass}">${escapeHtml_(message)}</div>${again}`;
 }
 function downloadVerifCopy_() {
   if (!verifCopyDownload_) return showToast("Kopian finns inte kvar. Skapa underlaget igen.");
   downloadBytes_(verifCopyDownload_.bytes, verifCopyDownload_.filename);
+  showToast("Kopia nedladdad");
 }
 function verifKindLabel_(kind) {
   return kind === "club-card" ? "Klubbkort" : "Utlägg";
@@ -9880,8 +9890,9 @@ function renderVerifReview_(item, pendingCount) {
     : `<p class="small mb-3" style="color:var(--muted);">PDF:en visas här när den är sparad.</p>`;
   const send = sent
     ? `<p class="small mb-3" style="color:var(--muted);">Skickad till bokföringsinkorgen.</p>`
-    : `<p class="small mb-3" style="color:var(--muted);">När underlaget stämmer skickas PDF:en till <strong>${escapeHtml_(verifArchiveEmail_)}</strong>.</p>
-       <button class="btn btn-accent w-100 mb-2" type="button" id="verif-send-archive" onclick="sendVerifUnderlag_('${escapeHtml_(item.id)}')">Granskad - skicka till bokföringsinkorg</button>`;
+    : `<p class="small mb-3" style="color:var(--muted);">När underlaget stämmer skickas PDF:en till <strong>${escapeHtml_(verifArchiveEmail_)}</strong>. Är blanketten fel kan du avslå den.</p>
+       <button class="btn btn-accent w-100 mb-2" type="button" id="verif-send-archive" onclick="sendVerifUnderlag_('${escapeHtml_(item.id)}')">Granskad - skicka till bokföringsinkorg</button>
+       <button class="btn btn-outline-danger w-100 mb-2" type="button" id="verif-reject" onclick="rejectVerifUnderlag_('${escapeHtml_(item.id)}')">Avslå</button>`;
   const remove = sent
     ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" id="verif-delete" onclick="deleteVerifUnderlag_('${escapeHtml_(item.id)}')">Rensa från listan</button>`
     : "";
@@ -9897,6 +9908,29 @@ function renderVerifReview_(item, pendingCount) {
       <button class="btn btn-ghost w-100" type="button" id="verif-download" onclick="downloadVerifUnderlag_('${escapeHtml_(item.id)}')">Ladda ner underlag</button>
       ${remove}
     </div>`;
+}
+function rejectVerifUnderlag_(id) {
+  if (!confirm("Avslå underlaget? Den som skickade in får ett mejl, och blanketten tas bort från kön.")) return;
+  const reasonRaw = prompt("Orsak till avslag (valfritt):", "");
+  if (reasonRaw === null) return;
+  const reason = String(reasonRaw || "").trim();
+  const btn = document.getElementById("verif-reject");
+  if (btn) { btn.disabled = true; btn.textContent = "Avslår…"; }
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) {
+        if (btn) { btn.disabled = false; btn.textContent = "Avslå"; }
+        showToast((res && res.error) || "Kunde inte avslå");
+        return;
+      }
+      showToast(res.notified ? "Avslaget. Medlemmen är meddelad." : "Avslaget.");
+      loadVerifReview_("");
+    })
+    .withFailureHandler((err) => {
+      if (btn) { btn.disabled = false; btn.textContent = "Avslå"; }
+      showToast(String(err && err.message ? err.message : err));
+    })
+    .rejectVerifUnderlag({ id, reason });
 }
 function deleteVerifUnderlag_(id) {
   if (!confirm("Rensa underlaget från listan? PDF:en tas bort.")) return;
