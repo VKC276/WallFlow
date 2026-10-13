@@ -221,7 +221,9 @@ export async function mailVerification(env, opts) {
 }
 
 export function underlagReviewUrl(env, id) {
-  return appBaseUrl(env) + "/#utlagg=" + encodeURIComponent(id);
+  const leaf = String(id || "").trim();
+  // Query + hash: mejlklienter kan tappa fragment, då läser appen ?utlagg= vid start.
+  return appBaseUrl(env) + "/?utlagg=" + encodeURIComponent(leaf) + "#utlagg=" + encodeURIComponent(leaf);
 }
 
 /** Kassör notifieras om utlägg och klubbkort. Länken öppnar granskningen i appen. */

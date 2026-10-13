@@ -2849,11 +2849,11 @@ function demoVerifApi_(store, action, args) {
     };
   }
   if (action === "listVerifUnderlag") {
-    if (!canTreasurer_()) return { ok: false, error: "Bara kassör kan granska underlag" };
+    if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan granska underlag" };
     return { ok: true, archiveEmail, items: store.verifUnderlag || [] };
   }
   if (action === "sendVerifUnderlag") {
-    if (!canTreasurer_()) return { ok: false, error: "Bara kassör kan granska underlag" };
+    if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan granska underlag" };
     const id = String(args[0] || "");
     const item = (store.verifUnderlag || []).find((x) => x.id === id);
     if (!item) return { ok: false, error: "Underlaget hittades inte" };
@@ -3673,6 +3673,9 @@ function hasWallflowAccess_() {
 function canReportLedbygg_() { return hasWallflowAccess_(); }
 function canReportHallvard_() { return hasAppRole_("hallvard"); }
 function canTreasurer_() { return userRole_() === "superadmin" || hasAppRole_("kassor"); }
+function canReviewVerif_() {
+  return !!(currentUser && currentUser.authorized && (userRole_() === "superadmin" || hasAppRole_("kassor")));
+}
 function canTimeAdmin_() { return userRole_() === "superadmin"; }
 function canManageTencards_() {
   const r = userRole_();
@@ -6326,7 +6329,7 @@ function openVerifToolFromMenu_() {
   hideTencardOverlay_();
   hideWellnessOverlay_();
   hideInspOverlay_();
-  verifScreen_ = canTreasurer_() ? "review" : "form";
+  verifScreen_ = canReviewVerif_() ? "review" : "form";
   clearUtlaggHash_();
   openVerifTool();
 }
@@ -9034,7 +9037,8 @@ function clearVerifRoute_() {
   } catch (_) { /* ignore */ }
 }
 function openGuestVerifFromRoute_() {
-  verifGuest_ = !currentUser.authorized;
+  verifGuest_ = true;
+  verifScreen_ = "form";
   const login = document.getElementById("login-panel");
   if (login) login.classList.remove("show");
   openVerifTool();
@@ -9058,23 +9062,45 @@ function closeVerifTool() {
     showAppChrome_();
   }
 }
+function utlaggIdFromSearch_() {
+  try {
+    const v = new URLSearchParams(location.search || "").get("utlagg") || "";
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v.toLowerCase() : "";
+  } catch (_) {
+    return "";
+  }
+}
 function isUtlaggRoute_() {
+  if (utlaggIdFromSearch_()) return true;
   const raw = String(location.hash || "").replace(/^#/, "").split(/[?&]/)[0].toLowerCase();
   return raw === "utlagg" || /^utlagg=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(raw);
 }
 function utlaggReviewId_() {
+  const fromSearch = utlaggIdFromSearch_();
+  if (fromSearch) return fromSearch;
   const raw = String(location.hash || "").replace(/^#/, "").split(/[?&]/)[0];
   const m = /^utlagg=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(raw);
   return m ? m[1].toLowerCase() : "";
 }
+function searchWithoutUtlagg_() {
+  try {
+    const params = new URLSearchParams(location.search || "");
+    params.delete("utlagg");
+    const s = params.toString();
+    return s ? "?" + s : "";
+  } catch (_) {
+    return "";
+  }
+}
 function clearUtlaggHash_() {
-  if (!isUtlaggRoute_()) return;
-  try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* ignore */ }
+  if (!isUtlaggRoute_() && !utlaggIdFromSearch_()) return;
+  try { history.replaceState(null, "", location.pathname + searchWithoutUtlagg_()); } catch (_) { /* ignore */ }
 }
 function setUtlaggHash_(id) {
   const next = id ? "#utlagg=" + id : "#utlagg";
-  if (location.hash === next) return;
-  try { history.replaceState(null, "", location.pathname + location.search + next); } catch (_) { /* ignore */ }
+  const base = location.pathname + searchWithoutUtlagg_() + next;
+  if (location.pathname + location.search + location.hash === base) return;
+  try { history.replaceState(null, "", base); } catch (_) { /* ignore */ }
 }
 function openVerifTool() {
   document.getElementById("app-admin").classList.remove("show");
@@ -9088,14 +9114,22 @@ function openVerifTool() {
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
   showAppChrome_();
+  // /verifikation och gästläge är bara blanketten — aldrig granskning.
+  if (verifGuest_ || !currentUser.authorized || isVerifRoute_()) {
+    verifScreen_ = "form";
+    loadVerifForm_();
+    return;
+  }
   const reviewId = utlaggReviewId_();
-  if (reviewId) verifScreen_ = "review";
-  else if (!verifScreen_) verifScreen_ = canTreasurer_() ? "review" : "form";
-  if (verifScreen_ === "review" && !canTreasurer_()) {
+  if (reviewId && canReviewVerif_()) verifScreen_ = "review";
+  else if (reviewId && !canReviewVerif_()) {
     showToast("Bara kassör kan granska underlag");
     verifScreen_ = "form";
+  } else if (!verifScreen_) verifScreen_ = canReviewVerif_() ? "review" : "form";
+  if (verifScreen_ === "review" && !canReviewVerif_()) {
+    verifScreen_ = "form";
   }
-  if (verifScreen_ === "review" && canTreasurer_()) {
+  if (verifScreen_ === "review" && canReviewVerif_()) {
     loadVerifReview_(reviewId);
     return;
   }
@@ -9103,12 +9137,17 @@ function openVerifTool() {
   loadVerifForm_();
 }
 function openVerifScreen_(screen) {
-  verifScreen_ = screen === "review" ? "review" : "form";
+  if (screen === "review" && !canReviewVerif_()) {
+    showToast("Bara kassör kan granska underlag");
+    verifScreen_ = "form";
+  } else {
+    verifScreen_ = screen === "review" ? "review" : "form";
+  }
   if (verifScreen_ === "form") clearUtlaggHash_();
   openVerifTool();
 }
 function verifTabsHtml_(pendingCount) {
-  if (!canTreasurer_()) return "";
+  if (!canReviewVerif_() || verifGuest_ || isVerifRoute_()) return "";
   const review = verifScreen_ === "review";
   const badge = pendingCount > 0 ? " (" + pendingCount + ")" : "";
   return `<div class="time-view-tabs">
@@ -9692,7 +9731,7 @@ function verifKindLabel_(kind) {
   return kind === "club-card" ? "Klubbkort" : "Utlägg";
 }
 function loadVerifReview_(id) {
-  if (!canTreasurer_()) {
+  if (!canReviewVerif_()) {
     verifScreen_ = "form";
     loadVerifForm_();
     return;
