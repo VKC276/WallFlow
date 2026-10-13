@@ -10,7 +10,7 @@
 import { dispatch } from "./api.js";
 import { publicCatalog, readCatalogRevision } from "./catalog.js";
 import { serveImage } from "./images.js";
-import { serveVerifPdf } from "./verif.js";
+import { purgeExpiredVerifUnderlag, serveVerifPdf } from "./verif.js";
 import { purgeExpiredWellnessReceipts } from "./friskvard.js";
 import { bridgeAuthorized, listUthyrareEmails } from "./rental.js";
 
@@ -128,5 +128,6 @@ export default {
 
   async scheduled(_event, env) {
     await purgeExpiredWellnessReceipts(env);
+    await purgeExpiredVerifUnderlag(env);
   }
 };

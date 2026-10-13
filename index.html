@@ -738,6 +738,11 @@
     }
     .verif-review-item strong { display: block; }
     .verif-review-item span { color: var(--muted); font-size: 0.82rem; }
+    .verif-review-row {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .verif-review-row .verif-review-item { flex: 1 1 auto; min-width: 0; }
+    .verif-review-row .btn { flex: 0 0 auto; align-self: center; }
     .verif-review-frame {
       width: 100%; height: 70vh; min-height: 420px; margin: 12px 0;
       border: 1px solid var(--line); border-radius: 12px; background: #fff;
@@ -2508,6 +2513,7 @@ function seedDemoDb_() {
     timeEntries: [],
     timeEntrySeq: 1,
     verifArchiveEmail: "inbox.ver.1624638@arkivplats.se",
+    verifRetentionDays: 90,
     wellnessOrg: {
       orgName: "Västerviks klätterklubb",
       orgNr: "802431-5718",
@@ -2536,6 +2542,7 @@ function loadDemoDb_() {
         if (!parsed.timeEntries) parsed.timeEntries = [];
         if (!parsed.timeEntrySeq) parsed.timeEntrySeq = 1;
         if (!parsed.verifArchiveEmail) parsed.verifArchiveEmail = "inbox.ver.1624638@arkivplats.se";
+        if (parsed.verifRetentionDays == null) parsed.verifRetentionDays = 90;
         if (!parsed.wellnessOrg) parsed.wellnessOrg = seedDemoDb_().wellnessOrg;
         if (!Array.isArray(parsed.tencards)) parsed.tencards = seedDemoDb_().tencards;
         if (!Array.isArray(parsed.wellnessReceipts)) parsed.wellnessReceipts = [];
@@ -2783,13 +2790,21 @@ function demoTimeApi_(store, action, args) {
   return { ok: false, error: "Okänd action: " + action };
 }
 
+function demoVerifRetentionDays_(store) {
+  const n = Math.round(Number(store.verifRetentionDays));
+  if (!Number.isFinite(n) || n < 0) return 90;
+  if (n === 0) return 0;
+  return Math.min(730, n);
+}
 function demoVerifApi_(store, action, args) {
   const payload = args[0] || {};
   const archiveEmail = String(store.verifArchiveEmail || "inbox.ver.1624638@arkivplats.se").trim().toLowerCase();
+  const retentionDays = demoVerifRetentionDays_(store);
   if (action === "getVerifApp") {
     return {
       ok: true,
       archiveEmail,
+      retentionDays,
       orgName: "Västerviks klätterklubb",
       orgNr: "802431-5718",
       today: currentYmd_(),
@@ -2797,12 +2812,13 @@ function demoVerifApi_(store, action, args) {
     };
   }
   if (action === "saveVerifSettings") {
-    if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ändra bokföringsmejlet" };
+    if (String(currentUser.role) !== "superadmin") return { ok: false, error: "Bara superadmin kan ändra bokföringsinställningarna" };
     const next = String(payload.archiveEmail || "").trim().toLowerCase();
     if (!next || next.indexOf("@") < 1) return { ok: false, error: "Ogiltig e-postadress" };
     store.verifArchiveEmail = next;
+    store.verifRetentionDays = demoVerifRetentionDays_({ verifRetentionDays: payload.retentionDays });
     saveDemoDb_(store);
-    return { ok: true, archiveEmail: next };
+    return { ok: true, archiveEmail: next, retentionDays: store.verifRetentionDays };
   }
   if (action === "submitVerification") {
     const me = (store.users || []).find((x) => x.username === currentUser.username);
@@ -2850,7 +2866,17 @@ function demoVerifApi_(store, action, args) {
   }
   if (action === "listVerifUnderlag") {
     if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan granska underlag" };
-    return { ok: true, archiveEmail, items: store.verifUnderlag || [] };
+    if (!Array.isArray(store.verifUnderlag)) store.verifUnderlag = [];
+    if (retentionDays > 0) {
+      const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+      store.verifUnderlag = store.verifUnderlag.filter((item) => {
+        if (item.status !== "sent") return true;
+        const when = Date.parse(item.reviewedAt || item.createdAt || "") || 0;
+        return when >= cutoff;
+      });
+      saveDemoDb_(store);
+    }
+    return { ok: true, archiveEmail, retentionDays, items: store.verifUnderlag || [] };
   }
   if (action === "sendVerifUnderlag") {
     if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan granska underlag" };
@@ -2863,6 +2889,23 @@ function demoVerifApi_(store, action, args) {
     item.reviewedBy = currentUser.username || "";
     saveDemoDb_(store);
     return { ok: true, id, status: "sent", reviewedAt: item.reviewedAt };
+  }
+  if (action === "deleteVerifUnderlag") {
+    if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan rensa underlag" };
+    const id = String(args[0] || "");
+    const item = (store.verifUnderlag || []).find((x) => x.id === id);
+    if (!item) return { ok: false, error: "Underlaget hittades inte" };
+    if (item.status !== "sent") return { ok: false, error: "Bara skickade underlag kan rensas. Väntande underlag ska granskas först." };
+    store.verifUnderlag = (store.verifUnderlag || []).filter((x) => x.id !== id);
+    saveDemoDb_(store);
+    return { ok: true, id };
+  }
+  if (action === "clearSentVerifUnderlag") {
+    if (!canReviewVerif_()) return { ok: false, error: "Bara kassör kan rensa underlag" };
+    const before = (store.verifUnderlag || []).length;
+    store.verifUnderlag = (store.verifUnderlag || []).filter((x) => x.status !== "sent");
+    saveDemoDb_(store);
+    return { ok: true, deleted: before - store.verifUnderlag.length };
   }
   return { ok: false, error: "Okänd action: " + action };
 }
@@ -3542,7 +3585,7 @@ function demoApi_(action, args) {
       if (action === "getTimeApp" || action === "addTimeEntry" || action === "getTreasurerReport" || action === "deleteTimeEntry" || action === "saveTimeSettings") {
         return ok(demoTimeApi_(store, action, args));
       }
-      if (action === "getVerifApp" || action === "saveVerifSettings" || action === "submitVerification" || action === "listVerifUnderlag" || action === "sendVerifUnderlag") {
+      if (action === "getVerifApp" || action === "saveVerifSettings" || action === "submitVerification" || action === "listVerifUnderlag" || action === "sendVerifUnderlag" || action === "deleteVerifUnderlag" || action === "clearSentVerifUnderlag") {
         return ok(demoVerifApi_(store, action, args));
       }
       if (action === "listTencards" || action === "lookupTencard" || action === "saveTencard" || action === "clipTencard" || action === "deleteTencard") {
@@ -6880,9 +6923,9 @@ function renderAdminHome() {
     </div>
     <div class="admin-card">
       <h3>Bokföring</h3>
-      <p class="small mb-3" style="color:var(--muted);">Kassör granskar utlägg och klubbkort i appen och skickar underlaget hit.</p>
+      <p class="small mb-3" style="color:var(--muted);">Kassör granskar utlägg och klubbkort i appen och skickar underlaget hit. Autorensning gäller skickade underlag.</p>
       <div class="admin-actions">
-        <button class="btn btn-ghost" type="button" onclick="renderVerifSettingsFromAdmin_()">Bokföringsinkorg</button>
+        <button class="btn btn-ghost" type="button" onclick="renderVerifSettingsFromAdmin_()">Bokföring och autorensning</button>
       </div>
     </div>` : ""}
     ${canManageTencards_() ? `
@@ -9011,6 +9054,7 @@ let verifFilePreviewUrls_ = [];
 let verifPreviewUrl_ = "";
 let verifLineCount_ = 1;
 let verifArchiveEmail_ = "inbox.ver.1624638@arkivplats.se";
+let verifRetentionDays_ = 90;
 let verifCamState_ = { open: false, stream: null };
 let verifCopyDownload_ = null;
 let verifScreen_ = "";
@@ -9748,6 +9792,7 @@ function loadVerifReview_(id) {
         return;
       }
       if (res.archiveEmail) verifArchiveEmail_ = String(res.archiveEmail);
+      if (res.retentionDays != null) verifRetentionDays_ = Math.max(0, Math.round(Number(res.retentionDays) || 0));
       verifReviewItems_ = res.items || [];
       const pending = verifReviewItems_.filter((item) => item.status !== "sent").length;
       if (wanted) {
@@ -9768,10 +9813,16 @@ function loadVerifReview_(id) {
     .listVerifUnderlag();
 }
 function verifReviewItemHtml_(item) {
-  return `<button class="verif-review-item" type="button" onclick="loadVerifReview_('${escapeHtml_(item.id)}')">
+  const sent = item.status === "sent";
+  const open = `<button class="verif-review-item" type="button" onclick="loadVerifReview_('${escapeHtml_(item.id)}')">
     <span><strong>${escapeHtml_(item.memberName || "Underlag")}</strong><span>${escapeHtml_(verifKindLabel_(item.kind))} · ${escapeHtml_(item.purchaseDate || "")} · ${escapeHtml_(formatSek_(item.total))}</span></span>
-    <span>${item.status === "sent" ? "Skickad" : "Granska"}</span>
+    <span>${sent ? "Skickad" : "Granska"}</span>
   </button>`;
+  if (!sent) return open;
+  return `<div class="verif-review-row">
+    ${open}
+    <button class="btn btn-ghost btn-sm" type="button" onclick="deleteVerifUnderlag_('${escapeHtml_(item.id)}')" aria-label="Rensa">Rensa</button>
+  </div>`;
 }
 function renderVerifReviewList_(items) {
   const list = items || [];
@@ -9781,8 +9832,18 @@ function renderVerifReviewList_(items) {
   const pendingHtml = pending.length
     ? `<div class="verif-review-list">${pending.map(verifReviewItemHtml_).join("")}</div>`
     : `<p class="mb-0" style="color:var(--muted);">Inga underlag väntar på granskning.</p>`;
+  const keepHint = verifRetentionDays_ > 0
+    ? `Skickade rensas automatiskt efter ${verifRetentionDays_} dagar.`
+    : "Autorensning är avstängd.";
   const sentHtml = sent.length
-    ? `<div class="admin-card"><h3>Skickade</h3><div class="verif-review-list">${sent.map(verifReviewItemHtml_).join("")}</div></div>`
+    ? `<div class="admin-card">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+          <h3 class="mb-0">Skickade</h3>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="clearSentVerifUnderlag_()">Rensa alla</button>
+        </div>
+        <p class="small mb-3" style="color:var(--muted);">${escapeHtml_(keepHint)}</p>
+        <div class="verif-review-list">${sent.map(verifReviewItemHtml_).join("")}</div>
+      </div>`
     : "";
   document.getElementById("verif-main").innerHTML = `
     ${verifTabsHtml_(pending.length)}
@@ -9821,6 +9882,9 @@ function renderVerifReview_(item, pendingCount) {
     ? `<p class="small mb-3" style="color:var(--muted);">Skickad till bokföringsinkorgen.</p>`
     : `<p class="small mb-3" style="color:var(--muted);">När underlaget stämmer skickas PDF:en till <strong>${escapeHtml_(verifArchiveEmail_)}</strong>.</p>
        <button class="btn btn-accent w-100 mb-2" type="button" id="verif-send-archive" onclick="sendVerifUnderlag_('${escapeHtml_(item.id)}')">Granskad - skicka till bokföringsinkorg</button>`;
+  const remove = sent
+    ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" id="verif-delete" onclick="deleteVerifUnderlag_('${escapeHtml_(item.id)}')">Rensa från listan</button>`
+    : "";
   document.getElementById("verif-main").innerHTML = `
     ${verifTabsHtml_(pendingCount)}
     <div class="admin-card">
@@ -9831,7 +9895,30 @@ function renderVerifReview_(item, pendingCount) {
       ${frame}
       ${send}
       <button class="btn btn-ghost w-100" type="button" id="verif-download" onclick="downloadVerifUnderlag_('${escapeHtml_(item.id)}')">Ladda ner underlag</button>
+      ${remove}
     </div>`;
+}
+function deleteVerifUnderlag_(id) {
+  if (!confirm("Rensa underlaget från listan? PDF:en tas bort.")) return;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte rensa");
+      showToast("Rensat");
+      loadVerifReview_("");
+    })
+    .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+    .deleteVerifUnderlag(id);
+}
+function clearSentVerifUnderlag_() {
+  if (!confirm("Rensa alla skickade underlag från listan? PDF:erna tas bort.")) return;
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte rensa");
+      showToast(res.deleted ? ("Rensade " + res.deleted) : "Inget att rensa");
+      loadVerifReview_("");
+    })
+    .withFailureHandler((err) => showToast(String(err && err.message ? err.message : err)))
+    .clearSentVerifUnderlag();
 }
 function sendVerifUnderlag_(id) {
   const btn = document.getElementById("verif-send-archive");
@@ -10134,11 +10221,13 @@ function renderVerifSettingsFromAdmin_() {
         document.getElementById("admin-main").innerHTML = `<div class="admin-card"><p>${escapeHtml_((res && res.error) || "Kunde inte hämta")}</p></div>`;
         return;
       }
-      renderVerifSettings_(res.archiveEmail || "");
+      if (res.retentionDays != null) verifRetentionDays_ = Math.max(0, Math.round(Number(res.retentionDays) || 0));
+      renderVerifSettings_(res.archiveEmail || "", res.retentionDays);
     })
     .getVerifApp();
 }
-function renderVerifSettings_(email) {
+function renderVerifSettings_(email, retentionDays) {
+  const keep = retentionDays != null ? Math.max(0, Math.round(Number(retentionDays) || 0)) : verifRetentionDays_;
   document.getElementById("admin-main").innerHTML = `
     <div class="admin-card">
       <button class="btn btn-sm btn-ghost mb-3" type="button" onclick="renderAdminHome()">← Tillbaka</button>
@@ -10149,11 +10238,18 @@ function renderVerifSettings_(email) {
       </p>
       <label class="form-label" for="verif-archive-email">E-post</label>
       <input id="verif-archive-email" type="email" class="form-control mb-3" value="${escapeHtml_(email)}" autocomplete="off">
+      <h3>Autorensning</h3>
+      <p class="small mb-3" style="color:var(--muted);">
+        Skickade underlag tas bort automatiskt efter angivet antal dagar. Väntande underlag rensas inte. Sätt 0 för att stänga av.
+      </p>
+      <label class="form-label" for="verif-retention-days">Behåll skickade (dagar)</label>
+      <input id="verif-retention-days" class="form-control mb-3" inputmode="numeric" value="${escapeHtml_(String(keep))}">
       <button class="btn btn-accent w-100" type="button" id="verif-archive-save" onclick="saveVerifSettings_()">Spara</button>
     </div>`;
 }
 function saveVerifSettings_() {
   const archiveEmail = val_("verif-archive-email");
+  const retentionDays = Math.max(0, Math.min(730, Math.round(Number(val_("verif-retention-days")) || 0)));
   const btn = document.getElementById("verif-archive-save");
   if (btn) { btn.disabled = true; btn.textContent = "Sparar…"; }
   google.script.run
@@ -10161,10 +10257,11 @@ function saveVerifSettings_() {
       if (btn) { btn.disabled = false; btn.textContent = "Spara"; }
       if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
       verifArchiveEmail_ = res.archiveEmail || archiveEmail;
+      verifRetentionDays_ = res.retentionDays != null ? res.retentionDays : retentionDays;
       showToast("Sparat");
-      renderVerifSettings_(verifArchiveEmail_);
+      renderVerifSettings_(verifArchiveEmail_, verifRetentionDays_);
     })
-    .saveVerifSettings({ archiveEmail });
+    .saveVerifSettings({ archiveEmail, retentionDays });
 }
 
 function renderWellnessSettingsFromAdmin_() {

@@ -77,6 +77,8 @@ import {
 } from "./images.js";
 import { clipInviteMessage, mailAccountActivated, mailAccountApplication, mailPasswordReset, mailWelcome } from "./mail.js";
 import {
+  clearSentVerifUnderlag,
+  deleteVerifUnderlag,
   getVerifApp,
   listVerifUnderlag,
   saveVerifSettingsAction,
@@ -226,6 +228,10 @@ export async function dispatch(env, action, token, args, extras) {
       const reviewer = await findUser(env, session.username);
       return sendVerifUnderlag(env, args[0], session, reviewer);
     }
+    case "deleteVerifUnderlag":
+      return deleteVerifUnderlag(env, args[0], session);
+    case "clearSentVerifUnderlag":
+      return clearSentVerifUnderlag(env, session);
     case "listTencards":
       return listTencardsAction(env, session);
     case "lookupTencard":

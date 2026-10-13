@@ -115,6 +115,7 @@ INSERT INTO settings (key, value) VALUES ('timeHallvardExtraAmount', '0');
 INSERT INTO settings (key, value) VALUES ('timeMaxYearAmount', '0');
 INSERT INTO settings (key, value) VALUES ('timeWarningYearAmount', '0');
 INSERT INTO settings (key, value) VALUES ('verifArchiveEmail', 'inbox.ver.1624638@arkivplats.se');
+INSERT INTO settings (key, value) VALUES ('verifRetentionDays', '90');
 INSERT INTO settings (key, value) VALUES ('wellnessOrgName', 'Västerviks klätterklubb');
 INSERT INTO settings (key, value) VALUES ('wellnessOrgNr', '802431-5718');
 INSERT INTO settings (key, value) VALUES ('wellnessOrgStreet', '');

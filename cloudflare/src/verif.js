@@ -6,7 +6,10 @@ import { roundMoney } from "./time.js";
 import { mailUnderlagNotice, mailUnderlagToArchive, underlagReviewUrl } from "./mail.js";
 
 export const VERIF_ARCHIVE_EMAIL_KEY = "verifArchiveEmail";
+export const VERIF_RETENTION_DAYS_KEY = "verifRetentionDays";
 export const DEFAULT_VERIF_ARCHIVE_EMAIL = "inbox.ver.1624638@arkivplats.se";
+export const DEFAULT_VERIF_RETENTION_DAYS = 90;
+export const MAX_VERIF_RETENTION_DAYS = 730;
 export const VERIF_ORG_NAME = "Västerviks klätterklubb";
 export const VERIF_ORG_NR = "802431-5718";
 export const MAX_PDF_BASE64_CHARS = 9000000;
@@ -50,6 +53,19 @@ export async function readVerifArchiveEmail(env) {
   const raw = await getSetting(env, VERIF_ARCHIVE_EMAIL_KEY, DEFAULT_VERIF_ARCHIVE_EMAIL);
   const check = validateEmail(raw);
   return check.ok ? check.email : DEFAULT_VERIF_ARCHIVE_EMAIL;
+}
+
+export function normalizeVerifRetentionDays(raw) {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n) || n < 0) return DEFAULT_VERIF_RETENTION_DAYS;
+  if (n === 0) return 0;
+  if (n > MAX_VERIF_RETENTION_DAYS) return MAX_VERIF_RETENTION_DAYS;
+  return n;
+}
+
+export async function readVerifRetentionDays(env) {
+  const raw = await getSetting(env, VERIF_RETENTION_DAYS_KEY, String(DEFAULT_VERIF_RETENTION_DAYS));
+  return normalizeVerifRetentionDays(raw);
 }
 
 export async function saveVerifArchiveEmail(env, raw) {
@@ -96,6 +112,7 @@ export async function getVerifApp(env, session) {
   return {
     ok: true,
     archiveEmail: await readVerifArchiveEmail(env),
+    retentionDays: await readVerifRetentionDays(env),
     orgName: VERIF_ORG_NAME,
     orgNr: VERIF_ORG_NR,
     today: todayStockholm(),
@@ -105,9 +122,15 @@ export async function getVerifApp(env, session) {
 
 export async function saveVerifSettingsAction(env, payload, session) {
   if (!canManageVerifSettings(session)) {
-    return { ok: false, error: "Bara superadmin kan ändra bokföringsmejlet" };
+    return { ok: false, error: "Bara superadmin kan ändra bokföringsinställningarna" };
   }
-  return saveVerifArchiveEmail(env, payload && payload.archiveEmail);
+  const emailRes = await saveVerifArchiveEmail(env, payload && payload.archiveEmail);
+  if (!emailRes.ok) return emailRes;
+  const retentionDays = normalizeVerifRetentionDays(
+    payload && payload.retentionDays != null ? payload.retentionDays : DEFAULT_VERIF_RETENTION_DAYS
+  );
+  await setSetting(env, VERIF_RETENTION_DAYS_KEY, String(retentionDays));
+  return { ok: true, archiveEmail: emailRes.archiveEmail, retentionDays };
 }
 
 export async function submitVerification(env, payload, session, user, origin) {
@@ -323,9 +346,38 @@ function mapVerifUnderlag(env, row, origin) {
   };
 }
 
+async function deleteVerifPdfKey(env, key) {
+  const k = String(key || "").trim();
+  if (!isVerifPdfKey(k)) return;
+  try {
+    await env.BILDER.delete(k);
+  } catch (_) { /* rensning av PDF får inte blockera */ }
+}
+
+export async function purgeExpiredVerifUnderlag(env) {
+  const retentionDays = await readVerifRetentionDays(env);
+  if (!retentionDays) return { ok: true, deleted: 0, retentionDays: 0 };
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT id, pdf_key FROM verif_underlag
+     WHERE status = 'sent'
+       AND COALESCE(NULLIF(reviewed_at, ''), created_at) < ?`
+  ).bind(cutoff).all();
+  const rows = results || [];
+  for (const row of rows) {
+    await deleteVerifPdfKey(env, row.pdf_key);
+    await env.DB.prepare("DELETE FROM verif_underlag WHERE id = ?").bind(row.id).run();
+  }
+  return { ok: true, deleted: rows.length, cutoff, retentionDays };
+}
+
 export async function listVerifUnderlag(env, session, origin) {
   if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan granska underlag" };
+  try {
+    await purgeExpiredVerifUnderlag(env);
+  } catch (_) { /* autorensning får inte blockera listan */ }
   const archiveEmail = await readVerifArchiveEmail(env);
+  const retentionDays = await readVerifRetentionDays(env);
   try {
     const res = await env.DB.prepare(
       "SELECT * FROM verif_underlag ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 200"
@@ -333,11 +385,39 @@ export async function listVerifUnderlag(env, session, origin) {
     return {
       ok: true,
       archiveEmail,
+      retentionDays,
       items: (res.results || []).map((row) => mapVerifUnderlag(env, row, origin))
     };
   } catch (err) {
     return { ok: false, error: "Kunde inte hämta underlag: " + String(err && err.message ? err.message : err) };
   }
+}
+
+export async function deleteVerifUnderlag(env, idOrPayload, session) {
+  if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan rensa underlag" };
+  const id = String(typeof idOrPayload === "string" ? idOrPayload : (idOrPayload && idOrPayload.id) || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, error: "Underlaget hittades inte" };
+  const row = await env.DB.prepare("SELECT * FROM verif_underlag WHERE id = ?").bind(id).first();
+  if (!row) return { ok: false, error: "Underlaget hittades inte" };
+  if (row.status !== "sent") {
+    return { ok: false, error: "Bara skickade underlag kan rensas. Väntande underlag ska granskas först." };
+  }
+  await deleteVerifPdfKey(env, row.pdf_key);
+  await env.DB.prepare("DELETE FROM verif_underlag WHERE id = ?").bind(id).run();
+  return { ok: true, id };
+}
+
+export async function clearSentVerifUnderlag(env, session) {
+  if (!canReviewVerif(session)) return { ok: false, error: "Bara kassör kan rensa underlag" };
+  const { results } = await env.DB.prepare(
+    "SELECT id, pdf_key FROM verif_underlag WHERE status = 'sent'"
+  ).all();
+  const rows = results || [];
+  for (const row of rows) {
+    await deleteVerifPdfKey(env, row.pdf_key);
+    await env.DB.prepare("DELETE FROM verif_underlag WHERE id = ?").bind(row.id).run();
+  }
+  return { ok: true, deleted: rows.length };
 }
 
 export async function sendVerifUnderlag(env, idOrPayload, session, user) {
