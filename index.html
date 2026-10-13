@@ -747,6 +747,12 @@
       width: 100%; height: 70vh; min-height: 420px; margin: 12px 0;
       border: 1px solid var(--line); border-radius: 12px; background: #fff;
     }
+    .verif-actions {
+      display: grid;
+      gap: 14px;
+    }
+    .verif-actions .btn { margin: 0; }
+    #app-verif .verif-file-actions { gap: 12px; }
     .verif-line-row { display: grid; grid-template-columns: 1fr 110px auto; gap: 8px; align-items: start; margin-bottom: 8px; }
     .verif-files { display: grid; gap: 8px; margin-top: 8px; }
     .verif-file {
@@ -9352,7 +9358,7 @@ function renderVerifForm_(data) {
         <input id="verif-camera" class="file-input-ios" type="file" accept="image/*" capture="environment" onchange="onVerifFiles_(event)">
         <input id="verif-files" class="file-input-ios" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="onVerifFiles_(event)">
       </div>
-      <div class="d-flex gap-2 flex-wrap mb-2">
+      <div class="d-flex verif-file-actions flex-wrap mb-2">
         <button class="btn btn-accent" type="button" onclick="openVerifCamera_()">Ta foto</button>
         <label class="btn btn-ghost mb-0" for="verif-files">Välj PDF eller bild</label>
       </div>
@@ -9360,8 +9366,10 @@ function renderVerifForm_(data) {
     </div>
     <div class="admin-card">
       <p class="small mb-3" id="verif-submit-hint" style="color:var(--muted);"></p>
-      <div id="verif-result"></div>
-      <button class="btn btn-accent w-100" type="button" id="verif-submit" onclick="submitVerif_()"></button>
+      <div class="verif-actions">
+        <div id="verif-result"></div>
+        <button class="btn btn-accent w-100" type="button" id="verif-submit" onclick="submitVerif_()"></button>
+      </div>
     </div>`;
   renderVerifLines_();
   applyVerifKindCopy_();
@@ -9715,6 +9723,7 @@ async function submitVerif_() {
   }
   if (btn) { btn.disabled = true; btn.textContent = "Skapar underlag…"; }
   clearVerifResult_();
+  let created = false;
   try {
     const pdf = await buildVerifPdf_(payload, verifFiles_);
     const res = await callScript_("submitVerification", Object.assign({}, payload, {
@@ -9730,6 +9739,7 @@ async function submitVerif_() {
       showToast(msg);
       return;
     }
+    created = true;
     const notified = !res.demo && Number(res.notifiedKassor) > 0;
     const copyName = "kopia-" + pdf.filename;
     const copyBytes = await stampVerifCopyPdf_(pdf.bytes, {
@@ -9752,7 +9762,14 @@ async function submitVerif_() {
     showVerifResult_(msg, "err");
     showToast(msg);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = verifSubmitLabel_(); }
+    if (!btn) return;
+    if (created) {
+      btn.disabled = true;
+      btn.textContent = "Underlag skapat";
+    } else {
+      btn.disabled = false;
+      btn.textContent = verifSubmitLabel_();
+    }
   }
 }
 function callScript_(action, payload) {
@@ -9772,9 +9789,9 @@ function showVerifResult_(message, tone) {
   if (!el) return;
   const toneClass = tone === "ok" ? "verif-banner payout" : (tone === "warn" ? "warn" : "max");
   const again = tone === "ok" || tone === "warn"
-    ? `<button class="btn btn-ghost w-100 mt-2" type="button" onclick="downloadVerifCopy_()">Ladda ner kopia</button>`
+    ? `<button class="btn btn-ghost w-100" type="button" onclick="downloadVerifCopy_()">Ladda ner kopia</button>`
     : "";
-  el.innerHTML = `<div class="time-banner ${toneClass}">${escapeHtml_(message)}</div>${again}`;
+  el.innerHTML = `<div class="verif-actions"><div class="time-banner ${toneClass} mb-0">${escapeHtml_(message)}</div>${again}</div>`;
 }
 function downloadVerifCopy_() {
   if (!verifCopyDownload_) return showToast("Kopian finns inte kvar. Skapa underlaget igen.");
@@ -9889,12 +9906,17 @@ function renderVerifReview_(item, pendingCount) {
     ? `<iframe class="verif-review-frame" title="Underlag" src="${escapeHtml_(item.downloadUrl)}"></iframe>`
     : `<p class="small mb-3" style="color:var(--muted);">PDF:en visas här när den är sparad.</p>`;
   const send = sent
-    ? `<p class="small mb-3" style="color:var(--muted);">Skickad till bokföringsinkorgen.</p>`
-    : `<p class="small mb-3" style="color:var(--muted);">När underlaget stämmer skickas PDF:en till <strong>${escapeHtml_(verifArchiveEmail_)}</strong>. Är blanketten fel kan du avslå den.</p>
-       <button class="btn btn-accent w-100 mb-2" type="button" id="verif-send-archive" onclick="sendVerifUnderlag_('${escapeHtml_(item.id)}')">Granskad - skicka till bokföringsinkorg</button>
-       <button class="btn btn-outline-danger w-100 mb-2" type="button" id="verif-reject" onclick="rejectVerifUnderlag_('${escapeHtml_(item.id)}')">Avslå</button>`;
+    ? `<p class="small mb-0" style="color:var(--muted);">Skickad till bokföringsinkorgen.</p>`
+    : `<p class="small mb-0" style="color:var(--muted);">När underlaget stämmer skickas PDF:en till <strong>${escapeHtml_(verifArchiveEmail_)}</strong>.</p>
+       <button class="btn btn-accent w-100" type="button" id="verif-send-archive" onclick="sendVerifUnderlag_('${escapeHtml_(item.id)}')">Granskad - skicka till bokföringsinkorg</button>
+       <div>
+         <label class="form-label" for="verif-reject-reason">Orsak till avslag</label>
+         <textarea id="verif-reject-reason" class="form-control" rows="3" maxlength="500" placeholder="Valfritt. Skickas till den som lämnade in underlaget."></textarea>
+         <p class="small mt-2 mb-0" style="color:var(--muted);">Avslag meddelar den som skickade in och tar bort blanketten från kön.</p>
+       </div>
+       <button class="btn btn-outline-danger w-100" type="button" id="verif-reject" onclick="rejectVerifUnderlag_('${escapeHtml_(item.id)}')">Avslå</button>`;
   const remove = sent
-    ? `<button class="btn btn-outline-danger w-100 mt-2" type="button" id="verif-delete" onclick="deleteVerifUnderlag_('${escapeHtml_(item.id)}')">Rensa från listan</button>`
+    ? `<button class="btn btn-outline-danger w-100" type="button" id="verif-delete" onclick="deleteVerifUnderlag_('${escapeHtml_(item.id)}')">Rensa från listan</button>`
     : "";
   document.getElementById("verif-main").innerHTML = `
     ${verifTabsHtml_(pendingCount)}
@@ -9904,22 +9926,27 @@ function renderVerifReview_(item, pendingCount) {
       <h3>${escapeHtml_(item.memberName || "Underlag")}</h3>
       <div class="mb-3">${verifReviewFacts_(item)}</div>
       ${frame}
-      ${send}
-      <button class="btn btn-ghost w-100" type="button" id="verif-download" onclick="downloadVerifUnderlag_('${escapeHtml_(item.id)}')">Ladda ner underlag</button>
-      ${remove}
+      <div class="verif-actions">
+        ${send}
+        <button class="btn btn-ghost w-100" type="button" id="verif-download" onclick="downloadVerifUnderlag_('${escapeHtml_(item.id)}')">Ladda ner underlag</button>
+        ${remove}
+      </div>
     </div>`;
 }
 function rejectVerifUnderlag_(id) {
-  if (!confirm("Avslå underlaget? Den som skickade in får ett mejl, och blanketten tas bort från kön.")) return;
-  const reasonRaw = prompt("Orsak till avslag (valfritt):", "");
-  if (reasonRaw === null) return;
-  const reason = String(reasonRaw || "").trim();
+  const reasonEl = document.getElementById("verif-reject-reason");
+  const reason = String((reasonEl && reasonEl.value) || "").trim();
   const btn = document.getElementById("verif-reject");
+  const sendBtn = document.getElementById("verif-send-archive");
   if (btn) { btn.disabled = true; btn.textContent = "Avslår…"; }
+  if (sendBtn) sendBtn.disabled = true;
+  if (reasonEl) reasonEl.disabled = true;
   google.script.run
     .withSuccessHandler((res) => {
       if (!res || res.ok === false) {
         if (btn) { btn.disabled = false; btn.textContent = "Avslå"; }
+        if (sendBtn) sendBtn.disabled = false;
+        if (reasonEl) reasonEl.disabled = false;
         showToast((res && res.error) || "Kunde inte avslå");
         return;
       }
@@ -9928,6 +9955,8 @@ function rejectVerifUnderlag_(id) {
     })
     .withFailureHandler((err) => {
       if (btn) { btn.disabled = false; btn.textContent = "Avslå"; }
+      if (sendBtn) sendBtn.disabled = false;
+      if (reasonEl) reasonEl.disabled = false;
       showToast(String(err && err.message ? err.message : err));
     })
     .rejectVerifUnderlag({ id, reason });
