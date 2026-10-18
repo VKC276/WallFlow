@@ -13,7 +13,8 @@
   <link rel="icon" href="../icon-32.png" type="image/png" sizes="32x32">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <!-- Matchar vastervikclimbing.se (Google Sites: Roboto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #12151a;
@@ -25,13 +26,13 @@
       --accent-2: #6ec8b0;
       --surface: rgba(255, 255, 255, 0.04);
       --surface-2: rgba(255, 255, 255, 0.07);
-      --closed: rgba(240, 168, 160, 0.14);
-      --closed-text: #f0a8a0;
+      --closed: #f5c6c6;
+      --closed-text: #7a2e2e;
       --open: rgba(110, 200, 176, 0.14);
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
-      --font-display: "Syne", sans-serif;
-      --font-body: "Figtree", sans-serif;
+      --font-display: "Roboto", Arial, sans-serif;
+      --font-body: "Roboto", Arial, sans-serif;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -56,14 +57,11 @@
     .brand {
       margin: 0;
       font-family: var(--font-display);
-      font-weight: 800;
-      font-size: clamp(1.55rem, 5.5vw, 2.15rem);
-      letter-spacing: -0.04em;
-      line-height: 0.95;
-      background: linear-gradient(120deg, #fff 12%, var(--accent) 55%, var(--accent-2) 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
+      font-weight: 700;
+      font-size: clamp(1.45rem, 5vw, 2rem);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      color: var(--text);
     }
     .lede {
       margin: 8px 0 0;
@@ -96,9 +94,9 @@
     .month-label {
       margin: 0 auto;
       font-family: var(--font-display);
-      font-weight: 800;
+      font-weight: 700;
       font-size: 1.05rem;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
       text-transform: capitalize;
     }
     .today-pill {
@@ -135,7 +133,11 @@
     }
     .day.in-month { animation: day-in 0.35s ease both; }
     .day.open { background: var(--open); border-color: rgba(110, 200, 176, 0.28); }
-    .day.closed { background: var(--closed); border-color: rgba(240, 168, 160, 0.22); }
+    .day.closed {
+      background: var(--closed);
+      border-color: rgba(180, 70, 70, 0.35);
+      color: var(--closed-text);
+    }
     .day.outside {
       opacity: 0.35;
       background: transparent;
@@ -167,6 +169,7 @@
       line-height: 1.2;
       color: var(--text);
     }
+    .day.closed .day-num,
     .day.closed .day-hours { color: var(--closed-text); }
     .day.outside .day-hours { display: none; }
     .legend {
@@ -190,7 +193,7 @@
       border: 1px solid var(--line);
     }
     .swatch.open { background: var(--open); }
-    .swatch.closed { background: var(--closed); }
+    .swatch.closed { background: var(--closed); border-color: rgba(180, 70, 70, 0.35); }
     .swatch.exception {
       background: transparent;
       position: relative;
@@ -202,32 +205,6 @@
       border-radius: 50%;
       background: var(--accent);
     }
-    .week-card {
-      margin-top: 14px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: var(--surface);
-    }
-    .week-card h2 {
-      margin: 0 0 8px;
-      font-family: var(--font-display);
-      font-size: 0.95rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-    .week-row {
-      display: grid;
-      grid-template-columns: 5.5rem 1fr;
-      gap: 8px;
-      padding: 5px 0;
-      border-top: 1px solid var(--line);
-      font-size: 0.86rem;
-    }
-    .week-row:first-of-type { border-top: 0; }
-    .week-row .label { color: var(--muted); font-weight: 600; }
-    .week-row .value { font-weight: 600; }
-    .week-row .value.closed { color: var(--closed-text); }
     .status {
       margin: 10px 0 0;
       color: var(--muted);
@@ -363,6 +340,18 @@ function buildMonthGrid_(ym, daysByDate, today) {
   }).join("");
 }
 
+function addDaysYmdPub_(ymd, days) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+function formatNoteDate_(ymd) {
+  return ymd.slice(8) + "/" + ymd.slice(5, 7);
+}
+
 function exceptionNotesHtml_(daysByDate, ym) {
   const notes = Object.keys(daysByDate)
     .filter((d) => d.startsWith(ym))
@@ -370,41 +359,30 @@ function exceptionNotesHtml_(daysByDate, ym) {
     .filter((d) => d && d.isException && d.note)
     .sort((a, b) => a.date.localeCompare(b.date));
   if (!notes.length) return "";
-  return notes.map((d) => {
-    const label = d.date.slice(8) + "/" + d.date.slice(5, 7);
-    return `<p class="note-line"><strong>${escapeHtml_(label)}</strong> — ${escapeHtml_(d.note)}</p>`;
-  }).join("");
-}
-
-function weekSummaryHtml_(week) {
-  if (!week) return "";
-  const labels = {
-    1: "Måndag", 2: "Tisdag", 3: "Onsdag", 4: "Torsdag",
-    5: "Fredag", 6: "Lördag", 7: "Söndag"
-  };
-  const rows = [];
-  for (let i = 1; i <= 7; i++) {
-    const slot = week[String(i)] || { closed: true };
-    const value = slot.closed
-      ? `<span class="value closed">Stängt</span>`
-      : `<span class="value">${escapeHtml_(slot.open)}–${escapeHtml_(slot.close)}</span>`;
-    rows.push(`<div class="week-row"><span class="label">${labels[i]}</span>${value}</div>`);
+  const groups = [];
+  for (const d of notes) {
+    const prev = groups[groups.length - 1];
+    if (prev && prev.note === d.note && addDaysYmdPub_(prev.to, 1) === d.date) {
+      prev.to = d.date;
+    } else {
+      groups.push({ from: d.date, to: d.date, note: d.note });
+    }
   }
-  return `<section class="week-card" aria-label="Standardtider">
-    <h2>Vanliga öppettider</h2>
-    ${rows.join("")}
-  </section>`;
+  return groups.map((g) => {
+    const label = g.from === g.to
+      ? formatNoteDate_(g.from)
+      : formatNoteDate_(g.from) + "–" + formatNoteDate_(g.to);
+    return `<p class="note-line"><strong>${escapeHtml_(label)}</strong> — ${escapeHtml_(g.note)}</p>`;
+  }).join("");
 }
 
 function render_() {
   const app = document.getElementById("app");
   if (!app) return;
-  if (state.loading && !state.week) {
+  if (state.loading && !Object.keys(state.daysByDate).length && !state.week) {
     app.innerHTML = `<p class="boot">Hämtar öppettider…</p>`;
     return;
   }
-  const canPrev = true;
-  const canNext = true;
   const notes = exceptionNotesHtml_(state.daysByDate, state.yearMonth);
   app.innerHTML = `
     <header>
@@ -412,9 +390,9 @@ function render_() {
       <p class="lede">Västerviks klätterhall — se dagens tider och kommande undantag.</p>
     </header>
     <div class="toolbar">
-      <button type="button" class="nav-btn" ${canPrev ? "" : "disabled"} onclick="shiftMonth(-1)" aria-label="Föregående månad">←</button>
+      <button type="button" class="nav-btn" onclick="shiftMonth(-1)" aria-label="Föregående månad">←</button>
       <p class="month-label">${escapeHtml_(monthTitle_(state.yearMonth))}</p>
-      <button type="button" class="nav-btn" ${canNext ? "" : "disabled"} onclick="shiftMonth(1)" aria-label="Nästa månad">→</button>
+      <button type="button" class="nav-btn" onclick="shiftMonth(1)" aria-label="Nästa månad">→</button>
       <span class="today-pill">Idag ${escapeHtml_(state.today || todayLocalYmd_())}</span>
     </div>
     <div class="legend">
@@ -427,7 +405,6 @@ function render_() {
       ${buildMonthGrid_(state.yearMonth, state.daysByDate, state.today)}
     </div>
     ${notes}
-    ${weekSummaryHtml_(state.week)}
     <p class="status ${state.error ? "error" : ""}" id="status">
       ${state.error ? escapeHtml_(state.error) : (state.loading ? "Uppdaterar…" : "Uppdateras automatiskt")}
     </p>

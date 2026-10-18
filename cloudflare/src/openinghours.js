@@ -382,12 +382,42 @@ export async function saveOpeningHoursWeek(env, payload, session) {
   return { ok: true, week };
 }
 
+/** Lista YYYY-MM-DD från from…to (inklusive), max 366 dagar. */
+function enumerateYmdRange(from, to) {
+  let a = String(from || "");
+  let b = String(to || "");
+  if (a > b) {
+    const tmp = a;
+    a = b;
+    b = tmp;
+  }
+  const out = [];
+  let cursor = a;
+  let guard = 0;
+  while (cursor <= b && guard < 366) {
+    out.push(cursor);
+    cursor = addDaysYmd(cursor, 1);
+    guard += 1;
+  }
+  if (cursor <= b) return { ok: false, error: "Perioden får vara högst 366 dagar" };
+  return { ok: true, dates: out, from: a, to: b };
+}
+
+function resolveExceptionDateRange(payload) {
+  const single = clipText(payload && payload.date, 10);
+  const fromRaw = clipText(payload && (payload.from || payload.dateFrom || payload.startDate), 10) || single;
+  const toRaw = clipText(payload && (payload.to || payload.dateTo || payload.endDate), 10) || fromRaw;
+  if (!isValidYmd(fromRaw)) return { ok: false, error: "Ogiltigt från-datum" };
+  if (!isValidYmd(toRaw)) return { ok: false, error: "Ogiltigt till-datum" };
+  return enumerateYmdRange(fromRaw, toRaw);
+}
+
 export async function saveOpeningHoursException(env, payload, session) {
   if (!canManageOpeningHours(session)) {
     return { ok: false, error: "Saknar behörighet" };
   }
-  const date = clipText(payload && payload.date, 10);
-  if (!isValidYmd(date)) return { ok: false, error: "Ogiltigt datum" };
+  const range = resolveExceptionDateRange(payload);
+  if (!range.ok) return range;
 
   const closed = !!(payload && (payload.closed === true || payload.closed === 1 || payload.closed === "1"));
   let open = "";
@@ -410,7 +440,7 @@ export async function saveOpeningHoursException(env, payload, session) {
   const now = new Date().toISOString();
   const by = clipText(session && session.username, 80);
 
-  await env.DB.prepare(
+  const stmt = env.DB.prepare(
     `INSERT INTO opening_hours_exceptions
       (date, closed, open_time, close_time, note, host_username, updated_at, updated_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -422,12 +452,21 @@ export async function saveOpeningHoursException(env, payload, session) {
       host_username = excluded.host_username,
       updated_at = excluded.updated_at,
       updated_by = excluded.updated_by`
-  ).bind(date, closed ? 1 : 0, open, close, note, hostUsername, now, by).run();
+  );
+  const batch = range.dates.map((date) =>
+    stmt.bind(date, closed ? 1 : 0, open, close, note, hostUsername, now, by)
+  );
+  await env.DB.batch(batch);
 
   return {
     ok: true,
+    from: range.from,
+    to: range.to,
+    count: range.dates.length,
     exception: {
-      date,
+      date: range.from,
+      from: range.from,
+      to: range.to,
       closed,
       open,
       close,
@@ -443,8 +482,15 @@ export async function deleteOpeningHoursException(env, payload, session) {
   if (!canManageOpeningHours(session)) {
     return { ok: false, error: "Saknar behörighet" };
   }
-  const date = clipText(payload && (typeof payload === "string" ? payload : payload.date), 10);
-  if (!isValidYmd(date)) return { ok: false, error: "Ogiltigt datum" };
-  await env.DB.prepare("DELETE FROM opening_hours_exceptions WHERE date = ?").bind(date).run();
-  return { ok: true, date };
+  const raw = typeof payload === "string" ? { date: payload } : (payload || {});
+  const range = resolveExceptionDateRange(raw);
+  if (!range.ok) return range;
+  if (range.dates.length === 1) {
+    await env.DB.prepare("DELETE FROM opening_hours_exceptions WHERE date = ?").bind(range.dates[0]).run();
+  } else {
+    await env.DB.prepare(
+      "DELETE FROM opening_hours_exceptions WHERE date >= ? AND date <= ?"
+    ).bind(range.from, range.to).run();
+  }
+  return { ok: true, from: range.from, to: range.to, count: range.dates.length };
 }

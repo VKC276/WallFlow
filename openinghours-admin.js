@@ -21,8 +21,62 @@
     exceptions: [],
     hostOptions: [],
     loading: false,
-    selectedDate: ""
+    selectedDate: "",
+    selectedDateTo: ""
   };
+
+  function addDaysYmd_(ymd, days) {
+    const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return "";
+    const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
+    return dt.toISOString().slice(0, 10);
+  }
+
+  function exceptionSignature_(ex) {
+    return [
+      ex.closed ? "1" : "0",
+      ex.open || "",
+      ex.close || "",
+      ex.note || "",
+      String(ex.hostUsername || "").toLowerCase()
+    ].join("|");
+  }
+
+  /** Gruppera på varandra följande dagar med samma innehåll till perioder. */
+  function groupExceptions_(list) {
+    const sorted = (list || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const groups = [];
+    for (const ex of sorted) {
+      const prev = groups[groups.length - 1];
+      if (
+        prev &&
+        exceptionSignature_(prev) === exceptionSignature_(ex) &&
+        addDaysYmd_(prev.to, 1) === ex.date
+      ) {
+        prev.to = ex.date;
+        prev.dates.push(ex.date);
+      } else {
+        groups.push({
+          from: ex.date,
+          to: ex.date,
+          dates: [ex.date],
+          closed: !!ex.closed,
+          open: ex.open || "",
+          close: ex.close || "",
+          note: ex.note || "",
+          hostUsername: ex.hostUsername || "",
+          hostName: ex.hostName || ""
+        });
+      }
+    }
+    return groups;
+  }
+
+  function formatPeriodLabel_(from, to) {
+    if (!to || from === to) return from;
+    return from + " – " + to;
+  }
 
   function escapeHtml_(s) {
     return String(s == null ? "" : s)
@@ -172,27 +226,30 @@
 
   function renderExceptions_() {
     const list = (state.exceptions || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const items = list.length
-      ? list.map((ex) => {
-        const hours = ex.closed ? "Stängt" : `${ex.open || ""}–${ex.close || ""}`;
-        const host = ex.hostName || ex.hostUsername || "—";
-        const note = ex.note ? `<div class="oh-ex-meta">${escapeHtml_(ex.note)}</div>` : "";
+    const groups = groupExceptions_(list);
+    const items = groups.length
+      ? groups.map((g) => {
+        const hours = g.closed ? "Stängt" : `${g.open || ""}–${g.close || ""}`;
+        const host = g.hostName || g.hostUsername || "—";
+        const note = g.note ? `<div class="oh-ex-meta">${escapeHtml_(g.note)}</div>` : "";
+        const label = formatPeriodLabel_(g.from, g.to);
         return `<div class="oh-ex-item">
           <div class="oh-ex-top">
-            <span class="oh-ex-date">${escapeHtml_(ex.date)}</span>
+            <span class="oh-ex-date">${escapeHtml_(label)}</span>
             <span class="oh-ex-meta">${escapeHtml_(hours)} · Hallvärd: ${escapeHtml_(host)}</span>
           </div>
           ${note}
           <div class="oh-ex-actions">
-            <button type="button" class="btn btn-sm btn-ghost" onclick="ohEditException_('${escapeHtml_(ex.date)}')">Redigera</button>
-            <button type="button" class="btn btn-sm btn-ghost" onclick="ohDeleteException_('${escapeHtml_(ex.date)}')">Ta bort</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="ohEditException_('${escapeHtml_(g.from)}','${escapeHtml_(g.to)}')">Redigera</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="ohDeleteException_('${escapeHtml_(g.from)}','${escapeHtml_(g.to)}')">Ta bort</button>
           </div>
         </div>`;
       }).join("")
       : `<p class="oh-hint">Inga undantag i den här månaden ännu.</p>`;
 
-    const sel = state.selectedDate || state.today || todayYmd_();
-    const existing = list.find((e) => e.date === sel) || null;
+    const selFrom = state.selectedDate || state.today || todayYmd_();
+    const selTo = state.selectedDateTo || selFrom;
+    const existing = list.find((e) => e.date === selFrom) || null;
     const closed = existing ? !!existing.closed : false;
     const open = existing && !existing.closed ? (existing.open || "") : "";
     const close = existing && !existing.closed ? (existing.close || "") : "";
@@ -202,13 +259,17 @@
     return `
       <div class="admin-card">
         <h3>Undantag</h3>
-        <p class="oh-hint">Ändra öppettider eller hallvärd för ett valt datum. Tom hallvärd innebär att veckans normalvärd gäller.</p>
+        <p class="oh-hint">Gäller ett datum eller en hel period (från–till). Tom hallvärd innebär att veckans normalvärd gäller.</p>
         <div class="row g-2 mb-3">
-          <div class="col-12 col-md-4">
-            <label class="form-label" for="oh-ex-date">Datum</label>
-            <input id="oh-ex-date" type="date" class="form-control" value="${escapeHtml_(sel)}" onchange="ohExceptionDateChange_()">
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="oh-ex-from">Från</label>
+            <input id="oh-ex-from" type="date" class="form-control" value="${escapeHtml_(selFrom)}" onchange="ohExceptionDateChange_()">
           </div>
-          <div class="col-12 col-md-8">
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="oh-ex-to">Till</label>
+            <input id="oh-ex-to" type="date" class="form-control" value="${escapeHtml_(selTo)}" onchange="ohExceptionDateChange_()">
+          </div>
+          <div class="col-12 col-md-4">
             <label class="oh-check" style="margin-top:1.7rem">
               <input type="checkbox" id="oh-ex-closed" ${closed ? "checked" : ""} onchange="ohExceptionClosedToggle_()">
               Stängt hela dagen
@@ -383,16 +444,27 @@
       .saveOpeningHoursWeek({ week });
   }
 
-  function ohEditException_(date) {
-    state.selectedDate = String(date || "").slice(0, 10);
+  function ohEditException_(from, to) {
+    state.selectedDate = String(from || "").slice(0, 10);
+    state.selectedDateTo = String(to || from || "").slice(0, 10);
     state.view = "exceptions";
     render_();
   }
 
   function ohExceptionDateChange_() {
-    const el = document.getElementById("oh-ex-date");
-    state.selectedDate = String(el && el.value || "").slice(0, 10);
-    render_();
+    const fromEl = document.getElementById("oh-ex-from");
+    const toEl = document.getElementById("oh-ex-to");
+    let from = String(fromEl && fromEl.value || "").slice(0, 10);
+    let to = String(toEl && toEl.value || "").slice(0, 10);
+    if (from && to && from > to) {
+      const tmp = from;
+      from = to;
+      to = tmp;
+      if (fromEl) fromEl.value = from;
+      if (toEl) toEl.value = to;
+    }
+    state.selectedDate = from;
+    state.selectedDateTo = to || from;
   }
 
   function ohExceptionClosedToggle_() {
@@ -404,7 +476,13 @@
   }
 
   function ohSaveException_() {
-    const date = String((document.getElementById("oh-ex-date") || {}).value || "").slice(0, 10);
+    let from = String((document.getElementById("oh-ex-from") || {}).value || "").slice(0, 10);
+    let to = String((document.getElementById("oh-ex-to") || {}).value || "").slice(0, 10) || from;
+    if (from && to && from > to) {
+      const tmp = from;
+      from = to;
+      to = tmp;
+    }
     const closed = !!(document.getElementById("oh-ex-closed") || {}).checked;
     const open = String((document.getElementById("oh-ex-open") || {}).value || "");
     const close = String((document.getElementById("oh-ex-close") || {}).value || "");
@@ -413,17 +491,20 @@
     google.script.run
       .withSuccessHandler((res) => {
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte spara");
-        toast_("Undantag sparat");
-        state.selectedDate = date;
-        if (date) state.yearMonth = date.slice(0, 7);
+        const n = res.count || 1;
+        toast_(n > 1 ? ("Undantag sparat för " + n + " dagar") : "Undantag sparat");
+        state.selectedDate = from;
+        state.selectedDateTo = to;
+        if (from) state.yearMonth = from.slice(0, 7);
         loadAdmin_();
       })
       .withFailureHandler(() => toast_("Nätverksfel"))
-      .saveOpeningHoursException({ date, closed, open, close, hostUsername, note });
+      .saveOpeningHoursException({ from, to, closed, open, close, hostUsername, note });
   }
 
-  function ohDeleteException_(date) {
-    if (!window.confirm("Ta bort undantaget " + date + "?")) return;
+  function ohDeleteException_(from, to) {
+    const label = formatPeriodLabel_(from, to || from);
+    if (!window.confirm("Ta bort undantaget " + label + "?")) return;
     google.script.run
       .withSuccessHandler((res) => {
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte ta bort");
@@ -431,7 +512,7 @@
         loadAdmin_();
       })
       .withFailureHandler(() => toast_("Nätverksfel"))
-      .deleteOpeningHoursException({ date });
+      .deleteOpeningHoursException({ from, to: to || from });
   }
 
   window.hideOpeningHoursOverlay_ = hideOpeningHoursOverlay_;
