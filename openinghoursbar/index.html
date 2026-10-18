@@ -57,6 +57,33 @@
       box-shadow: 0 1px 2px rgba(32, 33, 36, 0.06);
       animation: bar-in 0.4s ease both;
     }
+    .brand {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      padding: 12px 18px;
+      min-width: 9.5rem;
+      max-width: 12rem;
+      background: #fff;
+      border-right: 1px solid var(--line);
+    }
+    .brand-kicker {
+      margin: 0;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .brand-title {
+      margin: 0;
+      font-size: clamp(0.92rem, 2.2vw, 1.05rem);
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--text);
+    }
     .seg {
       flex: 1 1 0;
       display: flex;
@@ -131,8 +158,15 @@
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: none; }
     }
-    @media (max-width: 420px) {
+    @media (max-width: 560px) {
       .bar { flex-direction: column; border-radius: 12px; }
+      .brand {
+        max-width: none;
+        min-width: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 14px;
+      }
       .seg + .seg { border-left: 0; border-top: 1px solid var(--line); }
       .seg { padding: 11px 14px; }
       .hours { font-size: 1.05rem; }
@@ -207,7 +241,11 @@ function segmentHtml_(title, day) {
 function renderBar_(todayDay, tomorrowDay) {
   const app = document.getElementById("app");
   if (!app) return;
-  app.innerHTML = `<div class="bar" role="region" aria-label="Öppettider idag och imorgon">
+  app.innerHTML = `<div class="bar" role="region" aria-label="Hallens öppettider idag och imorgon">
+    <div class="brand">
+      <p class="brand-kicker">Klätterhallen</p>
+      <p class="brand-title">Hallens öppettider</p>
+    </div>
     ${segmentHtml_("Idag", todayDay)}
     ${segmentHtml_("Imorgon", tomorrowDay)}
   </div>`;
