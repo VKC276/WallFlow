@@ -69,20 +69,19 @@
       background: #fff;
       border-right: 1px solid var(--line);
     }
-    .brand-kicker {
-      margin: 0;
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
     .brand-title {
       margin: 0;
       font-size: clamp(0.92rem, 2.2vw, 1.05rem);
       font-weight: 700;
       line-height: 1.2;
       color: var(--text);
+    }
+    .brand-sub {
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 500;
+      line-height: 1.2;
+      color: var(--muted);
     }
     .seg {
       flex: 1 1 0;
@@ -241,10 +240,10 @@ function segmentHtml_(title, day) {
 function renderBar_(todayDay, tomorrowDay) {
   const app = document.getElementById("app");
   if (!app) return;
-  app.innerHTML = `<div class="bar" role="region" aria-label="Hallens öppettider idag och imorgon">
+  app.innerHTML = `<div class="bar" role="region" aria-label="Klätterhallen öppettider idag och imorgon">
     <div class="brand">
-      <p class="brand-kicker">Klätterhallen</p>
-      <p class="brand-title">Hallens öppettider</p>
+      <p class="brand-title">Klätterhallen</p>
+      <p class="brand-sub">öppettider</p>
     </div>
     ${segmentHtml_("Idag", todayDay)}
     ${segmentHtml_("Imorgon", tomorrowDay)}
