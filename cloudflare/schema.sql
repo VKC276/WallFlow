@@ -4,6 +4,7 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS opening_hours_exceptions;
 DROP TABLE IF EXISTS verif_underlag;
 DROP TABLE IF EXISTS wellness_receipts;
 DROP TABLE IF EXISTS time_entries;
@@ -108,6 +109,19 @@ CREATE INDEX idx_wellness_issued ON wellness_receipts (issued_at DESC);
 CREATE INDEX idx_wellness_receipt_no ON wellness_receipts (receipt_no);
 CREATE INDEX idx_verif_underlag_status ON verif_underlag (status, created_at);
 
+CREATE TABLE opening_hours_exceptions (
+  date TEXT PRIMARY KEY,
+  closed INTEGER NOT NULL DEFAULT 0 CHECK (closed IN (0, 1)),
+  open_time TEXT NOT NULL DEFAULT '',
+  close_time TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  host_username TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX idx_opening_hours_exceptions_date ON opening_hours_exceptions (date);
+
 INSERT INTO settings (key, value) VALUES ('timeLedbyggHourlyRate', '0');
 INSERT INTO settings (key, value) VALUES ('timeMinPayout', '0');
 INSERT INTO settings (key, value) VALUES ('timeHallvardShiftAmount', '0');
@@ -124,3 +138,7 @@ INSERT INTO settings (key, value) VALUES ('wellnessOrgCity', 'Västervik');
 INSERT INTO settings (key, value) VALUES ('wellnessOrgLegal', 'Ideell förening som inte är momsregistrerad');
 INSERT INTO settings (key, value) VALUES ('wellnessOrgVat', 'Moms utgår inte. Beloppet avser 0 kr moms.');
 INSERT INTO settings (key, value) VALUES ('wellnessRetentionDays', '90');
+INSERT INTO settings (key, value) VALUES (
+  'openingHoursWeek',
+  '{"1":{"closed":false,"open":"16:00","close":"21:00","hostUsername":""},"2":{"closed":false,"open":"16:00","close":"21:00","hostUsername":""},"3":{"closed":false,"open":"16:00","close":"21:00","hostUsername":""},"4":{"closed":false,"open":"16:00","close":"21:00","hostUsername":""},"5":{"closed":false,"open":"16:00","close":"22:00","hostUsername":""},"6":{"closed":false,"open":"10:00","close":"18:00","hostUsername":""},"7":{"closed":false,"open":"10:00","close":"16:00","hostUsername":""}}'
+);

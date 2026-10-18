@@ -123,6 +123,13 @@ import {
   voidKioskSale
 } from "./catalog.js";
 import { rentalAdmin } from "./rental.js";
+import {
+  deleteOpeningHoursException,
+  getOpeningHoursAdmin,
+  getOpeningHoursPublic,
+  saveOpeningHoursException,
+  saveOpeningHoursWeek
+} from "./openinghours.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -133,7 +140,8 @@ export async function dispatch(env, action, token, args, extras) {
     completePasswordReset: true,
     applyForAccount: true,
     getVerifApp: true,
-    recordKioskSale: true
+    recordKioskSale: true,
+    getOpeningHours: true
   };
 
   let session = null;
@@ -293,6 +301,16 @@ export async function dispatch(env, action, token, args, extras) {
       return clearKioskHomeBackground(env, session);
     case "recordKioskSale":
       return recordKioskSale(env, args[0]);
+    case "getOpeningHours":
+      return getOpeningHoursPublic(env, args[0]);
+    case "getOpeningHoursAdmin":
+      return getOpeningHoursAdmin(env, args[0], session);
+    case "saveOpeningHoursWeek":
+      return saveOpeningHoursWeek(env, args[0], session);
+    case "saveOpeningHoursException":
+      return saveOpeningHoursException(env, args[0], session);
+    case "deleteOpeningHoursException":
+      return deleteOpeningHoursException(env, args[0], session);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }

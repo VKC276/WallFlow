@@ -83,6 +83,12 @@ export function canWallReset(session) {
   return r === "superadmin" || r === "admin";
 }
 
+/** Öppettider + intern hallvärdsschema (hallvärd, admin, superadmin). */
+export function canManageOpeningHours(session) {
+  const r = roleOf(session);
+  return r === "superadmin" || r === "admin" || hasRole(session, "hallvard");
+}
+
 export function canManageLifetime(session) {
   return roleOf(session) === "superadmin";
 }

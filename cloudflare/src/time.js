@@ -4,6 +4,7 @@ import { todayStockholm } from "./db.js";
 import {
   allRolesOf,
   canIssueWellnessReceipt,
+  canManageOpeningHours,
   canManageTencards,
   hasRole,
   isSuperadminRole,
@@ -542,6 +543,7 @@ export function publicSessionFlags(session) {
     tencards: canManageTencards(session),
     wellness: canIssueWellnessReceipt(session),
     kioskCatalog: roleOf(session) === "superadmin" || roleOf(session) === "admin" || hasRole(session, "kassor"),
-    rental: hasRole(session, "uthyrare")
+    rental: hasRole(session, "uthyrare"),
+    openingHours: canManageOpeningHours(session)
   };
 }

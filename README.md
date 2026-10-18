@@ -12,6 +12,8 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Läsarvy (besökare / Google Sites-iframe):** [https://wallflow.vastervikclimbing.se/lasare.html](https://wallflow.vastervikclimbing.se/lasare.html) — nya leder + vem som byggt, **inga bilder**. Bädda in t.ex. med `?embed=1` (tätare layout) eller `?days=14` (fönster för ”Nytt”).
 
+**Öppettider (publik kalender):** [https://wallflow.vastervikclimbing.se/openinghours/](https://wallflow.vastervikclimbing.se/openinghours/) — standardtider + datumundantag. Bädda in med `?embed=1`. Hallvärdsschema syns bara inloggat under **Hallen → Öppettider** (admin/hallvärd).
+
 ## Google Sheet
 
 Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`

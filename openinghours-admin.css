@@ -1,0 +1,172 @@
+/* Öppettider — adminpanel i WallFlow */
+
+#app-openinghours {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--sheet-bg);
+}
+#app-openinghours.show { display: flex; }
+
+body.openinghours-open .filters-block,
+body.openinghours-open .search-toggle,
+body.openinghours-open .search-wrap {
+  display: none !important;
+}
+
+.oh-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.oh-day-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.oh-day-card {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.oh-day-card h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.oh-day-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.oh-day-fields .oh-span-2 { grid-column: 1 / -1; }
+
+.oh-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.oh-check input { width: 1rem; height: 1rem; }
+
+.oh-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.oh-month-nav .oh-month-label {
+  margin: 0 auto;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.oh-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.oh-cal .oh-dow {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 4px;
+}
+
+.oh-cal .oh-cell {
+  min-height: 78px;
+  padding: 7px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.oh-cal .oh-cell:hover { border-color: rgba(232, 165, 75, 0.45); }
+.oh-cal .oh-cell.outside {
+  opacity: 0.35;
+  pointer-events: none;
+  background: transparent;
+  border-color: transparent;
+}
+.oh-cal .oh-cell.open { background: rgba(110, 200, 176, 0.12); }
+.oh-cal .oh-cell.closed { background: rgba(240, 168, 160, 0.12); }
+.oh-cal .oh-cell.is-today { box-shadow: 0 0 0 1px var(--accent); }
+.oh-cal .oh-cell .num { font-weight: 700; font-size: 0.8rem; }
+.oh-cal .oh-cell .hours { font-size: 0.68rem; font-weight: 600; line-height: 1.2; }
+.oh-cal .oh-cell .host {
+  margin-top: auto;
+  font-size: 0.62rem;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oh-ex-list { display: grid; gap: 8px; }
+.oh-ex-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.oh-ex-item .oh-ex-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.oh-ex-item .oh-ex-date { font-weight: 700; }
+.oh-ex-item .oh-ex-meta { color: var(--muted); font-size: 0.82rem; }
+.oh-ex-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.oh-public-link {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.oh-public-link a { color: var(--accent); font-weight: 600; word-break: break-all; }
+
+.oh-hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 560px) {
+  .oh-cal .oh-cell { min-height: 68px; padding: 5px 4px; }
+  .oh-cal .oh-cell .hours { font-size: 0.58rem; }
+  .oh-cal .oh-cell .host { font-size: 0.55rem; }
+}

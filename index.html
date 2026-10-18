@@ -17,6 +17,7 @@
   <meta name="description" content="WallFlow — följ ledbyggnationen i klätterhallen.">
   <title>WallFlow</title>
   <link rel="stylesheet" href="rental-admin.css?v=20261006h">
+  <link rel="stylesheet" href="openinghours-admin.css?v=20261018a">
   <script>
     (function () {
       try {
@@ -574,14 +575,14 @@
     .detail-cell label { display: block; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .detail-cell strong { font-size: 0.95rem; }
     #app-public.ready { display: flex; }
-    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp, #app-catalog, #app-rental { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
+    #app-time, #app-verif, #app-tencard, #app-wellness, #app-insp, #app-catalog, #app-rental, #app-openinghours { display: none; flex-direction: column; flex: 1; min-height: 0; background: var(--sheet-bg); }
     #login-panel, #app-admin { position: fixed; inset: 0; z-index: 80; background: var(--sheet-bg); display: none; flex-direction: column; }
     #login-panel {
       background:
         radial-gradient(900px 420px at 50% -10%, var(--body-glow-1), transparent 55%),
         var(--bg-deep);
     }
-    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show, #app-catalog.show, #app-rental.show { display: flex; }
+    #login-panel.show, #app-admin.show, #app-time.show, #app-verif.show, #app-tencard.show, #app-wellness.show, #app-insp.show, #app-catalog.show, #app-rental.show, #app-openinghours.show { display: flex; }
     body.time-open .filters-block,
     body.time-open .search-toggle,
     body.time-open .search-wrap,
@@ -597,6 +598,9 @@
     body.rental-open .filters-block,
     body.rental-open .search-toggle,
     body.rental-open .search-wrap,
+    body.openinghours-open .filters-block,
+    body.openinghours-open .search-toggle,
+    body.openinghours-open .search-wrap,
     body.wellness-open .filters-block,
     body.wellness-open .search-toggle,
     body.wellness-open .search-wrap,
@@ -611,6 +615,7 @@
     body.tencard-open .topbar,
     body.catalog-open .topbar,
     body.rental-open .topbar,
+    body.openinghours-open .topbar,
     body.wellness-open .topbar,
     body.insp-open .topbar,
     body.no-routes .topbar {
@@ -1968,6 +1973,9 @@
     </div>
     <div id="app-catalog">
       <div class="admin-shell wide" id="catalog-main"></div>
+    </div>
+    <div id="app-openinghours">
+      <div class="admin-shell wide" id="openinghours-main"></div>
     </div>
     <div id="app-rental">
       <div class="admin-shell wide" id="app">
@@ -3745,6 +3753,10 @@ function canManageKioskCatalog_() {
   return r === "superadmin" || r === "admin" || hasAppRole_("kassor");
 }
 function canManageRental_() { return hasAppRole_("uthyrare"); }
+function canManageOpeningHours_() {
+  const r = userRole_();
+  return r === "superadmin" || r === "admin" || hasAppRole_("hallvard");
+}
 function canIssueWellnessReceipt_() {
   return canManageTencards_();
 }
@@ -3779,6 +3791,9 @@ function renderAccountMenu_() {
   }
   if (canManageRental_()) {
     hall.push(`<button type="button" role="menuitem" onclick="openRentalFromMenu_()">Uthyrning</button>`);
+  }
+  if (canManageOpeningHours_()) {
+    hall.push(`<button type="button" role="menuitem" onclick="openOpeningHoursFromMenu_()">Öppettider</button>`);
   }
   const ekonomi = [
     `<button type="button" role="menuitem" onclick="openTimeToolFromMenu_()">Rapportering</button>`,
@@ -4051,7 +4066,7 @@ function currentDisplayName_() {
 function hideAppChrome_() {
   const chrome = document.getElementById("app-chrome");
   if (chrome) chrome.classList.remove("ready");
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "rental-open", "no-routes");
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "rental-open", "openinghours-open", "no-routes");
 }
 function showAppChrome_() {
   const chrome = document.getElementById("app-chrome");
@@ -4064,6 +4079,7 @@ function showAppChrome_() {
   document.body.classList.toggle("insp-open", !!(document.getElementById("app-insp") && document.getElementById("app-insp").classList.contains("show")));
   document.body.classList.toggle("catalog-open", !!(document.getElementById("app-catalog") && document.getElementById("app-catalog").classList.contains("show")));
   document.body.classList.toggle("rental-open", !!(document.getElementById("app-rental") && document.getElementById("app-rental").classList.contains("show")));
+  document.body.classList.toggle("openinghours-open", !!(document.getElementById("app-openinghours") && document.getElementById("app-openinghours").classList.contains("show")));
   renderAccountMenu_();
 }
 function onTopBrandClick_() {
@@ -4074,6 +4090,7 @@ function onTopBrandClick_() {
   }
   if (hasWallflowAccess_()) {
     closeRentalTool();
+    if (typeof closeOpeningHoursTool === "function") closeOpeningHoursTool();
     closeTimeTool();
     closeVerifTool();
     closeTencardTool();
@@ -4087,6 +4104,7 @@ function onTopBrandClick_() {
     closeInspTool();
     if (typeof closeCatalogTool === "function") closeCatalogTool();
     closeRentalTool();
+    if (typeof closeOpeningHoursTool === "function") closeOpeningHoursTool();
     if (canManageRental_() && !canReportHallvard_() && !canTreasurer_()) openRentalTool();
     else openTimeTool();
   }
@@ -4113,7 +4131,8 @@ function showAppShell_() {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
-  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "rental-open");
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
+  document.body.classList.remove("time-open", "verif-open", "tencard-open", "wellness-open", "insp-open", "catalog-open", "rental-open", "openinghours-open");
   document.getElementById("app-public").classList.add("ready");
   renderEditToolbar_();
   if (currentUser.firstLogin) openSettings();
@@ -6321,6 +6340,7 @@ function closePanel(fromPopstate) {
 function openSettings() {
   if (!currentUser.authorized) return showLoginGate_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-admin").classList.add("show");
   if (currentUser.firstLogin) renderForcePasswordChange();
   else renderSettingsHome();
@@ -6329,6 +6349,7 @@ function openAdministration() {
   if (!currentUser.authorized) return showLoginGate_();
   if (!canOpenAdministration_()) return showToast("Saknar behörighet");
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-admin").classList.add("show");
   renderAdminHome();
 }
@@ -6381,6 +6402,7 @@ function openTimeToolFromMenu_() {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   openTimeTool();
 }
 function openVerifToolFromMenu_() {
@@ -6429,6 +6451,7 @@ function openRentalTool() {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   const pub = document.getElementById("app-public");
   if (pub) pub.classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
@@ -6443,6 +6466,7 @@ function openRentalTool() {
 }
 function closeRentalTool() {
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   if (String(location.hash || "") === "#uthyrning" && history.replaceState) {
     history.replaceState(null, "", location.pathname + location.search);
   }
@@ -6813,6 +6837,7 @@ function forceRelogin_(message) {
   hideInspOverlay_();
   if (typeof closeCatalogTool === "function") closeCatalogTool();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   closePanel();
   showLoginGate_();
   const lead = document.getElementById("login-lead");
@@ -8486,6 +8511,7 @@ function openTimeTool(view) {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-time").classList.add("show");
@@ -9170,6 +9196,7 @@ function openVerifTool() {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-verif").classList.add("show");
@@ -10432,6 +10459,7 @@ function openTencardTool() {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-tencard").classList.add("show");
@@ -10794,6 +10822,7 @@ function openWellnessTool() {
   hideInspOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-wellness").classList.add("show");
@@ -11435,6 +11464,7 @@ function openInspTool() {
   hideWellnessOverlay_();
   if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
   hideRentalOverlay_();
+  if (typeof hideOpeningHoursOverlay_ === "function") hideOpeningHoursOverlay_();
   document.getElementById("app-public").classList.remove("ready");
   if (typeof closeSearchPanel_ === "function") closeSearchPanel_();
   document.getElementById("app-insp").classList.add("show");
@@ -11760,5 +11790,6 @@ window.addEventListener("hashchange", () => {
   <script src="kiosk-catalog.js"></script>
   <script src="uthyrning-status.js?v=20261006b"></script>
   <script src="uthyrning.js?v=20261006e"></script>
+  <script src="openinghours-admin.js?v=20261018a"></script>
 </body>
 </html>
