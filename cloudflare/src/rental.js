@@ -19,6 +19,7 @@ const RENTAL_ACTIONS = [
   "updatePad",
   "createPad",
   "setPadActive",
+  "deletePad",
   "listPricingRules",
   "savePricingRule",
   "deletePricingRule",

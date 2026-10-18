@@ -69,6 +69,7 @@
     updatePad: 'Sparar pris…',
     createPad: 'Lägger till utrustning…',
     setPadActive: 'Uppdaterar utrustning…',
+    deletePad: 'Raderar utrustning…',
     listPricingRules: 'Hämtar rabattregler…',
     savePricingRule: 'Sparar rabattregel…',
     deletePricingRule: 'Tar bort rabattregel…',
@@ -1068,13 +1069,41 @@
     return price;
   }
 
-  function showPadErr(message) {
-    $('padErr').hidden = !message;
-    $('padErr').textContent = message || '';
+  function showPadErr(message, htmlExtra) {
+    var el = $('padErr');
+    if (!message && !htmlExtra) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    el.hidden = false;
+    if (htmlExtra) {
+      el.innerHTML = '<span>' + escapeHtml(message || '') + '</span>' + htmlExtra;
+    } else {
+      el.textContent = message || '';
+    }
   }
 
   function bookedCount(count) {
     return 'Uppbokad i ' + count + ' kommande bokning' + (count === 1 ? '' : 'ar');
+  }
+
+  function openBookingsHtml(bookings) {
+    if (!bookings || !bookings.length) return '';
+    var items = bookings.map(function (b) {
+      var guest = ((b.firstName || '') + ' ' + (b.lastName || '')).trim();
+      return '<li><strong>' + escapeHtml(b.bookingNumber) + '</strong> · ' +
+        escapeHtml(b.startDate) + '–' + escapeHtml(b.endDate) +
+        (guest ? ' · ' + escapeHtml(guest) : '') +
+        ' · ' + escapeHtml(statusLabel(b.status)) + '</li>';
+    }).join('');
+    return '<ul class="pad-blockers">' + items + '</ul>' +
+      '<p class="muted pad-blockers-hint">Avboka bokningarna ovan innan du raderar utrustningen.</p>';
+  }
+
+  function showPadBlocked(err, fallbackBookings) {
+    var bookings = (err && err.details && err.details.bookings) || fallbackBookings || [];
+    showPadErr(err && err.message ? err.message : 'Kan inte radera utrustningen.', openBookingsHtml(bookings));
   }
 
   function renderPads(pads) {
@@ -1093,8 +1122,9 @@
         '<div class="pad-actions">' +
           '<button type="button" class="btn btn-accent" data-save-pad="' + p.id + '">Spara</button>' +
           (p.active
-            ? '<button type="button" class="btn btn-ghost" data-deactivate-pad="' + p.id + '">Ta bort</button>'
+            ? '<button type="button" class="btn btn-ghost" data-deactivate-pad="' + p.id + '">Inaktivera</button>'
             : '<button type="button" class="btn btn-accent" data-activate-pad="' + p.id + '">Aktivera</button>') +
+          '<button type="button" class="btn btn-ghost" data-delete-pad="' + p.id + '">Radera</button>' +
         '</div>' +
         '</div>';
     }).join('');
@@ -1125,7 +1155,7 @@
         // come off the market whether or not it is spoken for — but the admin
         // is told, since the bookings themselves keep it.
         var booked = p.openBookings ? '\n\nOBS: ' + bookedCount(p.openBookings) + '. De bokningarna behåller utrustningen.' : '';
-        if (!confirm('Ta bort ' + p.name + '?\n\nUtrustningen avaktiveras: den försvinner ur gästens kalender men finns kvar på tidigare bokningar och kan aktiveras igen.' + booked)) return;
+        if (!confirm('Inaktivera ' + p.name + '?\n\nUtrustningen försvinner ur gästens kalender men finns kvar på tidigare bokningar och kan aktiveras igen.' + booked)) return;
         setPadActive(p.id, false, btn);
       };
     });
@@ -1133,6 +1163,29 @@
     list.querySelectorAll('[data-activate-pad]').forEach(function (btn) {
       btn.onclick = function () {
         setPadActive(btn.getAttribute('data-activate-pad'), true, btn);
+      };
+    });
+
+    list.querySelectorAll('[data-delete-pad]').forEach(function (btn) {
+      btn.onclick = function () {
+        var p = padById(btn.getAttribute('data-delete-pad'));
+        var openList = p.openBookingsList || [];
+        if (openList.length) {
+          showPadBlocked(
+            { message: 'Kan inte radera: det finns aktuella bokningar på utrustningen. Avboka dem först.' },
+            openList
+          );
+          return;
+        }
+        if (!confirm(
+          'Radera ' + p.name + ' permanent?\n\n' +
+          'Utrustningen tas bort helt ur systemet. Det går bara om inga aktuella bokningar finns kvar på den.'
+        )) return;
+        showPadErr('');
+        api('deletePad', { padId: p.id }, btn).then(refreshAll).catch(function (e) {
+          if (e && e.code === 'padHasOpenBookings') showPadBlocked(e, openList);
+          else showPadErr(e.message);
+        });
       };
     });
   }

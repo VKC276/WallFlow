@@ -703,6 +703,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pad-price { flex: 0 0 auto; display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
 .pad-price input { width: 6rem; padding: 0.45rem 0.55rem; }
 .pad-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: auto; }
+.pad-blockers {
+  margin: 0.55rem 0 0;
+  padding-left: 1.15rem;
+  text-align: left;
+}
+.pad-blockers li { margin: 0.2rem 0; }
+.pad-blockers-hint { margin: 0.45rem 0 0; }
 @media (max-width: 640px) {
   .pad-price { flex: 1 1 100%; }
   .pad-actions { margin-left: 0; flex: 1 1 100%; }
