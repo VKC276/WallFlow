@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2f2f2">
+  <meta name="description" content="Öppettider idag och imorgon — Västerviks klätterhall.">
+  <!-- Google Sites / iframe: tillåt inbäddning -->
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
+  <title>Öppettider — bar</title>
+  <link rel="icon" href="../favicon.ico" sizes="32x32">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f2f2f2;
+      --surface: #ffffff;
+      --text: #202124;
+      --muted: #5f6368;
+      --line: rgba(32, 33, 36, 0.12);
+      --open-bg: #d8f0e8;
+      --open-text: #1b5c48;
+      --closed-bg: #f5c6c6;
+      --closed-text: #7a2e2e;
+      --accent: #c47a1a;
+      --font: "Roboto", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+    body {
+      padding: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+    html.is-embed,
+    html.is-embed body {
+      background: transparent;
+      min-height: 0;
+    }
+    .bar {
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(32, 33, 36, 0.06);
+      animation: bar-in 0.4s ease both;
+    }
+    .seg {
+      flex: 1 1 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      min-width: 0;
+      position: relative;
+    }
+    .seg + .seg {
+      border-left: 1px solid var(--line);
+    }
+    .seg.open { background: linear-gradient(90deg, var(--open-bg) 0%, #fff 72%); }
+    .seg.closed { background: linear-gradient(90deg, var(--closed-bg) 0%, #fff 72%); }
+    .dot {
+      flex: 0 0 auto;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .seg.open .dot { background: var(--open-text); box-shadow: 0 0 0 4px rgba(27, 92, 72, 0.12); }
+    .seg.closed .dot { background: var(--closed-text); box-shadow: 0 0 0 4px rgba(122, 46, 46, 0.12); }
+    .copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .label {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .hours {
+      margin: 0;
+      font-size: clamp(0.95rem, 2.4vw, 1.15rem);
+      font-weight: 700;
+      line-height: 1.15;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .seg.open .hours { color: var(--open-text); }
+    .seg.closed .hours { color: var(--closed-text); }
+    .note {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--accent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .boot, .error {
+      width: 100%;
+      margin: 0;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .error { color: var(--closed-text); border-color: rgba(180, 70, 70, 0.35); background: #fff5f5; }
+    @keyframes bar-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    @media (max-width: 420px) {
+      .bar { flex-direction: column; border-radius: 12px; }
+      .seg + .seg { border-left: 0; border-top: 1px solid var(--line); }
+      .seg { padding: 11px 14px; }
+      .hours { font-size: 1.05rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="width:100%">
+    <p class="boot">Hämtar öppettider…</p>
+  </div>
+
+  <script>
+const API_URL = "https://wallflow.muddy-rice-38d4.workers.dev/";
+const REFRESH_MS = 5 * 60 * 1000;
+const WEEKDAY_SV = {
+  1: "måndag", 2: "tisdag", 3: "onsdag", 4: "torsdag",
+  5: "fredag", 6: "lördag", 7: "söndag"
+};
+
+(function bootEmbed_() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("embed") !== "0") {
+    // Standard: alltid bäddbar/transparent — använd ?embed=0 för fristående sida
+    document.documentElement.classList.add("is-embed");
+  }
+})();
+
+function escapeHtml_(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function apiCall_(action, args) {
+  return fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain; charset=UTF-8" },
+    body: JSON.stringify({ action, token: "", args: args || [] })
+  }).then((r) => r.json());
+}
+
+function addDaysYmd_(ymd, days) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+function formatHours_(day) {
+  if (!day || day.closed) return "Stängt";
+  return String(day.open || "") + "–" + String(day.close || "");
+}
+
+function segmentHtml_(title, day) {
+  const closed = !day || day.closed;
+  const note = day && day.note ? `<p class="note">${escapeHtml_(day.note)}</p>` : "";
+  const weekday = day && day.weekday ? WEEKDAY_SV[day.weekday] : "";
+  const sub = weekday ? title + " · " + weekday : title;
+  return `<div class="seg ${closed ? "closed" : "open"}">
+    <span class="dot" aria-hidden="true"></span>
+    <div class="copy">
+      <p class="label">${escapeHtml_(sub)}</p>
+      <p class="hours">${escapeHtml_(formatHours_(day))}</p>
+      ${note}
+    </div>
+  </div>`;
+}
+
+function renderBar_(todayDay, tomorrowDay) {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.innerHTML = `<div class="bar" role="region" aria-label="Öppettider idag och imorgon">
+    ${segmentHtml_("Idag", todayDay)}
+    ${segmentHtml_("Imorgon", tomorrowDay)}
+  </div>`;
+}
+
+function renderError_(msg) {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.innerHTML = `<p class="error">${escapeHtml_(msg)}</p>`;
+}
+
+function findDay_(days, ymd) {
+  return (days || []).find((d) => d && d.date === ymd) || null;
+}
+
+function load_() {
+  // Hämta ett litet fönster; API:ets "today" är Europe/Stockholm
+  const approx = new Date();
+  const y = approx.getFullYear();
+  const m = String(approx.getMonth() + 1).padStart(2, "0");
+  const d = String(approx.getDate()).padStart(2, "0");
+  const localToday = y + "-" + m + "-" + d;
+  const from = addDaysYmd_(localToday, -1);
+  const to = addDaysYmd_(localToday, 2);
+
+  return apiCall_("getOpeningHours", [{ from, to }])
+    .then((res) => {
+      if (!res || res.ok === false) {
+        renderError_((res && res.error) || "Kunde inte hämta öppettider");
+        return;
+      }
+      const today = String(res.today || localToday);
+      const tomorrow = addDaysYmd_(today, 1);
+      renderBar_(findDay_(res.days, today), findDay_(res.days, tomorrow));
+    })
+    .catch(() => renderError_("Nätverksfel — försök igen om en stund"));
+}
+
+load_();
+setInterval(load_, REFRESH_MS);
+  </script>
+</body>
+</html>
