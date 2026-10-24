@@ -4,6 +4,7 @@
 
 PRAGMA foreign_keys = ON;
 
+DROP TABLE IF EXISTS group_bookings;
 DROP TABLE IF EXISTS opening_hours_exception_periods;
 DROP TABLE IF EXISTS opening_hours_exceptions;
 DROP TABLE IF EXISTS verif_underlag;
@@ -138,6 +139,25 @@ CREATE TABLE opening_hours_exception_periods (
 
 CREATE INDEX idx_oh_ex_periods_from ON opening_hours_exception_periods (from_date);
 CREATE INDEX idx_oh_ex_periods_to ON opening_hours_exception_periods (to_date);
+
+CREATE TABLE group_bookings (
+  id TEXT PRIMARY KEY,
+  from_date TEXT NOT NULL,
+  to_date TEXT NOT NULL,
+  start_time TEXT NOT NULL DEFAULT '',
+  end_time TEXT NOT NULL DEFAULT '',
+  group_name TEXT NOT NULL DEFAULT '',
+  contact_name TEXT NOT NULL DEFAULT '',
+  contact_email TEXT NOT NULL DEFAULT '',
+  contact_phone TEXT NOT NULL DEFAULT '',
+  club_host TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT '',
+  updated_by TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX idx_group_bookings_from ON group_bookings (from_date);
+CREATE INDEX idx_group_bookings_to ON group_bookings (to_date);
 
 INSERT INTO settings (key, value) VALUES ('timeLedbyggHourlyRate', '0');
 INSERT INTO settings (key, value) VALUES ('timeMinPayout', '0');

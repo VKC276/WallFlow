@@ -16,6 +16,8 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Öppettidsbar (förstasida / iframe):** [https://wallflow.vastervikclimbing.se/openinghoursbar/](https://wallflow.vastervikclimbing.se/openinghoursbar/) — idag + imorgon i en avlång bar. Transparent bakgrund som standard; `?embed=0` för fristående sida.
 
+**Gruppbokningar (publik kalender):** [https://wallflow.vastervikclimbing.se/gruppbokningar/](https://wallflow.vastervikclimbing.se/gruppbokningar/) — bokade grupptider (tid + gruppnamn). Kontaktuppgifter och värd från klubben syns bara inloggat under **Hallen → Gruppbokningar** (admin/hallvärd). Bädda in med `?embed=1`.
+
 ## Google Sheet
 
 Spreadsheet-ID: `1K71FH4c9FpBuxF6noBlzmF_nA5VXhAtiV84sTbPmWi0`

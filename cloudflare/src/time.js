@@ -544,6 +544,7 @@ export function publicSessionFlags(session) {
     wellness: canIssueWellnessReceipt(session),
     kioskCatalog: roleOf(session) === "superadmin" || roleOf(session) === "admin" || hasRole(session, "kassor"),
     rental: hasRole(session, "uthyrare"),
-    openingHours: canManageOpeningHours(session)
+    openingHours: canManageOpeningHours(session),
+    groupBookings: canManageOpeningHours(session)
   };
 }

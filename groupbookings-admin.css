@@ -1,0 +1,146 @@
+/* Gruppbokningar — adminpanel i WallFlow */
+
+#app-groupbookings {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--sheet-bg);
+}
+#app-groupbookings.show { display: flex; }
+
+body.groupbookings-open .filters-block,
+body.groupbookings-open .search-toggle,
+body.groupbookings-open .search-wrap {
+  display: none !important;
+}
+
+.gb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.gb-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.gb-month-nav .gb-month-label {
+  margin: 0 auto;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.gb-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.gb-cal .gb-dow {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 4px;
+}
+
+.gb-cal .gb-cell {
+  min-height: 78px;
+  padding: 7px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.gb-cal .gb-cell:hover { border-color: rgba(232, 165, 75, 0.45); }
+.gb-cal .gb-cell.outside {
+  opacity: 0.35;
+  pointer-events: none;
+  background: transparent;
+  border-color: transparent;
+}
+.gb-cal .gb-cell.has-booking {
+  background: rgba(110, 200, 176, 0.12);
+  border-color: rgba(110, 200, 176, 0.28);
+}
+.gb-cal .gb-cell.is-today { box-shadow: 0 0 0 1px var(--accent); }
+.gb-cal .gb-cell .num { font-weight: 700; font-size: 0.8rem; }
+.gb-cal .gb-cell .gb-mini {
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gb-list { display: grid; gap: 8px; }
+.gb-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.gb-item .gb-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.gb-item .gb-title { font-weight: 700; }
+.gb-item .gb-meta { color: var(--muted); font-size: 0.82rem; }
+.gb-item .gb-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.gb-public-link {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.gb-public-link a { color: var(--accent); font-weight: 600; word-break: break-all; }
+
+.gb-hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.gb-private-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-left: 6px;
+}
+
+@media (max-width: 560px) {
+  .gb-cal .gb-cell { min-height: 68px; padding: 5px 4px; }
+  .gb-cal .gb-cell .gb-mini { font-size: 0.52rem; }
+}

@@ -130,6 +130,12 @@ import {
   saveOpeningHoursException,
   saveOpeningHoursWeek
 } from "./openinghours.js";
+import {
+  deleteGroupBooking,
+  getGroupBookingsAdmin,
+  getGroupBookingsPublic,
+  saveGroupBooking
+} from "./groupbookings.js";
 
 export async function dispatch(env, action, token, args, extras) {
   extras = extras || {};
@@ -141,7 +147,8 @@ export async function dispatch(env, action, token, args, extras) {
     applyForAccount: true,
     getVerifApp: true,
     recordKioskSale: true,
-    getOpeningHours: true
+    getOpeningHours: true,
+    getGroupBookings: true
   };
 
   let session = null;
@@ -311,6 +318,14 @@ export async function dispatch(env, action, token, args, extras) {
       return saveOpeningHoursException(env, args[0], session);
     case "deleteOpeningHoursException":
       return deleteOpeningHoursException(env, args[0], session);
+    case "getGroupBookings":
+      return getGroupBookingsPublic(env, args[0]);
+    case "getGroupBookingsAdmin":
+      return getGroupBookingsAdmin(env, args[0], session);
+    case "saveGroupBooking":
+      return saveGroupBooking(env, args[0], session);
+    case "deleteGroupBooking":
+      return deleteGroupBooking(env, args[0], session);
     default:
       return { ok: false, error: "Okänd action: " + action };
   }

@@ -400,6 +400,7 @@
     if (typeof hideInspOverlay_ === "function") hideInspOverlay_();
     if (typeof hideCatalogOverlay_ === "function") hideCatalogOverlay_();
     if (typeof hideRentalOverlay_ === "function") hideRentalOverlay_();
+    if (typeof hideGroupBookingsOverlay_ === "function") hideGroupBookingsOverlay_();
     hideOpeningHoursOverlay_();
 
     const pub = document.getElementById("app-public");
