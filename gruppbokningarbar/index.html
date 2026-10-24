@@ -164,29 +164,57 @@
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: none; }
     }
+    /* Kompakt läge för kiosk/iframe — alltid 7 kolumner, tätare typografi */
+    html.is-compact .brand {
+      min-width: 7.2rem;
+      max-width: 8.5rem;
+      padding: 8px 12px;
+    }
+    html.is-compact .brand-title { font-size: 0.88rem; }
+    html.is-compact .brand-sub { font-size: 0.7rem; }
+    html.is-compact .day { padding: 7px 6px; gap: 2px; }
+    html.is-compact .day-label { font-size: 0.58rem; }
+    html.is-compact .day-date { font-size: 0.72rem; }
+    html.is-compact .item { font-size: 0.62rem; }
+    html.is-compact .empty { font-size: 0.64rem; }
+    html.is-compact .bar {
+      border-radius: 0;
+      box-shadow: none;
+      border-left: 0;
+      border-right: 0;
+      border-top: 0;
+      animation: none;
+    }
+
     @media (max-width: 720px) {
-      .bar { flex-direction: column; border-radius: 12px; }
-      .brand {
+      html:not(.is-compact) .bar { flex-direction: column; border-radius: 12px; }
+      html:not(.is-compact) .brand {
         max-width: none;
         min-width: 0;
         border-right: 0;
         border-bottom: 1px solid var(--line);
         padding: 10px 14px;
       }
-      .days {
+      html:not(.is-compact) .days {
         display: flex;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         scroll-snap-type: x mandatory;
       }
-      .day {
+      html:not(.is-compact) .day {
         flex: 0 0 42%;
         max-width: 11rem;
         border-left: 0;
         border-top: 1px solid var(--line);
         scroll-snap-align: start;
       }
-      .day:first-child { border-top: 0; }
+      html:not(.is-compact) .day:first-child { border-top: 0; }
+
+      html.is-compact .days {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      html.is-compact .day { min-width: 5.5rem; }
     }
   </style>
 </head>
@@ -204,6 +232,9 @@ const MONTHS_SHORT = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "s
   const q = new URLSearchParams(location.search);
   if (q.get("embed") !== "0") {
     document.documentElement.classList.add("is-embed");
+  }
+  if (q.get("compact") === "1" || q.get("kiosk") === "1") {
+    document.documentElement.classList.add("is-compact");
   }
 })();
 
