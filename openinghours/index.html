@@ -313,6 +313,10 @@ function monthTitle_(ym) {
 
 function formatHours_(day) {
   if (!day || day.closed) return "Stängt";
+  if (day.hoursLabel) return String(day.hoursLabel);
+  if (Array.isArray(day.slots) && day.slots.length) {
+    return day.slots.map((s) => String(s.open || "") + "–" + String(s.close || "")).join(" · ");
+  }
   return String(day.open || "") + "–" + String(day.close || "");
 }
 

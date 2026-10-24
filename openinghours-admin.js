@@ -135,6 +135,10 @@
 
   function formatHours_(day) {
     if (!day || day.closed) return "Stängt";
+    if (day.hoursLabel) return String(day.hoursLabel);
+    if (Array.isArray(day.slots) && day.slots.length) {
+      return day.slots.map((s) => String(s.open || "") + "–" + String(s.close || "")).join(" · ");
+    }
     return `${day.open || ""}–${day.close || ""}`;
   }
 
@@ -270,8 +274,8 @@
     const closed = !!state.formClosed;
     const saveLabel = state.formMode === "edit" ? "Spara undantag" : "Skapa nytt undantag";
     const modeHint = state.formMode === "edit"
-      ? "Redigerar valt undantag. Överlappande undantag sparas som egna perioder — senast sparade gäller i kalendern."
-      : "Skapa undantag för ett datum eller en period. Överlapp tillåts; senast sparade gäller per dag i kalendern.";
+      ? "Redigerar valt undantag. Överlappande öppettider samma dag slås ihop i kalendern (t.ex. 12–15 · 18–21)."
+      : "Skapa undantag för ett datum eller en period. Flera öppna pass samma dag visas tillsammans i kalendern.";
 
     return `
       <div class="admin-card">

@@ -264,45 +264,107 @@ async function listPeriods(env, from, to) {
   return (results || []).map(mapPeriodRow);
 }
 
-/** Senast uppdaterade period som täcker dagen vinner. */
-function periodForDate(ymd, periods) {
-  let best = null;
-  for (const p of periods || []) {
-    if (!p.from || !p.to) continue;
-    if (ymd < p.from || ymd > p.to) continue;
-    if (!best || String(p.updatedAt || "") >= String(best.updatedAt || "")) best = p;
-  }
-  return best;
+function periodsCoveringDate(ymd, periods) {
+  return (periods || []).filter((p) => p && p.from && p.to && ymd >= p.from && ymd <= p.to);
 }
 
+function formatSlotsLabel(slots) {
+  if (!slots || !slots.length) return "";
+  return slots.map((s) => String(s.open || "") + "–" + String(s.close || "")).join(" · ");
+}
+
+/**
+ * Överlappande perioder:
+ * - Senaste stängd-period → dagen stängd
+ * - Annars slås alla öppna pass ihop (t.ex. 12–15 · 18–21)
+ */
 function resolveDay(ymd, week, periods) {
   const weekday = isoWeekdayFromYmd(ymd);
   const base = normalizeDaySlot(week[String(weekday)] || emptyDaySlot());
-  const ex = periodForDate(ymd, periods);
-  if (!ex) {
+  const covering = periodsCoveringDate(ymd, periods)
+    .slice()
+    .sort((a, b) => String(a.updatedAt || "").localeCompare(String(b.updatedAt || "")));
+  if (!covering.length) {
+    const baseSlots = base.closed || !base.open || !base.close
+      ? []
+      : [{ open: base.open, close: base.close }];
     return {
       date: ymd,
       weekday,
       closed: base.closed,
       open: base.open,
       close: base.close,
+      slots: baseSlots,
+      hoursLabel: base.closed ? "Stängt" : formatSlotsLabel(baseSlots),
       note: "",
       isException: false,
       hostUsername: base.hostUsername,
       exceptionId: ""
     };
   }
-  const slot = normalizeDaySlot(ex);
+
+  const latest = covering[covering.length - 1];
+  if (latest.closed) {
+    return {
+      date: ymd,
+      weekday,
+      closed: true,
+      open: "",
+      close: "",
+      slots: [],
+      hoursLabel: "Stängt",
+      note: clipText(latest.note, 200),
+      isException: true,
+      hostUsername: latest.hostUsername || base.hostUsername,
+      exceptionId: latest.id || ""
+    };
+  }
+
+  const slots = [];
+  const notes = [];
+  let hostUsername = base.hostUsername;
+  let exceptionId = "";
+  for (const p of covering) {
+    if (p.closed) continue;
+    const slot = normalizeDaySlot(p);
+    if (slot.closed || !slot.open || !slot.close) continue;
+    if (!slots.some((s) => s.open === slot.open && s.close === slot.close)) {
+      slots.push({ open: slot.open, close: slot.close });
+    }
+    if (p.note && notes.indexOf(p.note) < 0) notes.push(p.note);
+    if (slot.hostUsername) hostUsername = slot.hostUsername;
+    if (p.id) exceptionId = p.id;
+  }
+  slots.sort((a, b) => String(a.open).localeCompare(String(b.open)));
+
+  if (!slots.length) {
+    return {
+      date: ymd,
+      weekday,
+      closed: true,
+      open: "",
+      close: "",
+      slots: [],
+      hoursLabel: "Stängt",
+      note: notes.join(" · "),
+      isException: true,
+      hostUsername,
+      exceptionId
+    };
+  }
+
   return {
     date: ymd,
     weekday,
-    closed: slot.closed,
-    open: slot.open,
-    close: slot.close,
-    note: clipText(ex.note, 200),
+    closed: false,
+    open: slots[0].open,
+    close: slots[slots.length - 1].close,
+    slots,
+    hoursLabel: formatSlotsLabel(slots),
+    note: clipText(notes.join(" · "), 400),
     isException: true,
-    hostUsername: slot.hostUsername || base.hostUsername,
-    exceptionId: ex.id || ""
+    hostUsername,
+    exceptionId
   };
 }
 
@@ -364,6 +426,8 @@ export async function getOpeningHoursPublic(env, opts) {
     closed: d.closed,
     open: d.open,
     close: d.close,
+    slots: d.slots || [],
+    hoursLabel: d.hoursLabel || (d.closed ? "Stängt" : formatSlotsLabel(d.slots)),
     note: d.note,
     isException: d.isException
   }));
@@ -405,6 +469,8 @@ export async function getOpeningHoursAdmin(env, opts, session) {
       closed: d.closed,
       open: d.open,
       close: d.close,
+      slots: d.slots || [],
+      hoursLabel: d.hoursLabel || (d.closed ? "Stängt" : formatSlotsLabel(d.slots)),
       note: d.note,
       isException: d.isException,
       exceptionId: d.exceptionId || "",
