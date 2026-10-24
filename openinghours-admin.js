@@ -24,10 +24,9 @@
     loading: false,
     selectedDate: "",
     selectedDateTo: "",
-    /** "new" = skapa utan att röra andra undantag. "edit" = ersätt replaceFrom–replaceTo. */
+    /** "new" = skapa ny period. "edit" = uppdatera period med editingId. */
     formMode: "new",
-    replaceFrom: "",
-    replaceTo: "",
+    editingId: "",
     formClosed: false,
     formOpen: "",
     formClose: "",
@@ -41,8 +40,7 @@
     state.selectedDate = f;
     state.selectedDateTo = t;
     state.formMode = "new";
-    state.replaceFrom = "";
-    state.replaceTo = "";
+    state.editingId = "";
     state.formClosed = false;
     state.formOpen = "";
     state.formClose = "";
@@ -50,14 +48,13 @@
     state.formNote = "";
   }
 
-  function loadExceptionForm_(from, to, ex) {
-    const f = String(from || "").slice(0, 10);
-    const t = String(to || from || "").slice(0, 10);
+  function loadExceptionForm_(ex) {
+    const f = String((ex && (ex.from || ex.date)) || "").slice(0, 10);
+    const t = String((ex && ex.to) || f).slice(0, 10);
     state.selectedDate = f;
     state.selectedDateTo = t;
     state.formMode = "edit";
-    state.replaceFrom = f;
-    state.replaceTo = t;
+    state.editingId = String((ex && ex.id) || "").trim();
     state.formClosed = !!(ex && ex.closed);
     state.formOpen = ex && !ex.closed ? (ex.open || "") : "";
     state.formClose = ex && !ex.closed ? (ex.close || "") : "";
@@ -82,57 +79,17 @@
     if (noteEl) state.formNote = String(noteEl.value || "");
   }
 
-  function addDaysYmd_(ymd, days) {
-    const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return "";
-    const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-    dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
-    return dt.toISOString().slice(0, 10);
-  }
-
-  function exceptionSignature_(ex) {
-    return [
-      ex.closed ? "1" : "0",
-      ex.open || "",
-      ex.close || "",
-      ex.note || "",
-      String(ex.hostUsername || "").toLowerCase()
-    ].join("|");
-  }
-
-  /** Gruppera på varandra följande dagar med samma innehåll till perioder. */
-  function groupExceptions_(list) {
-    const sorted = (list || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const groups = [];
-    for (const ex of sorted) {
-      const prev = groups[groups.length - 1];
-      if (
-        prev &&
-        exceptionSignature_(prev) === exceptionSignature_(ex) &&
-        addDaysYmd_(prev.to, 1) === ex.date
-      ) {
-        prev.to = ex.date;
-        prev.dates.push(ex.date);
-      } else {
-        groups.push({
-          from: ex.date,
-          to: ex.date,
-          dates: [ex.date],
-          closed: !!ex.closed,
-          open: ex.open || "",
-          close: ex.close || "",
-          note: ex.note || "",
-          hostUsername: ex.hostUsername || "",
-          hostName: ex.hostName || ""
-        });
-      }
-    }
-    return groups;
-  }
-
   function formatPeriodLabel_(from, to) {
     if (!to || from === to) return from;
     return from + " – " + to;
+  }
+
+  /** Perioder som täcker ett datum (senast uppdaterad först). */
+  function periodsCovering_(ymd) {
+    return (state.exceptions || [])
+      .filter((p) => p && p.from && p.to && ymd >= p.from && ymd <= p.to)
+      .slice()
+      .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
   }
 
   function escapeHtml_(s) {
@@ -282,14 +239,17 @@
   }
 
   function renderExceptions_() {
-    const list = (state.exceptions || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const groups = groupExceptions_(list);
-    const items = groups.length
-      ? groups.map((g) => {
+    const periods = (state.exceptions || []).slice().sort((a, b) =>
+      String(a.from || "").localeCompare(String(b.from || "")) ||
+      String(a.to || "").localeCompare(String(b.to || ""))
+    );
+    const items = periods.length
+      ? periods.map((g) => {
         const hours = g.closed ? "Stängt" : `${g.open || ""}–${g.close || ""}`;
         const host = g.hostName || g.hostUsername || "—";
         const note = g.note ? `<div class="oh-ex-meta">${escapeHtml_(g.note)}</div>` : "";
         const label = formatPeriodLabel_(g.from, g.to);
+        const id = escapeHtml_(g.id || "");
         return `<div class="oh-ex-item">
           <div class="oh-ex-top">
             <span class="oh-ex-date">${escapeHtml_(label)}</span>
@@ -297,8 +257,8 @@
           </div>
           ${note}
           <div class="oh-ex-actions">
-            <button type="button" class="btn btn-sm btn-ghost" onclick="ohEditException_('${escapeHtml_(g.from)}','${escapeHtml_(g.to)}')">Redigera</button>
-            <button type="button" class="btn btn-sm btn-ghost" onclick="ohDeleteException_('${escapeHtml_(g.from)}','${escapeHtml_(g.to)}')">Ta bort</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="ohEditException_('${id}')">Redigera</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="ohDeleteException_('${id}')">Ta bort</button>
           </div>
         </div>`;
       }).join("")
@@ -310,8 +270,8 @@
     const closed = !!state.formClosed;
     const saveLabel = state.formMode === "edit" ? "Spara undantag" : "Skapa nytt undantag";
     const modeHint = state.formMode === "edit"
-      ? "Redigerar valt undantag. Om du ändrar datum tas den gamla perioden bort."
-      : "Skapa undantag för ett datum eller en period. Tom hallvärd = veckans normalvärd.";
+      ? "Redigerar valt undantag. Överlappande undantag sparas som egna perioder — senast sparade gäller i kalendern."
+      : "Skapa undantag för ett datum eller en period. Överlapp tillåts; senast sparade gäller per dag i kalendern.";
 
     return `
       <div class="admin-card">
@@ -509,22 +469,19 @@
     render_();
   }
 
-  function ohEditException_(from, to) {
-    const f = String(from || "").slice(0, 10);
-    const t = String(to || from || "").slice(0, 10);
-    const list = state.exceptions || [];
-    const ex = list.find((e) => e.date === f) || list.find((e) => e.date >= f && e.date <= t) || null;
-    loadExceptionForm_(f, t, ex);
+  function ohEditException_(id) {
+    const ex = (state.exceptions || []).find((e) => String(e.id || "") === String(id || ""));
+    if (!ex) return toast_("Undantaget hittades inte");
+    loadExceptionForm_(ex);
     state.view = "exceptions";
     render_();
   }
 
-  /** Kalenderklick: redigera hela perioden om undantag finns, annars nytt. */
+  /** Kalenderklick: redigera senast sparade period som täcker dagen, annars nytt. */
   function ohOpenDay_(date) {
     const ymd = String(date || "").slice(0, 10);
-    const groups = groupExceptions_(state.exceptions || []);
-    const g = groups.find((x) => ymd >= x.from && ymd <= x.to);
-    if (g) ohEditException_(g.from, g.to);
+    const covering = periodsCovering_(ymd);
+    if (covering.length) ohEditException_(covering[0].id);
     else ohNewException_(ymd, ymd);
   }
 
@@ -555,16 +512,11 @@
     const hostUsername = state.formHost;
     const note = state.formNote;
     const payload = { from, to, closed, open, close, hostUsername, note };
-    // Bara i redigeringsläge: ta bort gamla datum som inte längre ingår
-    if (state.formMode === "edit" && state.replaceFrom) {
-      payload.replaceFrom = state.replaceFrom;
-      payload.replaceTo = state.replaceTo || state.replaceFrom;
-    }
+    if (state.formMode === "edit" && state.editingId) payload.id = state.editingId;
     google.script.run
       .withSuccessHandler((res) => {
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte spara");
-        const n = res.count || 1;
-        toast_(n > 1 ? ("Undantag sparat för " + n + " dagar") : "Undantag sparat");
+        toast_(state.formMode === "edit" ? "Undantag uppdaterat" : "Undantag skapat");
         if (from) state.yearMonth = from.slice(0, 7);
         resetExceptionForm_(state.today || todayYmd_());
         loadAdmin_();
@@ -573,8 +525,9 @@
       .saveOpeningHoursException(payload);
   }
 
-  function ohDeleteException_(from, to) {
-    const label = formatPeriodLabel_(from, to || from);
+  function ohDeleteException_(id) {
+    const ex = (state.exceptions || []).find((e) => String(e.id || "") === String(id || ""));
+    const label = ex ? formatPeriodLabel_(ex.from, ex.to) : id;
     if (!window.confirm("Ta bort undantaget " + label + "?")) return;
     google.script.run
       .withSuccessHandler((res) => {
@@ -584,7 +537,7 @@
         loadAdmin_();
       })
       .withFailureHandler(() => toast_("Nätverksfel"))
-      .deleteOpeningHoursException({ from, to: to || from });
+      .deleteOpeningHoursException({ id });
   }
 
   window.hideOpeningHoursOverlay_ = hideOpeningHoursOverlay_;

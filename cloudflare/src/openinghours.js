@@ -153,15 +153,16 @@ async function readWeek(env) {
   return normalizeWeek(raw || DEFAULT_WEEK);
 }
 
-async function listExceptions(env, from, to) {
-  const { results } = await env.DB.prepare(
-    `SELECT date, closed, open_time, close_time, note, host_username, updated_at, updated_by
-     FROM opening_hours_exceptions
-     WHERE date >= ? AND date <= ?
-     ORDER BY date ASC`
-  ).bind(from, to).all();
-  return (results || []).map((row) => ({
-    date: String(row.date || "").trim(),
+function newPeriodId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "oh_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+}
+
+function mapPeriodRow(row) {
+  return {
+    id: String(row.id || "").trim(),
+    from: String(row.from_date || "").trim(),
+    to: String(row.to_date || "").trim(),
     closed: !!(row.closed === 1 || row.closed === true),
     open: String(row.open_time || "").trim(),
     close: String(row.close_time || "").trim(),
@@ -169,13 +170,115 @@ async function listExceptions(env, from, to) {
     hostUsername: String(row.host_username || "").trim(),
     updatedAt: String(row.updated_at || "").trim(),
     updatedBy: String(row.updated_by || "").trim()
-  }));
+  };
 }
 
-function resolveDay(ymd, week, exceptionByDate) {
+/** Migrera gamla dagsrader → perioder (en gång). */
+async function ensurePeriodsMigrated(env) {
+  try {
+    const counted = await env.DB.prepare(
+      "SELECT COUNT(*) AS c FROM opening_hours_exception_periods"
+    ).first();
+    if (counted && Number(counted.c) > 0) return;
+  } catch {
+    return;
+  }
+  let legacy = [];
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT date, closed, open_time, close_time, note, host_username, updated_at, updated_by
+       FROM opening_hours_exceptions ORDER BY date ASC`
+    ).all();
+    legacy = results || [];
+  } catch {
+    return;
+  }
+  if (!legacy.length) return;
+
+  const groups = [];
+  for (const row of legacy) {
+    const date = String(row.date || "").trim();
+    if (!isValidYmd(date)) continue;
+    const sig = [
+      row.closed ? "1" : "0",
+      String(row.open_time || ""),
+      String(row.close_time || ""),
+      String(row.note || ""),
+      String(row.host_username || "").toLowerCase()
+    ].join("|");
+    const prev = groups[groups.length - 1];
+    if (prev && prev.sig === sig && addDaysYmd(prev.to, 1) === date) {
+      prev.to = date;
+      if (String(row.updated_at || "") > prev.updatedAt) {
+        prev.updatedAt = String(row.updated_at || "");
+        prev.updatedBy = String(row.updated_by || "");
+      }
+    } else {
+      groups.push({
+        sig,
+        from: date,
+        to: date,
+        closed: !!(row.closed === 1 || row.closed === true),
+        open: String(row.open_time || ""),
+        close: String(row.close_time || ""),
+        note: String(row.note || ""),
+        hostUsername: String(row.host_username || ""),
+        updatedAt: String(row.updated_at || "") || new Date().toISOString(),
+        updatedBy: String(row.updated_by || "")
+      });
+    }
+  }
+
+  const stmt = env.DB.prepare(
+    `INSERT INTO opening_hours_exception_periods
+      (id, from_date, to_date, closed, open_time, close_time, note, host_username, updated_at, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  await env.DB.batch(
+    groups.map((g) =>
+      stmt.bind(
+        newPeriodId(),
+        g.from,
+        g.to,
+        g.closed ? 1 : 0,
+        g.open,
+        g.close,
+        g.note,
+        g.hostUsername,
+        g.updatedAt,
+        g.updatedBy
+      )
+    )
+  );
+}
+
+/** Perioder som överlappar [from, to]. */
+async function listPeriods(env, from, to) {
+  await ensurePeriodsMigrated(env);
+  const { results } = await env.DB.prepare(
+    `SELECT id, from_date, to_date, closed, open_time, close_time, note, host_username, updated_at, updated_by
+     FROM opening_hours_exception_periods
+     WHERE from_date <= ? AND to_date >= ?
+     ORDER BY from_date ASC, updated_at ASC`
+  ).bind(to, from).all();
+  return (results || []).map(mapPeriodRow);
+}
+
+/** Senast uppdaterade period som täcker dagen vinner. */
+function periodForDate(ymd, periods) {
+  let best = null;
+  for (const p of periods || []) {
+    if (!p.from || !p.to) continue;
+    if (ymd < p.from || ymd > p.to) continue;
+    if (!best || String(p.updatedAt || "") >= String(best.updatedAt || "")) best = p;
+  }
+  return best;
+}
+
+function resolveDay(ymd, week, periods) {
   const weekday = isoWeekdayFromYmd(ymd);
   const base = normalizeDaySlot(week[String(weekday)] || emptyDaySlot());
-  const ex = exceptionByDate[ymd] || null;
+  const ex = periodForDate(ymd, periods);
   if (!ex) {
     return {
       date: ymd,
@@ -185,7 +288,8 @@ function resolveDay(ymd, week, exceptionByDate) {
       close: base.close,
       note: "",
       isException: false,
-      hostUsername: base.hostUsername
+      hostUsername: base.hostUsername,
+      exceptionId: ""
     };
   }
   const slot = normalizeDaySlot(ex);
@@ -197,20 +301,17 @@ function resolveDay(ymd, week, exceptionByDate) {
     close: slot.close,
     note: clipText(ex.note, 200),
     isException: true,
-    hostUsername: slot.hostUsername || base.hostUsername
+    hostUsername: slot.hostUsername || base.hostUsername,
+    exceptionId: ex.id || ""
   };
 }
 
-function buildDays(from, to, week, exceptions) {
-  const byDate = {};
-  for (const ex of exceptions) {
-    if (ex.date) byDate[ex.date] = ex;
-  }
+function buildDays(from, to, week, periods) {
   const days = [];
   let cursor = from;
   let guard = 0;
   while (cursor <= to && guard < 500) {
-    days.push(resolveDay(cursor, week, byDate));
+    days.push(resolveDay(cursor, week, periods));
     cursor = addDaysYmd(cursor, 1);
     guard += 1;
   }
@@ -255,8 +356,8 @@ function stripHostsFromWeek(week) {
 export async function getOpeningHoursPublic(env, opts) {
   const range = resolveRange(opts || {});
   const week = await readWeek(env);
-  const exceptions = await listExceptions(env, range.from, range.to);
-  const days = buildDays(range.from, range.to, week, exceptions).map((d) => ({
+  const periods = await listPeriods(env, range.from, range.to);
+  const days = buildDays(range.from, range.to, week, periods).map((d) => ({
     date: d.date,
     weekday: d.weekday,
     weekdayLabel: WEEKDAY_LABELS_SV[d.weekday] || "",
@@ -284,7 +385,7 @@ export async function getOpeningHoursAdmin(env, opts, session) {
   }
   const range = resolveRange(opts || {});
   const week = await readWeek(env);
-  const exceptions = await listExceptions(env, range.from, range.to);
+  const periods = await listPeriods(env, range.from, range.to);
   const users = await readUsers(env);
   const hosts = hostLookup(users);
   const hostOptions = users
@@ -295,7 +396,7 @@ export async function getOpeningHoursAdmin(env, opts, session) {
     }))
     .sort((a, b) => a.name.localeCompare(b.name, "sv"));
 
-  const days = buildDays(range.from, range.to, week, exceptions).map((d) => {
+  const days = buildDays(range.from, range.to, week, periods).map((d) => {
     const host = enrichHost(d, hosts);
     return {
       date: d.date,
@@ -306,6 +407,7 @@ export async function getOpeningHoursAdmin(env, opts, session) {
       close: d.close,
       note: d.note,
       isException: d.isException,
+      exceptionId: d.exceptionId || "",
       hostUsername: host.hostUsername,
       hostName: host.hostName
     };
@@ -324,20 +426,26 @@ export async function getOpeningHoursAdmin(env, opts, session) {
     };
   }
 
-  const exceptionsAdmin = exceptions.map((ex) => {
-    const host = enrichHost(ex, hosts);
-    return {
-      date: ex.date,
-      closed: ex.closed,
-      open: ex.open,
-      close: ex.close,
-      note: ex.note,
-      hostUsername: host.hostUsername,
-      hostName: host.hostName,
-      updatedAt: ex.updatedAt,
-      updatedBy: ex.updatedBy
-    };
-  });
+  const exceptionsAdmin = periods
+    .slice()
+    .sort((a, b) => String(a.from).localeCompare(String(b.from)) || String(a.to).localeCompare(String(b.to)))
+    .map((ex) => {
+      const host = enrichHost(ex, hosts);
+      return {
+        id: ex.id,
+        from: ex.from,
+        to: ex.to,
+        date: ex.from,
+        closed: ex.closed,
+        open: ex.open,
+        close: ex.close,
+        note: ex.note,
+        hostUsername: host.hostUsername,
+        hostName: host.hostName,
+        updatedAt: ex.updatedAt,
+        updatedBy: ex.updatedBy
+      };
+    });
 
   return {
     ok: true,
@@ -416,25 +524,9 @@ export async function saveOpeningHoursException(env, payload, session) {
   if (!canManageOpeningHours(session)) {
     return { ok: false, error: "Saknar behörighet" };
   }
+  await ensurePeriodsMigrated(env);
   const range = resolveExceptionDateRange(payload);
   if (!range.ok) return range;
-
-  // Vid redigering: ta bort tidigare period så datumflytt (t.ex. 24 → 26) inte lämnar kvar gamla dagar.
-  const replaceFrom = clipText(payload && (payload.replaceFrom || payload.previousFrom), 10);
-  const replaceTo = clipText(payload && (payload.replaceTo || payload.previousTo), 10) || replaceFrom;
-  let replaced = null;
-  if (isValidYmd(replaceFrom) && isValidYmd(replaceTo)) {
-    const prev = enumerateYmdRange(replaceFrom, replaceTo);
-    if (!prev.ok) return prev;
-    const keep = {};
-    for (const d of range.dates) keep[d] = true;
-    const toDelete = prev.dates.filter((d) => !keep[d]);
-    if (toDelete.length) {
-      const delStmt = env.DB.prepare("DELETE FROM opening_hours_exceptions WHERE date = ?");
-      await env.DB.batch(toDelete.map((d) => delStmt.bind(d)));
-    }
-    replaced = { from: prev.from, to: prev.to };
-  }
 
   const closed = !!(payload && (payload.closed === true || payload.closed === 1 || payload.closed === "1"));
   let open = "";
@@ -456,32 +548,40 @@ export async function saveOpeningHoursException(env, payload, session) {
   const note = clipText(payload && payload.note, 200);
   const now = new Date().toISOString();
   const by = clipText(session && session.username, 80);
+  const idIn = clipText(payload && payload.id, 80);
+  let id = idIn;
 
-  const stmt = env.DB.prepare(
-    `INSERT INTO opening_hours_exceptions
-      (date, closed, open_time, close_time, note, host_username, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(date) DO UPDATE SET
-      closed = excluded.closed,
-      open_time = excluded.open_time,
-      close_time = excluded.close_time,
-      note = excluded.note,
-      host_username = excluded.host_username,
-      updated_at = excluded.updated_at,
-      updated_by = excluded.updated_by`
-  );
-  const batch = range.dates.map((date) =>
-    stmt.bind(date, closed ? 1 : 0, open, close, note, hostUsername, now, by)
-  );
-  await env.DB.batch(batch);
+  if (id) {
+    const existing = await env.DB.prepare(
+      "SELECT id FROM opening_hours_exception_periods WHERE id = ?"
+    ).bind(id).first();
+    if (!existing) return { ok: false, error: "Undantaget hittades inte" };
+    await env.DB.prepare(
+      `UPDATE opening_hours_exception_periods SET
+        from_date = ?, to_date = ?, closed = ?, open_time = ?, close_time = ?,
+        note = ?, host_username = ?, updated_at = ?, updated_by = ?
+       WHERE id = ?`
+    ).bind(
+      range.from, range.to, closed ? 1 : 0, open, close, note, hostUsername, now, by, id
+    ).run();
+  } else {
+    id = newPeriodId();
+    await env.DB.prepare(
+      `INSERT INTO opening_hours_exception_periods
+        (id, from_date, to_date, closed, open_time, close_time, note, host_username, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      id, range.from, range.to, closed ? 1 : 0, open, close, note, hostUsername, now, by
+    ).run();
+  }
 
   return {
     ok: true,
     from: range.from,
     to: range.to,
     count: range.dates.length,
-    replaced,
     exception: {
+      id,
       date: range.from,
       from: range.from,
       to: range.to,
@@ -500,15 +600,18 @@ export async function deleteOpeningHoursException(env, payload, session) {
   if (!canManageOpeningHours(session)) {
     return { ok: false, error: "Saknar behörighet" };
   }
-  const raw = typeof payload === "string" ? { date: payload } : (payload || {});
+  await ensurePeriodsMigrated(env);
+  const raw = typeof payload === "string" ? { id: payload } : (payload || {});
+  const id = clipText(raw.id, 80);
+  if (id) {
+    await env.DB.prepare("DELETE FROM opening_hours_exception_periods WHERE id = ?").bind(id).run();
+    return { ok: true, id };
+  }
+  // Bakåtkompat: radera period med exakt from/to
   const range = resolveExceptionDateRange(raw);
   if (!range.ok) return range;
-  if (range.dates.length === 1) {
-    await env.DB.prepare("DELETE FROM opening_hours_exceptions WHERE date = ?").bind(range.dates[0]).run();
-  } else {
-    await env.DB.prepare(
-      "DELETE FROM opening_hours_exceptions WHERE date >= ? AND date <= ?"
-    ).bind(range.from, range.to).run();
-  }
-  return { ok: true, from: range.from, to: range.to, count: range.dates.length };
+  await env.DB.prepare(
+    "DELETE FROM opening_hours_exception_periods WHERE from_date = ? AND to_date = ?"
+  ).bind(range.from, range.to).run();
+  return { ok: true, from: range.from, to: range.to };
 }
