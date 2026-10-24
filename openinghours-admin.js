@@ -308,17 +308,15 @@
     const selFrom = state.selectedDate;
     const selTo = state.selectedDateTo || selFrom;
     const closed = !!state.formClosed;
-    const modeLabel = state.formMode === "edit"
-      ? "Redigerar undantag (gamla datum i perioden tas bort om du flyttar dem)"
-      : "Nytt undantag (befintliga undantag påverkas inte)";
+    const saveLabel = state.formMode === "edit" ? "Spara undantag" : "Skapa nytt undantag";
+    const modeHint = state.formMode === "edit"
+      ? "Redigerar valt undantag. Om du ändrar datum tas den gamla perioden bort."
+      : "Skapa undantag för ett datum eller en period. Tom hallvärd = veckans normalvärd.";
 
     return `
       <div class="admin-card">
         <h3>Undantag</h3>
-        <p class="oh-hint">${modeLabel}. Tom hallvärd innebär att veckans normalvärd gäller.</p>
-        <div class="oh-ex-actions mb-3">
-          <button type="button" class="btn btn-sm ${state.formMode === "new" ? "btn-accent" : "btn-ghost"}" onclick="ohNewException_()">Nytt undantag</button>
-        </div>
+        <p class="oh-hint">${modeHint}</p>
         <div class="row g-2 mb-3">
           <div class="col-6 col-md-4">
             <label class="form-label" for="oh-ex-from">Från</label>
@@ -351,7 +349,7 @@
             <input id="oh-ex-note" type="text" class="form-control" maxlength="200" value="${escapeHtml_(state.formNote)}" placeholder="t.ex. Stängt p.g.a. tävling">
           </div>
         </div>
-        <button type="button" class="btn btn-accent w-100 mb-3" onclick="ohSaveException_()">${state.formMode === "edit" ? "Spara ändringar" : "Skapa undantag"}</button>
+        <button type="button" class="btn btn-accent w-100 mb-3" onclick="ohSaveException_()">${saveLabel}</button>
         <h4 class="mb-2">Undantag i perioden</h4>
         <div class="oh-ex-list">${items}</div>
       </div>`;
@@ -567,10 +565,8 @@
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte spara");
         const n = res.count || 1;
         toast_(n > 1 ? ("Undantag sparat för " + n + " dagar") : "Undantag sparat");
-        loadExceptionForm_(from, to, {
-          closed, open, close, hostUsername, note
-        });
         if (from) state.yearMonth = from.slice(0, 7);
+        resetExceptionForm_(state.today || todayYmd_());
         loadAdmin_();
       })
       .withFailureHandler(() => toast_("Nätverksfel"))
