@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f2f2f2">
+  <meta name="theme-color" content="#12151a">
   <meta name="description" content="Gruppbokningar de kommande 7 dagarna — Västerviks klätterhall.">
   <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
   <title>Gruppbokningar — bar</title>
@@ -13,15 +13,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f2f2f2;
-      --surface: #ffffff;
-      --text: #202124;
-      --muted: #5f6368;
-      --line: rgba(32, 33, 36, 0.12);
-      --booked-bg: #d8f0e8;
-      --booked-text: #1b5c48;
-      --empty-bg: #f7f7f7;
-      --accent: #c47a1a;
+      --bg: #12151a;
+      --bg-deep: #0e1116;
+      --surface: rgba(255, 255, 255, 0.04);
+      --text: #f2efe8;
+      --muted: #9aa3b2;
+      --line: rgba(255, 255, 255, 0.1);
+      --booked-bg: rgba(110, 200, 176, 0.16);
+      --booked-text: #b7e8da;
+      --empty-bg: rgba(255, 255, 255, 0.03);
+      --accent: #e8a54b;
       --font: "Roboto", Arial, sans-serif;
     }
     * { box-sizing: border-box; }
@@ -40,7 +41,7 @@
     }
     html.is-embed,
     html.is-embed body {
-      background: transparent;
+      background: var(--bg);
       min-height: 0;
     }
     .bar {
@@ -49,9 +50,9 @@
       align-items: stretch;
       border: 1px solid var(--line);
       border-radius: 14px;
-      background: var(--surface);
+      background: var(--bg);
       overflow: hidden;
-      box-shadow: 0 1px 2px rgba(32, 33, 36, 0.06);
+      box-shadow: none;
       animation: bar-in 0.4s ease both;
     }
     .brand {
@@ -63,7 +64,7 @@
       padding: 12px 16px;
       min-width: 8.5rem;
       max-width: 11rem;
-      background: #fff;
+      background: var(--bg-deep);
       border-right: 1px solid var(--line);
     }
     .brand-title {
@@ -96,7 +97,7 @@
     }
     .day:first-child { border-left: 0; }
     .day.booked {
-      background: linear-gradient(180deg, var(--booked-bg) 0%, #fff 78%);
+      background: linear-gradient(180deg, var(--booked-bg) 0%, var(--bg) 78%);
       color: var(--booked-text);
     }
     .day.is-today {
@@ -159,7 +160,11 @@
       font-size: 0.9rem;
       font-weight: 500;
     }
-    .error { color: #7a2e2e; border-color: rgba(180, 70, 70, 0.35); background: #fff5f5; }
+    .error {
+      color: #e08a8a;
+      border-color: rgba(224, 138, 138, 0.35);
+      background: rgba(224, 138, 138, 0.1);
+    }
     @keyframes bar-in {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: none; }
