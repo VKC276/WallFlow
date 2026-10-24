@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2f2f2">
+  <meta name="description" content="Gruppbokningar de kommande 7 dagarna — Västerviks klätterhall.">
+  <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
+  <title>Gruppbokningar — bar</title>
+  <link rel="icon" href="../favicon.ico" sizes="32x32">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f2f2f2;
+      --surface: #ffffff;
+      --text: #202124;
+      --muted: #5f6368;
+      --line: rgba(32, 33, 36, 0.12);
+      --booked-bg: #d8f0e8;
+      --booked-text: #1b5c48;
+      --empty-bg: #f7f7f7;
+      --accent: #c47a1a;
+      --font: "Roboto", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+    body {
+      padding: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+    html.is-embed,
+    html.is-embed body {
+      background: transparent;
+      min-height: 0;
+    }
+    .bar {
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(32, 33, 36, 0.06);
+      animation: bar-in 0.4s ease both;
+    }
+    .brand {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      padding: 12px 16px;
+      min-width: 8.5rem;
+      max-width: 11rem;
+      background: #fff;
+      border-right: 1px solid var(--line);
+    }
+    .brand-title {
+      margin: 0;
+      font-size: clamp(0.88rem, 2vw, 1rem);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .brand-sub {
+      margin: 0;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--muted);
+      line-height: 1.2;
+    }
+    .days {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+    .day {
+      min-width: 0;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-left: 1px solid var(--line);
+      background: var(--empty-bg);
+    }
+    .day:first-child { border-left: 0; }
+    .day.booked {
+      background: linear-gradient(180deg, var(--booked-bg) 0%, #fff 78%);
+      color: var(--booked-text);
+    }
+    .day.is-today {
+      box-shadow: inset 0 3px 0 var(--accent);
+    }
+    .day-label {
+      margin: 0;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .day.booked .day-label { color: var(--booked-text); opacity: 0.85; }
+    .day-date {
+      margin: 0;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    .items {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+    .item {
+      margin: 0;
+      font-size: 0.68rem;
+      font-weight: 600;
+      line-height: 1.2;
+      min-width: 0;
+    }
+    .item .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item .g {
+      display: block;
+      font-weight: 500;
+      opacity: 0.9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .empty {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .boot, .error {
+      width: 100%;
+      margin: 0;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .error { color: #7a2e2e; border-color: rgba(180, 70, 70, 0.35); background: #fff5f5; }
+    @keyframes bar-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+    @media (max-width: 720px) {
+      .bar { flex-direction: column; border-radius: 12px; }
+      .brand {
+        max-width: none;
+        min-width: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 14px;
+      }
+      .days {
+        display: flex;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+      }
+      .day {
+        flex: 0 0 42%;
+        max-width: 11rem;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        scroll-snap-align: start;
+      }
+      .day:first-child { border-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="width:100%">
+    <p class="boot">Hämtar gruppbokningar…</p>
+  </div>
+  <script>
+const API_URL = "https://wallflow.muddy-rice-38d4.workers.dev/";
+const REFRESH_MS = 5 * 60 * 1000;
+const DOW_SHORT = ["sön", "mån", "tis", "ons", "tor", "fre", "lör"];
+const MONTHS_SHORT = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+(function bootEmbed_() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("embed") !== "0") {
+    document.documentElement.classList.add("is-embed");
+  }
+})();
+
+function escapeHtml_(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function apiCall_(action, args) {
+  return fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain; charset=UTF-8" },
+    body: JSON.stringify({ action, token: "", args: args || [] })
+  }).then((r) => r.json());
+}
+
+function addDaysYmd_(ymd, days) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+function weekdayLabel_(ymd, today) {
+  if (ymd === today) return "Idag";
+  if (ymd === addDaysYmd_(today, 1)) return "Imorgon";
+  const m = String(ymd).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return DOW_SHORT[dt.getUTCDay()] || "";
+}
+
+function dateShort_(ymd) {
+  const m = String(ymd).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return ymd;
+  return Number(m[3]) + " " + (MONTHS_SHORT[Number(m[2]) - 1] || "");
+}
+
+function dayHtml_(ymd, day, today) {
+  const bookings = (day && day.bookings) || [];
+  const booked = bookings.length > 0;
+  const isToday = ymd === today;
+  let body;
+  if (!booked) {
+    body = `<p class="empty">Ingen bokning</p>`;
+  } else {
+    body = `<div class="items">${bookings.slice(0, 3).map((b) =>
+      `<p class="item"><span class="t">${escapeHtml_(b.hoursLabel || "")}</span><span class="g">${escapeHtml_(b.groupName || "Grupp")}</span></p>`
+    ).join("")}${bookings.length > 3 ? `<p class="item"><span class="t">+${bookings.length - 3} till</span></p>` : ""}</div>`;
+  }
+  return `<div class="day ${booked ? "booked" : ""}${isToday ? " is-today" : ""}">
+    <p class="day-label">${escapeHtml_(weekdayLabel_(ymd, today))}</p>
+    <p class="day-date">${escapeHtml_(dateShort_(ymd))}</p>
+    ${body}
+  </div>`;
+}
+
+function renderBar_(today, daysByDate) {
+  const app = document.getElementById("app");
+  if (!app) return;
+  const cells = [];
+  for (let i = 0; i < 7; i++) {
+    const ymd = addDaysYmd_(today, i);
+    cells.push(dayHtml_(ymd, daysByDate[ymd], today));
+  }
+  app.innerHTML = `<div class="bar" role="region" aria-label="Gruppbokningar de kommande sju dagarna">
+    <div class="brand">
+      <p class="brand-title">Gruppbokningar</p>
+      <p class="brand-sub">7 dagar</p>
+    </div>
+    <div class="days">${cells.join("")}</div>
+  </div>`;
+}
+
+function renderError_(msg) {
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.innerHTML = `<p class="error">${escapeHtml_(msg)}</p>`;
+}
+
+function load_() {
+  const approx = new Date();
+  const localToday =
+    approx.getFullYear() + "-" +
+    String(approx.getMonth() + 1).padStart(2, "0") + "-" +
+    String(approx.getDate()).padStart(2, "0");
+  const from = addDaysYmd_(localToday, -1);
+  const to = addDaysYmd_(localToday, 8);
+
+  return apiCall_("getGroupBookings", [{ from, to }])
+    .then((res) => {
+      if (!res || res.ok === false) {
+        renderError_((res && res.error) || "Kunde inte hämta gruppbokningar");
+        return;
+      }
+      const today = String(res.today || localToday);
+      const map = {};
+      (res.days || []).forEach((d) => { if (d && d.date) map[d.date] = d; });
+      renderBar_(today, map);
+    })
+    .catch(() => renderError_("Nätverksfel — försök igen om en stund"));
+}
+
+load_();
+setInterval(load_, REFRESH_MS);
+  </script>
+</body>
+</html>
