@@ -170,19 +170,29 @@
       to { opacity: 1; transform: none; }
     }
     /* Kompakt läge för kiosk/iframe — alltid 7 kolumner, tätare typografi */
+    html.is-compact.is-embed,
+    html.is-compact.is-embed body {
+      height: 100%;
+      min-height: 100%;
+    }
     html.is-compact .brand {
       min-width: 7.2rem;
       max-width: 8.5rem;
-      padding: 8px 12px;
+      padding: 14px 12px 6px;
     }
     html.is-compact .brand-title { font-size: 0.88rem; }
     html.is-compact .brand-sub { font-size: 0.7rem; }
-    html.is-compact .day { padding: 7px 6px; gap: 2px; }
+    html.is-compact .day {
+      padding: 14px 6px 6px;
+      gap: 2px;
+      justify-content: center;
+    }
     html.is-compact .day-label { font-size: 0.58rem; }
     html.is-compact .day-date { font-size: 0.72rem; }
     html.is-compact .item { font-size: 0.62rem; }
     html.is-compact .empty { font-size: 0.64rem; }
     html.is-compact .bar {
+      min-height: 100%;
       border-radius: 0;
       box-shadow: none;
       border-left: 0;
