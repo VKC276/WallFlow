@@ -464,29 +464,9 @@
   function ohExceptionDateChange_() {
     const fromEl = document.getElementById("oh-ex-from");
     const toEl = document.getElementById("oh-ex-to");
+    // Fälten är oberoende — sortering sker först vid spar. Spegla inte.
     const from = String(fromEl && fromEl.value || "").slice(0, 10);
     const to = String(toEl && toEl.value || "").slice(0, 10);
-    const prevFrom = state.selectedDate;
-    const prevTo = state.selectedDateTo || prevFrom;
-    const wasSingle = !!(prevFrom && prevFrom === prevTo);
-
-    // Endagsundantag: ändra Från eller Till → flytta båda till det nya datumet
-    // (annars byttes 24→26 tillbaka till 24–26 via sort).
-    if (wasSingle && from && to) {
-      if (from !== prevFrom && to === prevTo) {
-        if (toEl) toEl.value = from;
-        state.selectedDate = from;
-        state.selectedDateTo = from;
-        return;
-      }
-      if (to !== prevTo && from === prevFrom) {
-        if (fromEl) fromEl.value = to;
-        state.selectedDate = to;
-        state.selectedDateTo = to;
-        return;
-      }
-    }
-
     state.selectedDate = from;
     state.selectedDateTo = to || from;
   }
