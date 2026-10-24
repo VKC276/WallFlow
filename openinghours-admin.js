@@ -23,7 +23,10 @@
     hostOptions: [],
     loading: false,
     selectedDate: "",
-    selectedDateTo: ""
+    selectedDateTo: "",
+    /** Ursprunglig period vid redigering — tas bort vid spar om datum flyttas. */
+    replaceFrom: "",
+    replaceTo: ""
   };
 
   function addDaysYmd_(ymd, days) {
@@ -448,8 +451,12 @@
   }
 
   function ohEditException_(from, to) {
-    state.selectedDate = String(from || "").slice(0, 10);
-    state.selectedDateTo = String(to || from || "").slice(0, 10);
+    const f = String(from || "").slice(0, 10);
+    const t = String(to || from || "").slice(0, 10);
+    state.selectedDate = f;
+    state.selectedDateTo = t;
+    state.replaceFrom = f;
+    state.replaceTo = t;
     state.view = "exceptions";
     render_();
   }
@@ -457,15 +464,29 @@
   function ohExceptionDateChange_() {
     const fromEl = document.getElementById("oh-ex-from");
     const toEl = document.getElementById("oh-ex-to");
-    let from = String(fromEl && fromEl.value || "").slice(0, 10);
-    let to = String(toEl && toEl.value || "").slice(0, 10);
-    if (from && to && from > to) {
-      const tmp = from;
-      from = to;
-      to = tmp;
-      if (fromEl) fromEl.value = from;
-      if (toEl) toEl.value = to;
+    const from = String(fromEl && fromEl.value || "").slice(0, 10);
+    const to = String(toEl && toEl.value || "").slice(0, 10);
+    const prevFrom = state.selectedDate;
+    const prevTo = state.selectedDateTo || prevFrom;
+    const wasSingle = !!(prevFrom && prevFrom === prevTo);
+
+    // Endagsundantag: ändra Från eller Till → flytta båda till det nya datumet
+    // (annars byttes 24→26 tillbaka till 24–26 via sort).
+    if (wasSingle && from && to) {
+      if (from !== prevFrom && to === prevTo) {
+        if (toEl) toEl.value = from;
+        state.selectedDate = from;
+        state.selectedDateTo = from;
+        return;
+      }
+      if (to !== prevTo && from === prevFrom) {
+        if (fromEl) fromEl.value = to;
+        state.selectedDate = to;
+        state.selectedDateTo = to;
+        return;
+      }
     }
+
     state.selectedDate = from;
     state.selectedDateTo = to || from;
   }
@@ -491,6 +512,11 @@
     const close = String((document.getElementById("oh-ex-close") || {}).value || "");
     const hostUsername = String((document.getElementById("oh-ex-host") || {}).value || "");
     const note = String((document.getElementById("oh-ex-note") || {}).value || "");
+    const payload = { from, to, closed, open, close, hostUsername, note };
+    if (state.replaceFrom) {
+      payload.replaceFrom = state.replaceFrom;
+      payload.replaceTo = state.replaceTo || state.replaceFrom;
+    }
     google.script.run
       .withSuccessHandler((res) => {
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte spara");
@@ -498,11 +524,13 @@
         toast_(n > 1 ? ("Undantag sparat för " + n + " dagar") : "Undantag sparat");
         state.selectedDate = from;
         state.selectedDateTo = to;
+        state.replaceFrom = from;
+        state.replaceTo = to;
         if (from) state.yearMonth = from.slice(0, 7);
         loadAdmin_();
       })
       .withFailureHandler(() => toast_("Nätverksfel"))
-      .saveOpeningHoursException({ from, to, closed, open, close, hostUsername, note });
+      .saveOpeningHoursException(payload);
   }
 
   function ohDeleteException_(from, to) {

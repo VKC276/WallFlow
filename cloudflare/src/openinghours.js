@@ -419,6 +419,23 @@ export async function saveOpeningHoursException(env, payload, session) {
   const range = resolveExceptionDateRange(payload);
   if (!range.ok) return range;
 
+  // Vid redigering: ta bort tidigare period så datumflytt (t.ex. 24 → 26) inte lämnar kvar gamla dagar.
+  const replaceFrom = clipText(payload && (payload.replaceFrom || payload.previousFrom), 10);
+  const replaceTo = clipText(payload && (payload.replaceTo || payload.previousTo), 10) || replaceFrom;
+  let replaced = null;
+  if (isValidYmd(replaceFrom) && isValidYmd(replaceTo)) {
+    const prev = enumerateYmdRange(replaceFrom, replaceTo);
+    if (!prev.ok) return prev;
+    const keep = {};
+    for (const d of range.dates) keep[d] = true;
+    const toDelete = prev.dates.filter((d) => !keep[d]);
+    if (toDelete.length) {
+      const delStmt = env.DB.prepare("DELETE FROM opening_hours_exceptions WHERE date = ?");
+      await env.DB.batch(toDelete.map((d) => delStmt.bind(d)));
+    }
+    replaced = { from: prev.from, to: prev.to };
+  }
+
   const closed = !!(payload && (payload.closed === true || payload.closed === 1 || payload.closed === "1"));
   let open = "";
   let close = "";
@@ -463,6 +480,7 @@ export async function saveOpeningHoursException(env, payload, session) {
     from: range.from,
     to: range.to,
     count: range.dates.length,
+    replaced,
     exception: {
       date: range.from,
       from: range.from,
