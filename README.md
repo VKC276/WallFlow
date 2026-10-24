@@ -8,7 +8,7 @@ App för att följa **ledbyggnationen** i klätterhallen. Baserad på samma arki
 
 **Arkiv (GAS + Sheets):** Fryst kod före cutover — tag `archive/gas-sheets-2026-08-13`, branch `archive/gas-sheets`. Återställning: [docs/arkiv-gas-sheets.md](docs/arkiv-gas-sheets.md). `gas/Code.gs` finns kvar på `main`.
 
-**Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. **Space** bläddrar en ledlista per färg (nyaste längst upp).
+**Statistikskärm (högkant, ingen inloggning):** [https://wallflow.vastervikclimbing.se/display.html](https://wallflow.vastervikclimbing.se/display.html) — pajdiagram + status, uppdateras automatiskt. Växlar automatiskt mellan fördelning och ledlistor per färg (grön, blå, röd, …) var 15:e sekund. **Space** bläddrar manuellt.
 
 **Läsarvy (besökare / Google Sites-iframe):** [https://wallflow.vastervikclimbing.se/lasare.html](https://wallflow.vastervikclimbing.se/lasare.html) — nya leder + vem som byggt, **inga bilder**. Bädda in t.ex. med `?embed=1` (tätare layout) eller `?days=14` (fönster för ”Nytt”).
 
