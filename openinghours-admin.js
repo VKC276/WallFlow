@@ -24,10 +24,63 @@
     loading: false,
     selectedDate: "",
     selectedDateTo: "",
-    /** Ursprunglig period vid redigering — tas bort vid spar om datum flyttas. */
+    /** "new" = skapa utan att röra andra undantag. "edit" = ersätt replaceFrom–replaceTo. */
+    formMode: "new",
     replaceFrom: "",
-    replaceTo: ""
+    replaceTo: "",
+    formClosed: false,
+    formOpen: "",
+    formClose: "",
+    formHost: "",
+    formNote: ""
   };
+
+  function resetExceptionForm_(from, to) {
+    const f = String(from || state.today || todayYmd_()).slice(0, 10);
+    const t = String(to || f).slice(0, 10);
+    state.selectedDate = f;
+    state.selectedDateTo = t;
+    state.formMode = "new";
+    state.replaceFrom = "";
+    state.replaceTo = "";
+    state.formClosed = false;
+    state.formOpen = "";
+    state.formClose = "";
+    state.formHost = "";
+    state.formNote = "";
+  }
+
+  function loadExceptionForm_(from, to, ex) {
+    const f = String(from || "").slice(0, 10);
+    const t = String(to || from || "").slice(0, 10);
+    state.selectedDate = f;
+    state.selectedDateTo = t;
+    state.formMode = "edit";
+    state.replaceFrom = f;
+    state.replaceTo = t;
+    state.formClosed = !!(ex && ex.closed);
+    state.formOpen = ex && !ex.closed ? (ex.open || "") : "";
+    state.formClose = ex && !ex.closed ? (ex.close || "") : "";
+    state.formHost = (ex && (ex.hostUsername || "")) || "";
+    state.formNote = (ex && (ex.note || "")) || "";
+  }
+
+  function readExceptionFormIntoState_() {
+    const fromEl = document.getElementById("oh-ex-from");
+    const toEl = document.getElementById("oh-ex-to");
+    if (fromEl) state.selectedDate = String(fromEl.value || "").slice(0, 10);
+    if (toEl) state.selectedDateTo = String(toEl.value || "").slice(0, 10) || state.selectedDate;
+    const closedEl = document.getElementById("oh-ex-closed");
+    if (closedEl) state.formClosed = !!closedEl.checked;
+    const openEl = document.getElementById("oh-ex-open");
+    const closeEl = document.getElementById("oh-ex-close");
+    if (openEl) state.formOpen = String(openEl.value || "");
+    if (closeEl) state.formClose = String(closeEl.value || "");
+    const hostEl = document.getElementById("oh-ex-host");
+    if (hostEl) state.formHost = String(hostEl.value || "");
+    const noteEl = document.getElementById("oh-ex-note");
+    if (noteEl) state.formNote = String(noteEl.value || "");
+  }
 
   function addDaysYmd_(ymd, days) {
     const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -168,7 +221,7 @@
       const closed = !c.day || c.day.closed;
       const host = (c.day && (c.day.hostName || c.day.hostUsername)) || "";
       const today = c.date === state.today ? " is-today" : "";
-      return `<button type="button" class="oh-cell ${closed ? "closed" : "open"}${today}" onclick="ohEditException_('${c.date}')">
+      return `<button type="button" class="oh-cell ${closed ? "closed" : "open"}${today}" onclick="ohOpenDay_('${c.date}')">
         <span class="num">${c.num}</span>
         <span class="hours">${escapeHtml_(formatHours_(c.day))}</span>
         <span class="host">${escapeHtml_(host || "—")}</span>
@@ -251,19 +304,21 @@
       }).join("")
       : `<p class="oh-hint">Inga undantag i den här månaden ännu.</p>`;
 
-    const selFrom = state.selectedDate || state.today || todayYmd_();
+    if (!state.selectedDate) resetExceptionForm_(state.today || todayYmd_());
+    const selFrom = state.selectedDate;
     const selTo = state.selectedDateTo || selFrom;
-    const existing = list.find((e) => e.date === selFrom) || null;
-    const closed = existing ? !!existing.closed : false;
-    const open = existing && !existing.closed ? (existing.open || "") : "";
-    const close = existing && !existing.closed ? (existing.close || "") : "";
-    const note = existing ? (existing.note || "") : "";
-    const host = existing ? (existing.hostUsername || "") : "";
+    const closed = !!state.formClosed;
+    const modeLabel = state.formMode === "edit"
+      ? "Redigerar undantag (gamla datum i perioden tas bort om du flyttar dem)"
+      : "Nytt undantag (befintliga undantag påverkas inte)";
 
     return `
       <div class="admin-card">
         <h3>Undantag</h3>
-        <p class="oh-hint">Gäller ett datum eller en hel period (från–till). Tom hallvärd innebär att veckans normalvärd gäller.</p>
+        <p class="oh-hint">${modeLabel}. Tom hallvärd innebär att veckans normalvärd gäller.</p>
+        <div class="oh-ex-actions mb-3">
+          <button type="button" class="btn btn-sm ${state.formMode === "new" ? "btn-accent" : "btn-ghost"}" onclick="ohNewException_()">Nytt undantag</button>
+        </div>
         <div class="row g-2 mb-3">
           <div class="col-6 col-md-4">
             <label class="form-label" for="oh-ex-from">Från</label>
@@ -281,22 +336,22 @@
           </div>
           <div class="col-6">
             <label class="form-label" for="oh-ex-open">Öppnar</label>
-            <input id="oh-ex-open" type="time" class="form-control" value="${escapeHtml_(open)}" ${closed ? "disabled" : ""}>
+            <input id="oh-ex-open" type="time" class="form-control" value="${escapeHtml_(state.formOpen)}" ${closed ? "disabled" : ""}>
           </div>
           <div class="col-6">
             <label class="form-label" for="oh-ex-close">Stänger</label>
-            <input id="oh-ex-close" type="time" class="form-control" value="${escapeHtml_(close)}" ${closed ? "disabled" : ""}>
+            <input id="oh-ex-close" type="time" class="form-control" value="${escapeHtml_(state.formClose)}" ${closed ? "disabled" : ""}>
           </div>
           <div class="col-12">
             <label class="form-label" for="oh-ex-host">Hallvärd (intern)</label>
-            ${hostSelectHtml_("oh-ex-host", host, true)}
+            ${hostSelectHtml_("oh-ex-host", state.formHost, true)}
           </div>
           <div class="col-12">
             <label class="form-label" for="oh-ex-note">Publik anteckning (valfri)</label>
-            <input id="oh-ex-note" type="text" class="form-control" maxlength="200" value="${escapeHtml_(note)}" placeholder="t.ex. Stängt p.g.a. tävling">
+            <input id="oh-ex-note" type="text" class="form-control" maxlength="200" value="${escapeHtml_(state.formNote)}" placeholder="t.ex. Stängt p.g.a. tävling">
           </div>
         </div>
-        <button type="button" class="btn btn-accent w-100 mb-3" onclick="ohSaveException_()">Spara undantag</button>
+        <button type="button" class="btn btn-accent w-100 mb-3" onclick="ohSaveException_()">${state.formMode === "edit" ? "Spara ändringar" : "Skapa undantag"}</button>
         <h4 class="mb-2">Undantag i perioden</h4>
         <div class="oh-ex-list">${items}</div>
       </div>`;
@@ -450,50 +505,60 @@
       .saveOpeningHoursWeek({ week });
   }
 
-  function ohEditException_(from, to) {
-    const f = String(from || "").slice(0, 10);
-    const t = String(to || from || "").slice(0, 10);
-    state.selectedDate = f;
-    state.selectedDateTo = t;
-    state.replaceFrom = f;
-    state.replaceTo = t;
+  function ohNewException_(from, to) {
+    resetExceptionForm_(from || state.today || todayYmd_(), to);
     state.view = "exceptions";
     render_();
   }
 
+  function ohEditException_(from, to) {
+    const f = String(from || "").slice(0, 10);
+    const t = String(to || from || "").slice(0, 10);
+    const list = state.exceptions || [];
+    const ex = list.find((e) => e.date === f) || list.find((e) => e.date >= f && e.date <= t) || null;
+    loadExceptionForm_(f, t, ex);
+    state.view = "exceptions";
+    render_();
+  }
+
+  /** Kalenderklick: redigera hela perioden om undantag finns, annars nytt. */
+  function ohOpenDay_(date) {
+    const ymd = String(date || "").slice(0, 10);
+    const groups = groupExceptions_(state.exceptions || []);
+    const g = groups.find((x) => ymd >= x.from && ymd <= x.to);
+    if (g) ohEditException_(g.from, g.to);
+    else ohNewException_(ymd, ymd);
+  }
+
   function ohExceptionDateChange_() {
-    const fromEl = document.getElementById("oh-ex-from");
-    const toEl = document.getElementById("oh-ex-to");
-    // Fälten är oberoende — sortering sker först vid spar. Spegla inte.
-    const from = String(fromEl && fromEl.value || "").slice(0, 10);
-    const to = String(toEl && toEl.value || "").slice(0, 10);
-    state.selectedDate = from;
-    state.selectedDateTo = to || from;
+    readExceptionFormIntoState_();
   }
 
   function ohExceptionClosedToggle_() {
-    const closed = !!(document.getElementById("oh-ex-closed") || {}).checked;
+    readExceptionFormIntoState_();
     const openEl = document.getElementById("oh-ex-open");
     const closeEl = document.getElementById("oh-ex-close");
-    if (openEl) openEl.disabled = closed;
-    if (closeEl) closeEl.disabled = closed;
+    if (openEl) openEl.disabled = state.formClosed;
+    if (closeEl) closeEl.disabled = state.formClosed;
   }
 
   function ohSaveException_() {
-    let from = String((document.getElementById("oh-ex-from") || {}).value || "").slice(0, 10);
-    let to = String((document.getElementById("oh-ex-to") || {}).value || "").slice(0, 10) || from;
+    readExceptionFormIntoState_();
+    let from = state.selectedDate;
+    let to = state.selectedDateTo || from;
     if (from && to && from > to) {
       const tmp = from;
       from = to;
       to = tmp;
     }
-    const closed = !!(document.getElementById("oh-ex-closed") || {}).checked;
-    const open = String((document.getElementById("oh-ex-open") || {}).value || "");
-    const close = String((document.getElementById("oh-ex-close") || {}).value || "");
-    const hostUsername = String((document.getElementById("oh-ex-host") || {}).value || "");
-    const note = String((document.getElementById("oh-ex-note") || {}).value || "");
+    const closed = !!state.formClosed;
+    const open = state.formOpen;
+    const close = state.formClose;
+    const hostUsername = state.formHost;
+    const note = state.formNote;
     const payload = { from, to, closed, open, close, hostUsername, note };
-    if (state.replaceFrom) {
+    // Bara i redigeringsläge: ta bort gamla datum som inte längre ingår
+    if (state.formMode === "edit" && state.replaceFrom) {
       payload.replaceFrom = state.replaceFrom;
       payload.replaceTo = state.replaceTo || state.replaceFrom;
     }
@@ -502,10 +567,9 @@
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte spara");
         const n = res.count || 1;
         toast_(n > 1 ? ("Undantag sparat för " + n + " dagar") : "Undantag sparat");
-        state.selectedDate = from;
-        state.selectedDateTo = to;
-        state.replaceFrom = from;
-        state.replaceTo = to;
+        loadExceptionForm_(from, to, {
+          closed, open, close, hostUsername, note
+        });
         if (from) state.yearMonth = from.slice(0, 7);
         loadAdmin_();
       })
@@ -520,6 +584,7 @@
       .withSuccessHandler((res) => {
         if (!res || res.ok === false) return toast_((res && res.error) || "Kunde inte ta bort");
         toast_("Undantag borttaget");
+        resetExceptionForm_(state.today || todayYmd_());
         loadAdmin_();
       })
       .withFailureHandler(() => toast_("Nätverksfel"))
@@ -534,7 +599,9 @@
   window.ohShiftMonth_ = ohShiftMonth_;
   window.ohWeekClosedToggle_ = ohWeekClosedToggle_;
   window.ohSaveWeek_ = ohSaveWeek_;
+  window.ohNewException_ = ohNewException_;
   window.ohEditException_ = ohEditException_;
+  window.ohOpenDay_ = ohOpenDay_;
   window.ohExceptionDateChange_ = ohExceptionDateChange_;
   window.ohExceptionClosedToggle_ = ohExceptionClosedToggle_;
   window.ohSaveException_ = ohSaveException_;
