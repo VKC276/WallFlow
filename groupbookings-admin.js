@@ -5,9 +5,6 @@
     "januari", "februari", "mars", "april", "maj", "juni",
     "juli", "augusti", "september", "oktober", "november", "december"
   ];
-  const PUBLIC_URL = "https://wallflow.vastervikclimbing.se/gruppbokningar/";
-  const PUBLIC_BAR_URL = "https://wallflow.vastervikclimbing.se/gruppbokningarbar/";
-
   const state = {
     view: "calendar",
     yearMonth: "",
@@ -280,13 +277,6 @@
     main.innerHTML = `
       <p class="admin-kicker">Hallen</p>
       <h2 class="mb-2">Gruppbokningar</h2>
-      <div class="gb-public-link">
-        Publik kalender (grupp + tider, utan kontakt/värd):
-        <a href="${PUBLIC_URL}" target="_blank" rel="noopener">${PUBLIC_URL}</a><br>
-        7-dagarsbar (iframe):
-        <a href="${PUBLIC_BAR_URL}" target="_blank" rel="noopener">${PUBLIC_BAR_URL}</a><br>
-        Kalender: <code>?embed=1</code> · Baren är bäddbar som standard (<code>?embed=0</code> för fristående sida).
-      </div>
       ${renderTabs_()}
       ${state.loading ? `<p class="gb-hint">Laddar…</p>` : ""}
       ${body}

@@ -146,18 +146,6 @@ body.openinghours-open .search-wrap {
 .oh-ex-item .oh-ex-meta { color: var(--muted); font-size: 0.82rem; }
 .oh-ex-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.oh-public-link {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  font-size: 0.84rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.oh-public-link a { color: var(--accent); font-weight: 600; word-break: break-all; }
-
 .oh-hint {
   margin: 0 0 12px;
   color: var(--muted);

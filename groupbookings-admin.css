@@ -111,18 +111,6 @@ body.groupbookings-open .search-wrap {
 .gb-item .gb-meta { color: var(--muted); font-size: 0.82rem; }
 .gb-item .gb-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-.gb-public-link {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  font-size: 0.84rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-.gb-public-link a { color: var(--accent); font-weight: 600; word-break: break-all; }
-
 .gb-hint {
   margin: 0 0 12px;
   color: var(--muted);

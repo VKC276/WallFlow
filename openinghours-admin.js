@@ -10,9 +10,6 @@
     1: "Måndag", 2: "Tisdag", 3: "Onsdag", 4: "Torsdag",
     5: "Fredag", 6: "Lördag", 7: "Söndag"
   };
-  const PUBLIC_URL = "https://wallflow.vastervikclimbing.se/openinghours/";
-  const PUBLIC_BAR_URL = "https://wallflow.vastervikclimbing.se/openinghoursbar/";
-
   const state = {
     view: "calendar", // calendar | week | exceptions
     yearMonth: "",
@@ -328,13 +325,6 @@
     main.innerHTML = `
       <p class="admin-kicker">Hallen</p>
       <h2 class="mb-2">Öppettider</h2>
-      <div class="oh-public-link">
-        Publik kalender (utan hallvärd):
-        <a href="${PUBLIC_URL}" target="_blank" rel="noopener">${PUBLIC_URL}</a><br>
-        Öppettidsbar (idag/imorgon):
-        <a href="${PUBLIC_BAR_URL}" target="_blank" rel="noopener">${PUBLIC_BAR_URL}</a><br>
-        Kalender: <code>?embed=1</code> · Baren är bäddbar som standard.
-      </div>
       ${renderTabs_()}
       ${state.loading ? `<p class="oh-hint">Laddar…</p>` : ""}
       ${body}
