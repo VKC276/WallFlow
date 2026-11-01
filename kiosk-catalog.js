@@ -320,10 +320,15 @@ function kioskQrButtons_(settings) {
   return Array.isArray(list) ? list.slice() : [];
 }
 
+function kioskClipEnabled_(settings) {
+  return Boolean(settings && settings.clipTenCardsEnabled);
+}
+
 function kioskHomeOrder_(settings) {
   const buttons = kioskQrButtons_(settings);
   const allowed = new Set(buttons.map((b) => String(b.id || "")).filter(Boolean));
   allowed.add("swish");
+  if (kioskClipEnabled_(settings)) allowed.add("clip");
   const raw = (settings && settings.homeOrder) || [];
   const out = [];
   const seen = new Set();
@@ -341,11 +346,13 @@ function kioskHomeOrder_(settings) {
     }
   });
   if (!seen.has("swish")) out.push("swish");
+  if (kioskClipEnabled_(settings) && !seen.has("clip")) out.push("clip");
   return out;
 }
 
 function kioskHomeOrderLabel_(slot, settings) {
   if (slot === "swish") return "Betala med Swish";
+  if (slot === "clip") return "Klipp 10 kort";
   const btn = kioskQrButtons_(settings).find((b) => b.id === slot);
   return String((btn && btn.title) || "QR-knapp").trim() || "QR-knapp";
 }
@@ -353,14 +360,24 @@ function kioskHomeOrderLabel_(slot, settings) {
 function kioskHomeOrderHtml_(settings) {
   const order = kioskHomeOrder_(settings);
   const swishColor = String((settings && settings.swishButtonColor) || "#1a9f4b");
-  const rows = order.map((slot, index) => `
+  const clipColor = "#2196F3";
+  const rows = order.map((slot, index) => {
+    const color =
+      slot === "swish"
+        ? swishColor
+        : slot === "clip"
+          ? clipColor
+          : ((kioskQrButtons_(settings).find((b) => b.id === slot) || {}).color || "#1f6f8b");
+    const fixed = slot === "swish" || slot === "clip";
+    return `
     <div class="d-flex align-items-center gap-2 mb-2" data-home-slot="${escapeHtml_(slot)}" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;">
-      <span style="width:16px;height:16px;border-radius:4px;background:${escapeHtml_(slot === "swish" ? swishColor : ((kioskQrButtons_(settings).find((b) => b.id === slot) || {}).color || "#1f6f8b"))};flex-shrink:0;"></span>
-      <span style="flex:1;">${escapeHtml_(kioskHomeOrderLabel_(slot, settings))}${slot === "swish" ? ` <span class="small" style="color:var(--muted);">(fast)</span>` : ""}</span>
+      <span style="width:16px;height:16px;border-radius:4px;background:${escapeHtml_(color)};flex-shrink:0;"></span>
+      <span style="flex:1;">${escapeHtml_(kioskHomeOrderLabel_(slot, settings))}${fixed ? ` <span class="small" style="color:var(--muted);">(fast)</span>` : ""}</span>
       ${slot === "swish" ? `<label class="small mb-0 d-flex align-items-center gap-1">Färg <input id="kiosk-swish-color" type="color" value="${escapeHtml_(swishColor)}" style="width:40px;height:28px;padding:0;border:0;background:transparent;"></label>` : ""}
       <button type="button" class="btn btn-sm btn-ghost" data-home-up ${index === 0 ? "disabled" : ""} aria-label="Flytta upp">↑</button>
       <button type="button" class="btn btn-sm btn-ghost" data-home-down ${index === order.length - 1 ? "disabled" : ""} aria-label="Flytta ner">↓</button>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   return `<div id="kiosk-home-order">${rows}</div>`;
 }
 
@@ -446,6 +463,16 @@ function refreshKioskHomeOrderButtons_() {
 
 function syncSettingsDraftFromDom_() {
   if (!catalogState_.settings) catalogState_.settings = {};
+  const shop = document.getElementById("kiosk-shop-name");
+  const swish = document.getElementById("kiosk-swish");
+  const theme = document.getElementById("kiosk-theme");
+  const swishColor = document.getElementById("kiosk-swish-color");
+  const clipId = document.getElementById("kiosk-clip-id");
+  if (shop) catalogState_.settings.shopName = shop.value;
+  if (swish) catalogState_.settings.swishNumber = swish.value;
+  if (theme) catalogState_.settings.theme = theme.value;
+  if (swishColor) catalogState_.settings.swishButtonColor = swishColor.value;
+  if (clipId) catalogState_.settings.clipKioskId = clipId.value || "reception";
   catalogState_.settings.homeQrButtons = readKioskQrButtonsFromDom_();
   catalogState_.settings.homeOrder = readKioskHomeOrderFromDom_();
 }
@@ -491,6 +518,17 @@ function renderKioskSettings_(main) {
       ${s.homeBackgroundUrl ? `<img src="${escapeHtml_(s.homeBackgroundUrl)}" alt="" style="width:100%;max-height:140px;object-fit:cover;display:block;margin-bottom:8px;border-radius:8px;">` : ""}
       <input id="kiosk-home-bg" type="file" accept="image/*" class="form-control form-control-sm">
       ${s.homeBackgroundUrl ? `<button type="button" class="btn btn-sm btn-ghost mt-2" id="kiosk-home-bg-clear">Ta bort bakgrund</button>` : ""}
+    </div>
+    ${catalogSectionDivider_()}
+    <h4>Klipp 10 kort</h4>
+    <p class="small" style="color:var(--muted);">Visar knappen <strong>Klipp 10 kort</strong> på kassans startsida. Använder samma blipp-flöde som kiosk-skärmen (kortläsare + Cloudflare).</p>
+    <label class="d-flex align-items-center gap-2 mb-2" style="max-width:420px;">
+      <input type="checkbox" id="kiosk-clip-enabled"${s.clipTenCardsEnabled ? " checked" : ""}>
+      <span>Visa &quot;Klipp 10 kort&quot; på startsidan</span>
+    </label>
+    <div class="detail-cell" style="margin-bottom:8px;max-width:420px;">
+      <label>Kiosk-id (samma som agentens kioskId)</label>
+      <input id="kiosk-clip-id" class="form-control" value="${escapeHtml_(s.clipKioskId || "reception")}" placeholder="reception">
     </div>
     ${catalogSectionDivider_()}
     <h4>Startsidans ordning</h4>
@@ -870,11 +908,15 @@ function kioskSettingsPayload_(categories) {
   const swish = document.getElementById("kiosk-swish");
   const theme = document.getElementById("kiosk-theme");
   const swishColor = document.getElementById("kiosk-swish-color");
+  const clipEnabled = document.getElementById("kiosk-clip-enabled");
+  const clipId = document.getElementById("kiosk-clip-id");
   return {
     shopName: shop ? shop.value : s.shopName,
     swishNumber: swish ? swish.value : s.swishNumber,
     theme: theme ? theme.value : s.theme,
     swishButtonColor: swishColor ? swishColor.value : s.swishButtonColor || "#1a9f4b",
+    clipTenCardsEnabled: clipEnabled ? Boolean(clipEnabled.checked) : Boolean(s.clipTenCardsEnabled),
+    clipKioskId: clipId ? clipId.value : s.clipKioskId || "reception",
     homeQrButtons: readKioskQrButtonsFromDom_(),
     homeOrder: readKioskHomeOrderFromDom_(),
     categories: categories || s.categories || []
@@ -986,14 +1028,25 @@ function bindCatalogTool_(root) {
       });
     });
   }
+  const clipToggle = root.querySelector("#kiosk-clip-enabled");
+  if (clipToggle) {
+    clipToggle.addEventListener("change", () => {
+      if (!catalogState_.settings) return;
+      syncSettingsDraftFromDom_();
+      catalogState_.settings.clipTenCardsEnabled = Boolean(clipToggle.checked);
+      const clipId = root.querySelector("#kiosk-clip-id");
+      if (clipId) catalogState_.settings.clipKioskId = clipId.value || "reception";
+      catalogState_.settings.homeOrder = kioskHomeOrder_(catalogState_.settings);
+      renderKioskSettings_(root);
+    });
+  }
   const saveSettings = root.querySelector("#kiosk-settings-save");
   if (saveSettings) {
     saveSettings.addEventListener("click", () => {
       google.script.run
         .withSuccessHandler(async (res) => {
           if (!res || res.ok === false) return showToast((res && res.error) || "Kunde inte spara");
-          showToast("Kassainställningar sparade");
-          const uploads = [];
+          showToast("Kassainställningar sparade");          const uploads = [];
           const shopLogo = document.getElementById("kiosk-logo");
           const shopFile = shopLogo && shopLogo.files && shopLogo.files[0];
           if (shopFile) {

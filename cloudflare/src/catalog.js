@@ -8,6 +8,7 @@ import { deleteKioskLogoBilder, deleteKioskProductBilder, deleteKioskEntryLogoBi
 
 const DEFAULT_CATEGORIES = ["Entre", "Hyra", "Dryck", "Snacks", "Utrustning", "Övrigt"];
 const SWISH_SLOT = "swish";
+const CLIP_SLOT = "clip";
 const MAX_HOME_QR_BUTTONS = 8;
 const DEFAULT_QR_COLORS = ["#1f6f8b", "#c45c26", "#2f6b3a", "#5b4b8a"];
 const DEFAULT_SWISH_COLOR = "#1a9f4b";
@@ -45,7 +46,7 @@ function parseHomeQrButtons(raw) {
   for (const row of parsed) {
     if (!row || typeof row !== "object") continue;
     const id = sanitizeButtonId(row.id);
-    if (!id || id === SWISH_SLOT || seen.has(id)) continue;
+    if (!id || id === SWISH_SLOT || id === CLIP_SLOT || seen.has(id)) continue;
     seen.add(id);
     const fallbackColor = DEFAULT_QR_COLORS[out.length % DEFAULT_QR_COLORS.length];
     out.push({
@@ -62,9 +63,11 @@ function parseHomeQrButtons(raw) {
   return out;
 }
 
-function parseHomeOrder(raw, buttonIds) {
+function parseHomeOrder(raw, buttonIds, options) {
+  const clipEnabled = Boolean(options && options.clipEnabled);
   const allowed = new Set((buttonIds || []).map((id) => sanitizeButtonId(id)).filter(Boolean));
   allowed.add(SWISH_SLOT);
+  if (clipEnabled) allowed.add(CLIP_SLOT);
   let parsed = raw;
   if (typeof raw === "string") {
     try {
@@ -78,7 +81,7 @@ function parseHomeOrder(raw, buttonIds) {
   if (Array.isArray(parsed)) {
     for (const item of parsed) {
       const slot = sanitizeButtonId(item) || String(item || "").trim();
-      if (slot !== SWISH_SLOT && !allowed.has(slot)) continue;
+      if (slot !== SWISH_SLOT && slot !== CLIP_SLOT && !allowed.has(slot)) continue;
       if (!allowed.has(slot) || seen.has(slot)) continue;
       seen.add(slot);
       out.push(slot);
@@ -92,7 +95,16 @@ function parseHomeOrder(raw, buttonIds) {
     }
   }
   if (!seen.has(SWISH_SLOT)) out.push(SWISH_SLOT);
+  if (clipEnabled && !seen.has(CLIP_SLOT)) out.push(CLIP_SLOT);
   return out;
+}
+
+function parseBoolSetting(raw, fallback) {
+  const s = String(raw == null ? "" : raw).trim().toLowerCase();
+  if (!s) return fallback;
+  if (s === "1" || s === "true" || s === "yes" || s === "on") return true;
+  if (s === "0" || s === "false" || s === "no" || s === "off") return false;
+  return fallback;
 }
 
 function mapHomeQrButton(btn, origin) {
@@ -205,6 +217,8 @@ export async function publicCatalog(env, origin) {
     homeBgKey,
     homeBgHash,
     swishButtonColorRaw,
+    clipTenCardsEnabledRaw,
+    clipKioskIdRaw,
     products
   ] = await Promise.all([
     readCatalogRevision(env),
@@ -229,6 +243,8 @@ export async function publicCatalog(env, origin) {
     setting(env, "kioskHomeBgKey", ""),
     setting(env, "kioskHomeBgHash", ""),
     setting(env, "kioskSwishButtonColor", DEFAULT_SWISH_COLOR),
+    setting(env, "kioskClipTenCardsEnabled", "0"),
+    setting(env, "kioskClipKioskId", "reception"),
     env.DB.prepare(
       "SELECT id, name, price, category, sort, active, featured, image_key, image_hash FROM kiosk_products WHERE active = 1 ORDER BY featured DESC, category, sort, name"
     ).all()
@@ -258,6 +274,8 @@ export async function publicCatalog(env, origin) {
   }
   const logo = String(logoKey || "").trim();
   const swish = normalizeSwish(swishNumber);
+  const clipTenCardsEnabled = parseBoolSetting(clipTenCardsEnabledRaw, false);
+  const clipKioskId = String(clipKioskIdRaw || "reception").trim() || "reception";
   const mappedButtons = homeQrButtons.map((btn) => mapHomeQrButton(btn, origin));
   const member = mappedButtons.find((b) => b.id === "member") || mappedButtons[0] || null;
   const epassi = mappedButtons.find((b) => b.id === "epassi") || mappedButtons[1] || null;
@@ -269,9 +287,12 @@ export async function publicCatalog(env, origin) {
     swishNumber: swish,
     swishConfigured: Boolean(swish),
     swishButtonColor: normalizeHexColor(swishButtonColorRaw, DEFAULT_SWISH_COLOR),
+    clipTenCardsEnabled,
+    clipKioskId,
     homeOrder: parseHomeOrder(
       homeOrderRaw,
-      homeQrButtons.map((b) => b.id)
+      homeQrButtons.map((b) => b.id),
+      { clipEnabled: clipTenCardsEnabled }
     ),
     homeQrButtons: mappedButtons,
     homeBackgroundUrl: imageUrlFromKey(origin, homeBgKey, homeBgHash),
@@ -449,9 +470,12 @@ export async function saveKioskSettings(env, session, payload) {
       await deleteKioskEntryLogoBilder(env, prev.id);
     }
   }
+  const clipTenCardsEnabled = payload.clipTenCardsEnabled === true || payload.clipTenCardsEnabled === 1 || payload.clipTenCardsEnabled === "1";
+  const clipKioskId = String(payload.clipKioskId || "reception").trim() || "reception";
   const homeOrder = parseHomeOrder(
     payload.homeOrder,
-    homeQrButtons.map((b) => b.id)
+    homeQrButtons.map((b) => b.id),
+    { clipEnabled: clipTenCardsEnabled }
   );
   const categories = parseCategories(JSON.stringify(payload.categories || DEFAULT_CATEGORIES));
   const upsert = env.DB.prepare(
@@ -462,6 +486,8 @@ export async function saveKioskSettings(env, session, payload) {
     upsert.bind("kioskSwishNumber", swish),
     upsert.bind("kioskTheme", theme),
     upsert.bind("kioskSwishButtonColor", swishButtonColor),
+    upsert.bind("kioskClipTenCardsEnabled", clipTenCardsEnabled ? "1" : "0"),
+    upsert.bind("kioskClipKioskId", clipKioskId),
     upsert.bind("kioskHomeQrButtons", JSON.stringify(homeQrButtons)),
     upsert.bind("kioskHomeOrder", JSON.stringify(homeOrder)),
     upsert.bind("kioskCategories", JSON.stringify(categories))
