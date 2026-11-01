@@ -472,7 +472,7 @@ function syncSettingsDraftFromDom_() {
   if (swish) catalogState_.settings.swishNumber = swish.value;
   if (theme) catalogState_.settings.theme = theme.value;
   if (swishColor) catalogState_.settings.swishButtonColor = swishColor.value;
-  if (clipId) catalogState_.settings.clipKioskId = clipId.value || "reception";
+  if (clipId) catalogState_.settings.clipKioskId = clipId.value || "retail";
   catalogState_.settings.homeQrButtons = readKioskQrButtonsFromDom_();
   catalogState_.settings.homeOrder = readKioskHomeOrderFromDom_();
 }
@@ -521,14 +521,15 @@ function renderKioskSettings_(main) {
     </div>
     ${catalogSectionDivider_()}
     <h4>Klipp 10 kort</h4>
-    <p class="small" style="color:var(--muted);">Visar knappen <strong>Klipp 10 kort</strong> på kassans startsida. Använder samma blipp-flöde som kiosk-skärmen (kortläsare + Cloudflare).</p>
+    <p class="small" style="color:var(--muted);">Visar knappen <strong>Klipp 10 kort</strong> på självbetjäningskassan. Kortläsar-agenten på kassadatorn pratar med Cloudflare (vkc-kiosk-API) — <strong>oberoende</strong> av den gamla kioskskärmen/karusellen.</p>
     <label class="d-flex align-items-center gap-2 mb-2" style="max-width:420px;">
       <input type="checkbox" id="kiosk-clip-enabled"${s.clipTenCardsEnabled ? " checked" : ""}>
       <span>Visa &quot;Klipp 10 kort&quot; på startsidan</span>
     </label>
     <div class="detail-cell" style="margin-bottom:8px;max-width:420px;">
-      <label>Kiosk-id (samma som agentens kioskId)</label>
-      <input id="kiosk-clip-id" class="form-control" value="${escapeHtml_(s.clipKioskId || "reception")}" placeholder="reception">
+      <label>Kortkanal-id (CLOUDFLARE.kioskId på agenten)</label>
+      <input id="kiosk-clip-id" class="form-control" value="${escapeHtml_(s.clipKioskId || "retail")}" placeholder="retail">
+      <p class="small" style="color:var(--muted);margin-top:4px;">Använd eget id, t.ex. <code>retail</code> — dela inte id med receptionsskärmen.</p>
     </div>
     ${catalogSectionDivider_()}
     <h4>Startsidans ordning</h4>
@@ -916,7 +917,7 @@ function kioskSettingsPayload_(categories) {
     theme: theme ? theme.value : s.theme,
     swishButtonColor: swishColor ? swishColor.value : s.swishButtonColor || "#1a9f4b",
     clipTenCardsEnabled: clipEnabled ? Boolean(clipEnabled.checked) : Boolean(s.clipTenCardsEnabled),
-    clipKioskId: clipId ? clipId.value : s.clipKioskId || "reception",
+    clipKioskId: clipId ? clipId.value : s.clipKioskId || "retail",
     homeQrButtons: readKioskQrButtonsFromDom_(),
     homeOrder: readKioskHomeOrderFromDom_(),
     categories: categories || s.categories || []
@@ -1035,7 +1036,7 @@ function bindCatalogTool_(root) {
       syncSettingsDraftFromDom_();
       catalogState_.settings.clipTenCardsEnabled = Boolean(clipToggle.checked);
       const clipId = root.querySelector("#kiosk-clip-id");
-      if (clipId) catalogState_.settings.clipKioskId = clipId.value || "reception";
+      if (clipId) catalogState_.settings.clipKioskId = clipId.value || "retail";
       catalogState_.settings.homeOrder = kioskHomeOrder_(catalogState_.settings);
       renderKioskSettings_(root);
     });
