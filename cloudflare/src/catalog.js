@@ -218,7 +218,6 @@ export async function publicCatalog(env, origin) {
     homeBgHash,
     swishButtonColorRaw,
     clipTenCardsEnabledRaw,
-    clipKioskIdRaw,
     products
   ] = await Promise.all([
     readCatalogRevision(env),
@@ -244,7 +243,6 @@ export async function publicCatalog(env, origin) {
     setting(env, "kioskHomeBgHash", ""),
     setting(env, "kioskSwishButtonColor", DEFAULT_SWISH_COLOR),
     setting(env, "kioskClipTenCardsEnabled", "0"),
-    setting(env, "kioskClipKioskId", "retail"),
     env.DB.prepare(
       "SELECT id, name, price, category, sort, active, featured, image_key, image_hash FROM kiosk_products WHERE active = 1 ORDER BY featured DESC, category, sort, name"
     ).all()
@@ -275,7 +273,6 @@ export async function publicCatalog(env, origin) {
   const logo = String(logoKey || "").trim();
   const swish = normalizeSwish(swishNumber);
   const clipTenCardsEnabled = parseBoolSetting(clipTenCardsEnabledRaw, false);
-  const clipKioskId = String(clipKioskIdRaw || "retail").trim() || "retail";
   const mappedButtons = homeQrButtons.map((btn) => mapHomeQrButton(btn, origin));
   const member = mappedButtons.find((b) => b.id === "member") || mappedButtons[0] || null;
   const epassi = mappedButtons.find((b) => b.id === "epassi") || mappedButtons[1] || null;
@@ -288,7 +285,6 @@ export async function publicCatalog(env, origin) {
     swishConfigured: Boolean(swish),
     swishButtonColor: normalizeHexColor(swishButtonColorRaw, DEFAULT_SWISH_COLOR),
     clipTenCardsEnabled,
-    clipKioskId,
     homeOrder: parseHomeOrder(
       homeOrderRaw,
       homeQrButtons.map((b) => b.id),
@@ -471,7 +467,6 @@ export async function saveKioskSettings(env, session, payload) {
     }
   }
   const clipTenCardsEnabled = payload.clipTenCardsEnabled === true || payload.clipTenCardsEnabled === 1 || payload.clipTenCardsEnabled === "1";
-  const clipKioskId = String(payload.clipKioskId || "retail").trim() || "retail";
   const homeOrder = parseHomeOrder(
     payload.homeOrder,
     homeQrButtons.map((b) => b.id),
@@ -487,7 +482,6 @@ export async function saveKioskSettings(env, session, payload) {
     upsert.bind("kioskTheme", theme),
     upsert.bind("kioskSwishButtonColor", swishButtonColor),
     upsert.bind("kioskClipTenCardsEnabled", clipTenCardsEnabled ? "1" : "0"),
-    upsert.bind("kioskClipKioskId", clipKioskId),
     upsert.bind("kioskHomeQrButtons", JSON.stringify(homeQrButtons)),
     upsert.bind("kioskHomeOrder", JSON.stringify(homeOrder)),
     upsert.bind("kioskCategories", JSON.stringify(categories))

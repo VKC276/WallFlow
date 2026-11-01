@@ -467,12 +467,10 @@ function syncSettingsDraftFromDom_() {
   const swish = document.getElementById("kiosk-swish");
   const theme = document.getElementById("kiosk-theme");
   const swishColor = document.getElementById("kiosk-swish-color");
-  const clipId = document.getElementById("kiosk-clip-id");
   if (shop) catalogState_.settings.shopName = shop.value;
   if (swish) catalogState_.settings.swishNumber = swish.value;
   if (theme) catalogState_.settings.theme = theme.value;
   if (swishColor) catalogState_.settings.swishButtonColor = swishColor.value;
-  if (clipId) catalogState_.settings.clipKioskId = clipId.value || "retail";
   catalogState_.settings.homeQrButtons = readKioskQrButtonsFromDom_();
   catalogState_.settings.homeOrder = readKioskHomeOrderFromDom_();
 }
@@ -521,16 +519,11 @@ function renderKioskSettings_(main) {
     </div>
     ${catalogSectionDivider_()}
     <h4>Klipp 10 kort</h4>
-    <p class="small" style="color:var(--muted);">Visar knappen <strong>Klipp 10 kort</strong> på självbetjäningskassan. Kortläsar-agenten på kassadatorn pratar med Cloudflare (vkc-kiosk-API) — <strong>oberoende</strong> av den gamla kioskskärmen/karusellen.</p>
+    <p class="small" style="color:var(--muted);">Visar knappen <strong>Klipp 10 kort</strong> på självbetjäningskassan. Kräver att kortläsaren är inkopplad och agenten körs på kassadatorn.</p>
     <label class="d-flex align-items-center gap-2 mb-2" style="max-width:420px;">
       <input type="checkbox" id="kiosk-clip-enabled"${s.clipTenCardsEnabled ? " checked" : ""}>
       <span>Visa &quot;Klipp 10 kort&quot; på startsidan</span>
     </label>
-    <div class="detail-cell" style="margin-bottom:8px;max-width:420px;">
-      <label>Kortkanal-id (CLOUDFLARE.kioskId på agenten)</label>
-      <input id="kiosk-clip-id" class="form-control" value="${escapeHtml_(s.clipKioskId || "retail")}" placeholder="retail">
-      <p class="small" style="color:var(--muted);margin-top:4px;">Använd eget id, t.ex. <code>retail</code> — dela inte id med receptionsskärmen.</p>
-    </div>
     ${catalogSectionDivider_()}
     <h4>Startsidans ordning</h4>
     <p class="small" style="color:var(--muted);">Ändra ordningen med upp/ner. Swish-knappen kan flyttas men inte tas bort.</p>
@@ -910,14 +903,12 @@ function kioskSettingsPayload_(categories) {
   const theme = document.getElementById("kiosk-theme");
   const swishColor = document.getElementById("kiosk-swish-color");
   const clipEnabled = document.getElementById("kiosk-clip-enabled");
-  const clipId = document.getElementById("kiosk-clip-id");
   return {
     shopName: shop ? shop.value : s.shopName,
     swishNumber: swish ? swish.value : s.swishNumber,
     theme: theme ? theme.value : s.theme,
     swishButtonColor: swishColor ? swishColor.value : s.swishButtonColor || "#1a9f4b",
     clipTenCardsEnabled: clipEnabled ? Boolean(clipEnabled.checked) : Boolean(s.clipTenCardsEnabled),
-    clipKioskId: clipId ? clipId.value : s.clipKioskId || "retail",
     homeQrButtons: readKioskQrButtonsFromDom_(),
     homeOrder: readKioskHomeOrderFromDom_(),
     categories: categories || s.categories || []
@@ -1035,8 +1026,6 @@ function bindCatalogTool_(root) {
       if (!catalogState_.settings) return;
       syncSettingsDraftFromDom_();
       catalogState_.settings.clipTenCardsEnabled = Boolean(clipToggle.checked);
-      const clipId = root.querySelector("#kiosk-clip-id");
-      if (clipId) catalogState_.settings.clipKioskId = clipId.value || "retail";
       catalogState_.settings.homeOrder = kioskHomeOrder_(catalogState_.settings);
       renderKioskSettings_(root);
     });
